@@ -1,7 +1,29 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { getTripsForUser, getTrip, getTripMembers } from '@/firebase/firestore';
+import {
+  getTripsForUser,
+  getTrip,
+  getTripMembers,
+  getPendingInvitesForUser,
+  getUser,
+  acceptTripInvite,
+  declineTripInvite,
+  updateTripCategory as fbUpdateTripCategory,
+  updateTripClassification as fbUpdateTripClassification,
+} from '@/firebase/firestore';
 import { transitionAllTrips } from '@/services/tripStatusService';
-import { setTrips, setCurrentTrip, setMembers, setLoading, setError } from './tripsSlice';
+import {
+  setTrips,
+  setCurrentTrip,
+  setMembers,
+  setLoading,
+  setError,
+  setInvitations,
+  setInvitationsLoading,
+  removeInvitation,
+  updateTripInList,
+} from './tripsSlice';
+import { TripInvitation } from '@/types/invitation';
+import { RootState } from '@/store';
 
 export const fetchUserTrips = createAsyncThunk(
   'trips/fetchUserTrips',
@@ -40,6 +62,88 @@ export const fetchTripById = createAsyncThunk(
       throw e;
     } finally {
       dispatch(setLoading(false));
+    }
+  }
+);
+
+export const fetchTripInvitations = createAsyncThunk(
+  'trips/fetchTripInvitations',
+  async (args: { email: string; phone: string }, { dispatch }) => {
+    dispatch(setInvitationsLoading(true));
+    try {
+      const pending = await getPendingInvitesForUser(args.email, args.phone);
+      const invitations: TripInvitation[] = [];
+
+      for (const member of pending) {
+        const trip = await getTrip(member.tripId);
+        if (trip) {
+          const invitedBy = await getUser(trip.createdBy);
+          invitations.push({ member, trip, invitedBy });
+        }
+      }
+
+      dispatch(setInvitations(invitations));
+    } catch (e) {
+      dispatch(setError((e as Error).message));
+    }
+  }
+);
+
+export const acceptInvitation = createAsyncThunk(
+  'trips/acceptInvitation',
+  async (memberId: string, { dispatch, getState }) => {
+    const { auth } = getState() as RootState;
+    if (!auth.firebaseUid) return;
+    try {
+      await acceptTripInvite(memberId, auth.firebaseUid);
+      dispatch(removeInvitation(memberId));
+      dispatch(fetchUserTrips(auth.firebaseUid));
+    } catch (e) {
+      dispatch(setError((e as Error).message));
+    }
+  }
+);
+
+export const declineInvitation = createAsyncThunk(
+  'trips/declineInvitation',
+  async (memberId: string, { dispatch }) => {
+    try {
+      await declineTripInvite(memberId);
+      dispatch(removeInvitation(memberId));
+    } catch (e) {
+      dispatch(setError((e as Error).message));
+    }
+  }
+);
+
+export const updateTripCategory = createAsyncThunk(
+  'trips/updateCategory',
+  async (
+    { tripId, category }: { tripId: string; category: string },
+    { dispatch, getState }
+  ) => {
+    await fbUpdateTripCategory(tripId, category);
+    const { trips } = (getState() as RootState).trips;
+    const trip = trips.find((t) => t.tripId === tripId);
+    if (trip) {
+      const updatedTrip = { ...trip, category };
+      dispatch(updateTripInList(updatedTrip));
+    }
+  }
+);
+
+export const updateTripClassification = createAsyncThunk(
+  'trips/updateClassification',
+  async (
+    { tripId, classification }: { tripId: string; classification: 'real' | 'test' },
+    { dispatch, getState }
+  ) => {
+    await fbUpdateTripClassification(tripId, classification);
+    const { trips } = (getState() as RootState).trips;
+    const trip = trips.find((t) => t.tripId === tripId);
+    if (trip) {
+      const updatedTrip = { ...trip, classification };
+      dispatch(updateTripInList(updatedTrip));
     }
   }
 );

@@ -155,6 +155,7 @@ export async function createTrip(input: CreateTripInput): Promise<string> {
     currency: input.currency,
     membersCount: input.members.length + 1,
     createdAt: serverTimestamp(),
+    classification: 'real',
   });
 
   const ownerMemberId = `${tripId}_${input.createdBy}`;
@@ -188,7 +189,7 @@ export async function createTrip(input: CreateTripInput): Promise<string> {
       email: normalizedEmail,
       phone: normalizedPhone,
       role: 'editor',
-      inviteStatus: matchedUserId ? 'accepted' : 'pending',
+      inviteStatus: 'pending',
     });
   }
 
@@ -379,6 +380,22 @@ export async function acceptTripInvite(
   }
 }
 
+export async function declineTripInvite(memberId: string): Promise<void> {
+  const memberRef = doc(db(), 'tripMembers', memberId);
+  const memberSnap = await getDoc(memberRef);
+  if (!memberSnap.exists()) return;
+
+  const batch = writeBatch(db());
+  const tripRef = doc(db(), 'trips', memberSnap.data().tripId);
+
+  batch.update(tripRef, {
+    membersCount: increment(-1),
+  });
+  batch.delete(memberRef);
+
+  await batch.commit();
+}
+
 export async function recalculateEqualExpenses(
   tripId: string,
   newMemberKey: string
@@ -429,7 +446,7 @@ export async function addMemberToTrip(
     email: normalizedEmail,
     phone: normalizedPhone,
     role: 'editor',
-    inviteStatus: matchedUserId ? 'accepted' : 'pending',
+    inviteStatus: 'pending',
   });
 
   const tripRef = doc(db(), 'trips', tripId);
@@ -446,4 +463,18 @@ export async function addMemberToTrip(
   }
 
   return matchedUserId;
+}
+
+export async function updateTripCategory(
+  tripId: string,
+  category: string
+): Promise<void> {
+  await updateDoc(doc(db(), 'trips', tripId), { category });
+}
+
+export async function updateTripClassification(
+  tripId: string,
+  classification: 'real' | 'test'
+): Promise<void> {
+  await updateDoc(doc(db(), 'trips', tripId), { classification });
 }

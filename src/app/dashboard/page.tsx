@@ -3,7 +3,8 @@
 import { useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { PlusCircle, Wallet, Map, HandCoins } from 'lucide-react';
+import { PlusCircle, Wallet, Map, HandCoins, TestTube, CheckCircle } from 'lucide-react';
+import dayjs from 'dayjs';
 import { ProtectedRoute } from '@/components/common/ProtectedRoute';
 import { AppShell } from '@/components/layout/AppShell';
 import { TripCard } from '@/components/trips/TripCard';
@@ -20,6 +21,8 @@ import { getTripMembers } from '@/firebase/firestore';
 import { useState } from 'react';
 import { Trip } from '@/types/trip';
 import { formatCurrency } from '@/lib/utils';
+import { TripInvitations } from '@/components/trips/TripInvitations';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function DashboardPage() {
   return (
@@ -36,10 +39,9 @@ function DashboardContent() {
   const dispatch = useAppDispatch();
   const { trips, loading } = useAppSelector((s) => s.trips);
   const [spentByTrip, setSpentByTrip] = useState<Record<string, number>>({});
-  const [pendingSettlements, setPendingSettlements] = useState(0);
+  const [activeFilter, setActiveFilter] = useState('upcoming');
 
-const firstName = (user as any)?.displayName?.split(' ')[0] || 'Traveler';
-// adjsfl
+  const firstName = user?.name?.split(' ')[0] || 'Traveler';
 
   useEffect(() => {
     if (uid) dispatch(fetchUserTrips(uid));
@@ -47,58 +49,62 @@ const firstName = (user as any)?.displayName?.split(' ')[0] || 'Traveler';
 
   useEffect(() => {
     async function loadStats() {
-      let totalPending = 0;
       const spent: Record<string, number> = {};
-
       for (const trip of trips) {
-        // Silently repair trip data (e.g., member counts)
-        await syncTripData(trip.tripId);
-        
         const expenses = await getExpenses(trip.tripId);
         spent[trip.tripId] = expenses.reduce((s, e) => s + e.amount, 0);
-        const members = await getTripMembers(trip.tripId);
-        const computed = computeSettlements(expenses, members, trip.tripId);
-        totalPending += computed.length;
       }
-
       setSpentByTrip(spent);
-      setPendingSettlements(totalPending);
     }
     if (trips.length > 0) loadStats();
   }, [trips]);
 
-  const grouped = useMemo(() => {
-    const planned: Trip[] = [];
-    const ongoing: Trip[] = [];
-    const completed: Trip[] = [];
-    trips.forEach((t) => {
-      if (t.status === 'planned') planned.push(t);
-      else if (t.status === 'ongoing') ongoing.push(t);
-      else if (t.status === 'completed') completed.push(t);
+  const filteredAndGroupedTrips = useMemo(() => {
+    const now = dayjs();
+    const filtered = trips.filter((trip) => {
+      // If filtering for test trips, only show test trips
+      if (activeFilter === 'test_trips') {
+        return trip.classification === 'test';
+      }
+
+      // Otherwise, only show real trips
+      if (trip.classification === 'test') {
+        return false;
+      }
+
+      const startDate = dayjs(trip.startDate.toDate());
+      switch (activeFilter) {
+        case 'upcoming':
+          return trip.status === 'planned' && startDate.isAfter(now);
+        case 'this_month':
+          return startDate.isSame(now, 'month');
+        case 'ongoing':
+          return trip.status === 'ongoing';
+        case 'completed':
+          return trip.status === 'completed';
+        case 'all':
+        default:
+          return true;
+      }
     });
-    return { planned, ongoing, completed };
-  }, [trips]);
+
+    return filtered.reduce((acc, trip) => {
+      const category = trip.category || 'Uncategorized';
+      if (!acc[category]) {
+        acc[category] = [];
+      }
+      acc[category].push(trip);
+      return acc;
+    }, {} as Record<string, Trip[]>);
+  }, [trips, activeFilter]);
 
   const totalSpent = Object.values(spentByTrip).reduce((a, b) => a + b, 0);
+  const realTrips = trips.filter((t) => t.classification !== 'test');
+  const testTrips = trips.filter((t) => t.classification === 'test');
 
   if (loading && trips.length === 0) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 bg-muted/50 animate-pulse rounded-xl" />
-          ))}
-        </div>
-        <div className="space-y-4">
-          <div className="h-8 w-48 bg-muted/50 animate-pulse rounded-lg" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-64 bg-muted/50 animate-pulse rounded-xl" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    // Keep a simple loading skeleton for the initial load
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -119,87 +125,115 @@ const firstName = (user as any)?.displayName?.split(' ')[0] || 'Traveler';
         </Link>
       </div>
 
+      <TripInvitations />
+
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="grid grid-cols-1 sm:grid-cols-3 gap-6"
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
       >
-        <Card className="relative overflow-hidden group hover:shadow-lg transition-all duration-300 border-l-4 border-l-primary">
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors duration-300">
-              <Map className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Total trips</p>
-              <p className="text-3xl font-bold tracking-tight">{trips.length}</p>
-            </div>
-            <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
-              <Map className="h-24 w-24" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden group hover:shadow-lg transition-all duration-300 border-l-4 border-l-success">
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-success/10 text-success group-hover:bg-success group-hover:text-white transition-colors duration-300">
-              <Wallet className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Total spent</p>
-              <p className="text-3xl font-bold tracking-tight">{formatCurrency(totalSpent)}</p>
-            </div>
-            <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
-              <Wallet className="h-24 w-24" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="relative overflow-hidden group hover:shadow-lg transition-all duration-300 border-l-4 border-l-warning">
-          <CardContent className="p-6 flex items-center gap-4">
-            <div className="p-3 rounded-xl bg-warning/10 text-warning group-hover:bg-warning group-hover:text-white transition-colors duration-300">
-              <HandCoins className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-muted-foreground">Pending settlements</p>
-              <p className="text-3xl font-bold tracking-tight">{pendingSettlements}</p>
-            </div>
-            <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
-              <HandCoins className="h-24 w-24" />
-            </div>
-          </CardContent>
-        </Card>
-      </motion.div>
-
-      {trips.length === 0 ? (
-        <EmptyState
-          title="No trips yet"
-          description="Create your first group trip and start tracking expenses together."
-          actionLabel="Create trip"
-          onAction={() => (window.location.href = '/trips/new')}
+        <StatCard
+          label="Real Trips"
+          value={realTrips.length}
+          icon={CheckCircle}
+          color="primary"
         />
-      ) : (
-        <>
-          {(['planned', 'ongoing', 'completed'] as const).map((status) => {
-            const list = grouped[status];
-            if (list.length === 0) return null;
-            return (
-              <section key={status}>
-                <h2 className="text-lg font-semibold capitalize mb-4">{status}</h2>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {list.map((trip, i) => (
-                    <TripCard
-                      key={trip.tripId}
-                      trip={trip}
-                      spent={spentByTrip[trip.tripId] ?? 0}
-                      index={i}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
-        </>
-      )}
+        <StatCard
+          label="Test Trips"
+          value={testTrips.length}
+          icon={TestTube}
+          color="warning"
+        />
+        <StatCard
+          label="Total Spent"
+          value={formatCurrency(totalSpent)}
+          icon={Wallet}
+          color="success"
+        />
+      </motion.div>
+      
+      <Tabs value={activeFilter} onValueChange={setActiveFilter}>
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto">
+          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
+          <TabsTrigger value="this_month">This Month</TabsTrigger>
+          <TabsTrigger value="ongoing">Ongoing</TabsTrigger>
+          <TabsTrigger value="completed">Completed</TabsTrigger>
+          <TabsTrigger value="all">All Real</TabsTrigger>
+          <TabsTrigger value="test_trips">Test Trips</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      
+      <div className="space-y-6">
+        {Object.keys(filteredAndGroupedTrips).length > 0 ? (
+          Object.entries(filteredAndGroupedTrips)
+            .sort(([catA], [catB]) => (catA === 'Uncategorized' ? 1 : catB === 'Uncategorized' ? -1 : catA.localeCompare(catB)))
+            .map(([category, tripsInCategory]) => (
+            <section key={category}>
+              <h2 className="text-xl font-semibold capitalize mb-4">{category}</h2>
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {tripsInCategory.map((trip, i) => (
+                  <TripCard
+                    key={trip.tripId}
+                    trip={trip}
+                    spent={spentByTrip[trip.tripId] ?? 0}
+                    index={i}
+                  />
+                ))}
+              </div>
+            </section>
+          ))
+        ) : (
+          <EmptyState
+            title="No trips found"
+            description={`There are no trips matching the "${activeFilter}" filter.`}
+          />
+        )}
+      </div>
     </div>
   );
 }
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-32 bg-muted/50 animate-pulse rounded-xl" />
+        ))}
+      </div>
+      <div className="space-y-4">
+        <div className="h-8 w-full bg-muted/50 animate-pulse rounded-lg" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-64 bg-muted/50 animate-pulse rounded-xl" />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: React.ElementType; color: 'primary' | 'success' | 'warning' }) {
+  const colors = {
+    primary: 'border-l-primary text-primary bg-primary/10 group-hover:bg-primary',
+    success: 'border-l-success text-success bg-success/10 group-hover:bg-success',
+    warning: 'border-l-warning text-warning bg-warning/10 group-hover:bg-warning',
+  }
+  return (
+     <Card className={`relative overflow-hidden group hover:shadow-lg transition-all duration-300 border-l-4 ${colors[color]}`}>
+        <CardContent className="p-6 flex items-center gap-4">
+          <div className={`p-3 rounded-xl ${colors[color]} group-hover:text-white transition-colors duration-300`}>
+            <Icon className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">{label}</p>
+            <p className="text-3xl font-bold tracking-tight">{value}</p>
+          </div>
+          <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
+            <Icon className="h-24 w-24" />
+          </div>
+        </CardContent>
+      </Card>
+  )
+}
+

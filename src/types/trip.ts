@@ -23,4 +23,6 @@ export interface Trip {
   currency: string;
   membersCount: number;
   createdAt: Timestamp;
+  category?: string;
+  classification?: 'real' | 'test';
 }
