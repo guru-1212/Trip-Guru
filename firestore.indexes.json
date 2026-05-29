@@ -1,0 +1,29 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "tripMembers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "inviteStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tripMembers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "email", "order": "ASCENDING" },
+        { "fieldPath": "inviteStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tripMembers",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "phone", "order": "ASCENDING" },
+        { "fieldPath": "inviteStatus", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
