@@ -95,10 +95,10 @@ export function TripCard({ trip, spent = 0, index = 0 }: TripCardProps) {
                 )}
               </div>
               <Progress 
-                value={progress} 
-                className={`h-2 ${isOverBudget ? 'bg-danger/20' : ''}`}
-                indicatorClassName={isOverBudget ? 'bg-danger' : 'bg-primary'}
-              />
+  value={progress} 
+  className={`h-2 ${isOverBudget ? 'bg-danger/20 [&>div]:bg-danger' : '[&>div]:bg-primary'}`}
+/>
+
             </div>
           </CardContent>
         </Card>

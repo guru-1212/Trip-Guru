@@ -38,7 +38,8 @@ function DashboardContent() {
   const [spentByTrip, setSpentByTrip] = useState<Record<string, number>>({});
   const [pendingSettlements, setPendingSettlements] = useState(0);
 
-  const firstName = user?.displayName?.split(' ')[0] || 'Traveler';
+const firstName = (user as any)?.displayName?.split(' ')[0] || 'Traveler';
+
 
   useEffect(() => {
     if (uid) dispatch(fetchUserTrips(uid));
