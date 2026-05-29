@@ -9,11 +9,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAppSelector } from '@/store';
 import { useExpenses } from '@/hooks/useExpenses';
 import { getMemberKey, formatCurrency } from '@/lib/utils';
+import { syncTripData } from '@/firebase/firestore';
 import dayjs from 'dayjs';
+import { useEffect } from 'react';
 
 export default function TripOverviewPage() {
   const params = useParams();
   const tripId = params.tripId as string;
+
+  useEffect(() => {
+    if (tripId) {
+      syncTripData(tripId).catch(console.error);
+    }
+  }, [tripId]);
 
   return (
     <TripPageShell tripId={tripId}>

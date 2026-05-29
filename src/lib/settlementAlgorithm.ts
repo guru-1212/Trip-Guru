@@ -13,17 +13,27 @@ export function calculateNetBalances(
   members: TripMember[]
 ): Map<string, number> {
   const balances = new Map<string, number>();
+  const activeKeys = new Set(members.map(getMemberKey));
 
-  members.forEach((m) => {
-    balances.set(getMemberKey(m), 0);
+  // 1. Initialize balances for all active members
+  activeKeys.forEach((key) => {
+    balances.set(key, 0);
   });
 
+  // 2. Process each expense against the balances
   expenses.forEach((expense) => {
-    const payer = expense.paidBy;
-    balances.set(payer, (balances.get(payer) ?? 0) + expense.amount);
+    const payerKey = expense.paidBy;
 
+    // A. Credit the person who paid
+    if (activeKeys.has(payerKey)) {
+      balances.set(payerKey, (balances.get(payerKey) ?? 0) + expense.amount);
+    }
+
+    // B. Debit the people who were part of the split
     expense.splitBetween.forEach((split) => {
-      balances.set(split.uid, (balances.get(split.uid) ?? 0) - split.amount);
+      if (activeKeys.has(split.uid)) {
+        balances.set(split.uid, (balances.get(split.uid) ?? 0) - split.amount);
+      }
     });
   });
 
@@ -77,8 +87,12 @@ export function computeSettlements(
     creditor.balance -= amount;
     debtor.balance -= amount;
 
+    // Force move to next index if balance is effectively zero
     if (creditor.balance < 0.01) ci++;
     if (debtor.balance < 0.01) di++;
+    
+    // Safety break: if we are stuck on the same person but balance won't drop
+    if (ci >= creditors.length || di >= debtors.length) break;
   }
 
   return settlements;

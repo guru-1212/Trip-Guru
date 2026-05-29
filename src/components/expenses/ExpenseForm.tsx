@@ -80,8 +80,9 @@ export function ExpenseForm({ tripId, members, createdBy, onSuccess }: ExpenseFo
     try {
       let splitBetween;
       if (splitType === 'equal') {
+        const uidsToSplit = selectedMembers.length > 0 ? selectedMembers : members.map(getMemberKey);
         splitBetween = calculateSplit('equal', data.amount, {
-          memberUids: selectedMembers.length ? selectedMembers : [paidBy],
+          memberUids: uidsToSplit,
         });
       } else if (splitType === 'unequal') {
         splitBetween = calculateSplit('unequal', data.amount, {

@@ -51,8 +51,16 @@ function MembersContent({ tripId }: { tripId: string }) {
   const pending = members.filter((m) => m.inviteStatus === 'pending');
 
   const handleRemove = async (memberId: string) => {
-    if (!confirm('Remove this member?')) return;
-    await removeTripMember(memberId);
+    if (!confirm('Remove this member? Any "Equal Split" expenses will be redistributed among remaining members.')) return;
+    setSubmitting(true);
+    try {
+      await removeTripMember(memberId);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to remove member');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleAddMember = async (e: React.FormEvent) => {

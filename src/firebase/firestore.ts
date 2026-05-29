@@ -105,15 +105,17 @@ export async function findUserByEmailOrPhone(
   phone: string
 ): Promise<string | null> {
   if (email) {
+    const normalizedEmail = email.trim().toLowerCase();
     const q = query(
       collection(db(), 'users'),
-      where('email', '==', email.toLowerCase())
+      where('email', '==', normalizedEmail)
     );
     const snap = await getDocs(q);
     if (!snap.empty) return snap.docs[0].id;
   }
   if (phone) {
-    const q = query(collection(db(), 'users'), where('phone', '==', phone));
+    const normalizedPhone = normalizePhone(phone);
+    const q = query(collection(db(), 'users'), where('phone', '==', normalizedPhone));
     const snap = await getDocs(q);
     if (!snap.empty) return snap.docs[0].id;
   }
@@ -160,16 +162,19 @@ export async function createTrip(input: CreateTripInput): Promise<string> {
     tripId,
     userId: input.createdBy,
     name: input.ownerName,
-    email: input.ownerEmail.toLowerCase(),
-    phone: input.ownerPhone,
+    email: input.ownerEmail.trim().toLowerCase(),
+    phone: normalizePhone(input.ownerPhone),
     role: 'owner',
     inviteStatus: 'accepted',
   });
 
   for (const member of input.members) {
+    const normalizedEmail = member.email.trim().toLowerCase();
+    const normalizedPhone = normalizePhone(member.phone);
+
     const matchedUserId = await findUserByEmailOrPhone(
-      member.email,
-      member.phone
+      normalizedEmail,
+      normalizedPhone
     );
     const memberUserId = matchedUserId;
     const memberDocId = memberUserId
@@ -180,8 +185,8 @@ export async function createTrip(input: CreateTripInput): Promise<string> {
       tripId,
       userId: matchedUserId,
       name: member.name,
-      email: member.email.toLowerCase(),
-      phone: member.phone,
+      email: normalizedEmail,
+      phone: normalizedPhone,
       role: 'editor',
       inviteStatus: matchedUserId ? 'accepted' : 'pending',
     });
@@ -207,7 +212,42 @@ export async function deleteExpense(expenseId: string): Promise<void> {
 }
 
 export async function removeTripMember(memberId: string): Promise<void> {
-  await deleteDoc(doc(db(), 'tripMembers', memberId));
+  const memberRef = doc(db(), 'tripMembers', memberId);
+  const memberSnap = await getDoc(memberRef);
+  if (!memberSnap.exists()) return;
+
+  const { tripId, userId } = memberSnap.data();
+  const memberKey = userId ?? memberId;
+
+  const expenses = await getExpenses(tripId);
+  const batch = writeBatch(db());
+
+  // 1. Redistribute Equal Split expenses
+  for (const exp of expenses) {
+    if (exp.splitType === 'equal') {
+      const uids = exp.splitBetween.map((s) => s.uid);
+      if (uids.includes(memberKey)) {
+        const remainingUids = uids.filter((uid) => uid !== memberKey);
+        if (remainingUids.length > 0) {
+          const newSplit = calculateEqualSplit(exp.amount, remainingUids);
+          batch.update(doc(db(), 'expenses', exp.id), {
+            splitBetween: newSplit,
+          });
+        }
+      }
+    }
+  }
+
+  // 2. Decrement trip member count
+  const tripRef = doc(db(), 'trips', tripId);
+  batch.update(tripRef, {
+    membersCount: increment(-1),
+  });
+
+  // 3. Delete member
+  batch.delete(memberRef);
+
+  await batch.commit();
 }
 
 export async function saveSettlements(
@@ -257,6 +297,18 @@ export async function updateTripStatus(
   await updateDoc(doc(db(), 'trips', tripId), { status });
 }
 
+export async function syncTripData(tripId: string): Promise<void> {
+  const members = await getTripMembers(tripId);
+  const trip = await getTrip(tripId);
+  if (!trip) return;
+
+  if (trip.membersCount !== members.length) {
+    await updateDoc(doc(db(), 'trips', tripId), {
+      membersCount: members.length,
+    });
+  }
+}
+
 export async function getPendingInvitesForUser(
   email: string,
   phone: string
@@ -265,9 +317,10 @@ export async function getPendingInvitesForUser(
   const seen = new Set<string>();
 
   if (email) {
+    const normalizedEmail = email.trim().toLowerCase();
     const q = query(
       collection(db(), 'tripMembers'),
-      where('email', '==', email.toLowerCase()),
+      where('email', '==', normalizedEmail),
       where('inviteStatus', '==', 'pending')
     );
     const snap = await getDocs(q);
@@ -280,9 +333,10 @@ export async function getPendingInvitesForUser(
   }
 
   if (phone) {
+    const normalizedPhone = normalizePhone(phone);
     const q = query(
       collection(db(), 'tripMembers'),
-      where('phone', '==', phone),
+      where('phone', '==', normalizedPhone),
       where('inviteStatus', '==', 'pending')
     );
     const snap = await getDocs(q);
@@ -358,7 +412,10 @@ export async function addMemberToTrip(
   member: { name: string; email: string; phone: string },
   recalculatePast: boolean
 ): Promise<string | null> {
-  const matchedUserId = await findUserByEmailOrPhone(member.email, member.phone);
+  const normalizedEmail = member.email.trim().toLowerCase();
+  const normalizedPhone = normalizePhone(member.phone);
+
+  const matchedUserId = await findUserByEmailOrPhone(normalizedEmail, normalizedPhone);
   const memberDocId = matchedUserId
     ? `${tripId}_${matchedUserId}`
     : doc(collection(db(), 'tripMembers')).id;
@@ -369,8 +426,8 @@ export async function addMemberToTrip(
     tripId,
     userId: matchedUserId,
     name: member.name,
-    email: member.email.toLowerCase(),
-    phone: member.phone,
+    email: normalizedEmail,
+    phone: normalizedPhone,
     role: 'editor',
     inviteStatus: matchedUserId ? 'accepted' : 'pending',
   });

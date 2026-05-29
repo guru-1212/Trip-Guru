@@ -7,6 +7,7 @@ import {
   doc,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '@/firebase/config';
+import { normalizePhone } from '@/lib/utils';
 
 export async function autoLinkMembersOnRegister(
   uid: string,
@@ -16,21 +17,24 @@ export async function autoLinkMembersOnRegister(
   const membersRef = collection(getFirebaseDb(), 'tripMembers');
   let linked = 0;
 
+  const normalizedEmail = email.trim().toLowerCase();
+  const normalizedPhone = normalizePhone(phone);
+
   const queries = [];
-  if (email) {
+  if (normalizedEmail) {
     queries.push(
       query(
         membersRef,
-        where('email', '==', email.toLowerCase()),
+        where('email', '==', normalizedEmail),
         where('inviteStatus', '==', 'pending')
       )
     );
   }
-  if (phone) {
+  if (normalizedPhone) {
     queries.push(
       query(
         membersRef,
-        where('phone', '==', phone),
+        where('phone', '==', normalizedPhone),
         where('inviteStatus', '==', 'pending')
       )
     );

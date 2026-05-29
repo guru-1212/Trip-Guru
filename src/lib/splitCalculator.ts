@@ -12,22 +12,20 @@ export function calculateEqualSplit(
   memberUids: string[]
 ): SplitEntry[] {
   if (memberUids.length === 0) {
-    throw new SplitValidationError('At least one member required for equal split');
+    throw new SplitValidationError('Cannot split between 0 members.');
   }
 
-  const base = Math.floor((total * 100) / memberUids.length) / 100;
-  let remainder = Math.round(total * 100) - base * 100 * memberUids.length;
-  remainder = Math.round(remainder);
+  const totalInCents = Math.round(total * 100);
+  const sharePerMember = Math.floor(totalInCents / memberUids.length);
+  let remainder = totalInCents % memberUids.length;
 
-  return memberUids.map((uid, index) => {
-    let amount = base;
-    if (index === memberUids.length - 1) {
-      amount = Math.round((total - base * (memberUids.length - 1)) * 100) / 100;
-    } else if (remainder > 0) {
-      amount = Math.round((base + 0.01) * 100) / 100;
-      remainder -= 1;
+  return memberUids.map((uid) => {
+    let finalShare = sharePerMember;
+    if (remainder > 0) {
+      finalShare++;
+      remainder--;
     }
-    return { uid, amount };
+    return { uid, amount: finalShare / 100 };
   });
 }
 

@@ -14,7 +14,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { fetchUserTrips } from '@/features/trips/tripsThunks';
-import { getExpenses } from '@/firebase/firestore';
+import { getExpenses, syncTripData } from '@/firebase/firestore';
 import { computeSettlements } from '@/lib/settlementAlgorithm';
 import { getTripMembers } from '@/firebase/firestore';
 import { useState } from 'react';
@@ -50,6 +50,9 @@ function DashboardContent() {
       const spent: Record<string, number> = {};
 
       for (const trip of trips) {
+        // Silently repair trip data (e.g., member counts)
+        await syncTripData(trip.tripId);
+        
         const expenses = await getExpenses(trip.tripId);
         spent[trip.tripId] = expenses.reduce((s, e) => s + e.amount, 0);
         const members = await getTripMembers(trip.tripId);
