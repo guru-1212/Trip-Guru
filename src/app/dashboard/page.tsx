@@ -23,6 +23,12 @@ import { Trip } from '@/types/trip';
 import { formatCurrency } from '@/lib/utils';
 import { TripInvitations } from '@/components/trips/TripInvitations';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function DashboardPage() {
   return (
@@ -39,7 +45,9 @@ function DashboardContent() {
   const dispatch = useAppDispatch();
   const { trips, loading } = useAppSelector((s) => s.trips);
   const [spentByTrip, setSpentByTrip] = useState<Record<string, number>>({});
+  const [userSpentByTrip, setUserSpentByTrip] = useState<Record<string, number>>({});
   const [activeFilter, setActiveFilter] = useState('upcoming');
+  const [showBreakdown, setShowBreakdown] = useState(false);
 
   const firstName = user?.name?.split(' ')[0] || 'Traveler';
 
@@ -49,15 +57,20 @@ function DashboardContent() {
 
   useEffect(() => {
     async function loadStats() {
-      const spent: Record<string, number> = {};
+      const tripSpent: Record<string, number> = {};
+      const userSpent: Record<string, number> = {};
       for (const trip of trips) {
         const expenses = await getExpenses(trip.tripId);
-        spent[trip.tripId] = expenses.reduce((s, e) => s + e.amount, 0);
+        tripSpent[trip.tripId] = expenses.reduce((s, e) => s + e.amount, 0);
+        userSpent[trip.tripId] = expenses
+          .filter((e) => e.paidBy === uid)
+          .reduce((s, e) => s + e.amount, 0);
       }
-      setSpentByTrip(spent);
+      setSpentByTrip(tripSpent);
+      setUserSpentByTrip(userSpent);
     }
-    if (trips.length > 0) loadStats();
-  }, [trips]);
+    if (trips.length > 0 && uid) loadStats();
+  }, [trips, uid]);
 
   const filteredAndGroupedTrips = useMemo(() => {
     const now = dayjs();
@@ -98,7 +111,28 @@ function DashboardContent() {
     }, {} as Record<string, Trip[]>);
   }, [trips, activeFilter]);
 
-  const totalSpent = Object.values(spentByTrip).reduce((a, b) => a + b, 0);
+  const totalUserSpent = useMemo(() => {
+    return Object.entries(userSpentByTrip)
+      .filter(([tripId]) => {
+        const trip = trips.find((t) => t.tripId === tripId);
+        return trip?.classification !== 'test';
+      })
+      .reduce((sum, [_, amount]) => sum + amount, 0);
+  }, [userSpentByTrip, trips]);
+
+  const spendBreakdown = useMemo(() => {
+    return Object.entries(userSpentByTrip)
+      .filter(([tripId]) => {
+        const trip = trips.find((t) => t.tripId === tripId);
+        return trip?.classification !== 'test' && userSpentByTrip[tripId] > 0;
+      })
+      .map(([tripId, amount]) => ({
+        tripName: trips.find((t) => t.tripId === tripId)?.tripName || 'Unknown',
+        amount,
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }, [userSpentByTrip, trips]);
+
   const realTrips = trips.filter((t) => t.classification !== 'test');
   const testTrips = trips.filter((t) => t.classification === 'test');
 
@@ -146,9 +180,10 @@ function DashboardContent() {
         />
         <StatCard
           label="Total Spent"
-          value={formatCurrency(totalSpent)}
+          value={formatCurrency(totalUserSpent)}
           icon={Wallet}
           color="success"
+          onClick={() => setShowBreakdown(true)}
         />
       </motion.div>
       
@@ -189,6 +224,43 @@ function DashboardContent() {
           />
         )}
       </div>
+
+      <Dialog open={showBreakdown} onOpenChange={setShowBreakdown}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Personal Spend Breakdown</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            {spendBreakdown.length > 0 ? (
+              <div className="space-y-3">
+                {spendBreakdown.map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex justify-between items-center border-b pb-2 last:border-0"
+                  >
+                    <span className="font-medium text-muted-foreground truncate mr-4">
+                      {item.tripName}
+                    </span>
+                    <span className="font-bold text-foreground shrink-0">
+                      {formatCurrency(item.amount)}
+                    </span>
+                  </div>
+                ))}
+                <div className="flex justify-between items-center pt-4 border-t border-dashed">
+                  <span className="font-bold text-lg">Total</span>
+                  <span className="font-bold text-lg text-primary">
+                    {formatCurrency(totalUserSpent)}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-8">
+                No personal expenses recorded yet.
+              </p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -213,27 +285,54 @@ function DashboardSkeleton() {
   );
 }
 
-function StatCard({ label, value, icon: Icon, color }: { label: string; value: string | number; icon: React.ElementType; color: 'primary' | 'success' | 'warning' }) {
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  color,
+  onClick,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ElementType;
+  color: 'primary' | 'success' | 'warning';
+  onClick?: () => void;
+}) {
   const colors = {
-    primary: 'border-l-primary text-primary bg-primary/10 group-hover:bg-primary',
-    success: 'border-l-success text-success bg-success/10 group-hover:bg-success',
-    warning: 'border-l-warning text-warning bg-warning/10 group-hover:bg-warning',
-  }
+    primary:
+      'border-l-primary text-primary bg-primary/10 group-hover:bg-primary',
+    success:
+      'border-l-success text-success bg-success/10 group-hover:bg-success',
+    warning:
+      'border-l-warning text-warning bg-warning/10 group-hover:bg-warning',
+  };
   return (
-     <Card className={`relative overflow-hidden group hover:shadow-lg transition-all duration-300 border-l-4 ${colors[color]}`}>
-        <CardContent className="p-6 flex items-center gap-4">
-          <div className={`p-3 rounded-xl ${colors[color]} group-hover:text-white transition-colors duration-300`}>
-            <Icon className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">{label}</p>
-            <p className="text-3xl font-bold tracking-tight">{value}</p>
-          </div>
-          <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
-            <Icon className="h-24 w-24" />
-          </div>
-        </CardContent>
-      </Card>
-  )
+    <Card
+      className={`relative overflow-hidden group hover:shadow-lg transition-all duration-300 border-l-4 ${
+        colors[color]
+      } ${onClick ? 'cursor-pointer' : ''}`}
+      onClick={onClick}
+    >
+      <CardContent className="p-6 flex items-center gap-4">
+        <div
+          className={`p-3 rounded-xl ${colors[color]} group-hover:text-white transition-colors duration-300`}
+        >
+          <Icon className="h-6 w-6" />
+        </div>
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          <p className="text-3xl font-bold tracking-tight">{value}</p>
+          {onClick && (
+            <p className="text-[10px] text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              Click to view breakdown
+            </p>
+          )}
+        </div>
+        <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
+          <Icon className="h-24 w-24" />
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
