@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import './globals.css';
 import { ReduxProvider } from '@/components/providers/ReduxProvider';
 import { FCMProvider } from '@/components/providers/FCMProvider';
+import { PWAInstallPrompt } from '@/components/common/PWAInstallPrompt';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -35,7 +36,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
         <ReduxProvider>
-          <FCMProvider>{children}</FCMProvider>
+          <FCMProvider>
+            {children}
+            <PWAInstallPrompt />
+          </FCMProvider>
         </ReduxProvider>
       </body>
     </html>

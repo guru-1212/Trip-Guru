@@ -13,7 +13,12 @@ Foundational guidance for the TripMate repository.
 
 ## Technical Patterns
 
-### 1. Data Access (Firestore)
+### 1. PWA & Installation
+- **Service Worker:** Managed by `next-pwa`. Configured in `next.config.js`.
+- **Install Prompt:** Custom logic in `src/components/common/PWAInstallPrompt.tsx` handles the `beforeinstallprompt` event.
+- **Manifest:** Located at `public/manifest.json`. Defines app identity and standalone behavior.
+
+### 2. Data Access (Firestore)
 - **Centralized Logic:** All Firestore interactions must reside in `src/firebase/firestore.ts`.
 - **Normalization:** Normalize phone numbers using `normalizePhone` from `@/lib/utils`.
 - **Atomic Operations:** Use `writeBatch` for multi-document updates (e.g., creating a trip with members).
