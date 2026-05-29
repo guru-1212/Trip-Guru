@@ -39,7 +39,7 @@ function DashboardContent() {
   const [pendingSettlements, setPendingSettlements] = useState(0);
 
 const firstName = (user as any)?.displayName?.split(' ')[0] || 'Traveler';
-
+// adjsfl
 
   useEffect(() => {
     if (uid) dispatch(fetchUserTrips(uid));
