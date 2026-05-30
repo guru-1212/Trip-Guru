@@ -29,7 +29,7 @@ export function ComparisonOverview({ expenses, currency, tripId, expectedBudget 
         .reduce((sum, e) => sum + e.amount, 0);
       
       const actual = expenses
-        .filter(e => e.category === cat && e.expenseType === 'actual')
+        .filter(e => e.category === cat && (e.expenseType || 'actual') === 'actual')
         .reduce((sum, e) => sum + e.amount, 0);
         
       return { category: cat, planned, actual };
@@ -100,11 +100,17 @@ export function ComparisonOverview({ expenses, currency, tripId, expectedBudget 
                 <div key={cat.category} className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="font-medium">{cat.category}</span>
-                    <span>
-                      <span className="font-bold">{formatCurrency(cat.actual, currency)}</span>
-                      <span className="text-muted-foreground mx-1">/</span>
-                      <span className="text-muted-foreground">{formatCurrency(cat.planned, currency)}</span>
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground block leading-none mb-1">Real</span>
+                        <span className="font-bold">{formatCurrency(cat.actual, currency)}</span>
+                      </div>
+                      <div className="text-muted-foreground/30 h-4 w-[1px] bg-border mx-1" />
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold uppercase text-muted-foreground block leading-none mb-1">Assumption</span>
+                        <span className="text-muted-foreground">{formatCurrency(cat.planned, currency)}</span>
+                      </div>
+                    </div>
                   </div>
                   <Progress 
                     value={percent} 

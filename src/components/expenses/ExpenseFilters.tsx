@@ -2,7 +2,7 @@
 
 import { useAppDispatch, useAppSelector } from '@/store';
 import { setFilters } from '@/features/expenses/expensesSlice';
-import { ExpenseCategory } from '@/types/expense';
+import { ExpenseCategory, DEFAULT_EXPENSE_CATEGORIES } from '@/types/expense';
 import { TripMember } from '@/types/member';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -15,10 +15,6 @@ import {
 } from '@/components/ui/select';
 import { getMemberKey } from '@/lib/utils';
 
-const categories: (ExpenseCategory | 'all')[] = [
-  'all', 'Food', 'Hotel', 'Petrol', 'Toll', 'Shopping', 'Ticket', 'Emergency', 'Misc',
-];
-
 interface ExpenseFiltersProps {
   members: TripMember[];
 }
@@ -26,6 +22,10 @@ interface ExpenseFiltersProps {
 export function ExpenseFilters({ members }: ExpenseFiltersProps) {
   const dispatch = useAppDispatch();
   const filters = useAppSelector((s) => s.expenses.filters);
+  const { currentTrip } = useAppSelector((s) => s.trips);
+
+  const customCategories = currentTrip?.customExpenseCategories || [];
+  const allCategories = ['all', ...DEFAULT_EXPENSE_CATEGORIES, ...customCategories];
 
   return (
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 p-4 rounded-lg border border-border bg-muted/30">
@@ -41,7 +41,7 @@ export function ExpenseFilters({ members }: ExpenseFiltersProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {categories.map((c) => (
+            {allCategories.map((c) => (
               <SelectItem key={c} value={c}>
                 {c}
               </SelectItem>

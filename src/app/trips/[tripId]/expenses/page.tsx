@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { Plus, Receipt, LayoutDashboard, Calculator, History } from 'lucide-react';
+import { Plus, Receipt, LayoutDashboard, Calculator, History, Settings } from 'lucide-react';
 import { TripPageShell } from '@/components/trips/TripPageShell';
 import { ExpenseCard } from '@/components/expenses/ExpenseCard';
 import { ExpenseForm } from '@/components/expenses/ExpenseForm';
 import { ExpenseFilters } from '@/components/expenses/ExpenseFilters';
 import { ComparisonOverview } from '@/components/expenses/ComparisonOverview';
+import { CategoryManagementDialog } from '@/components/expenses/CategoryManagementDialog';
 import { EmptyState } from '@/components/common/EmptyState';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -108,18 +110,22 @@ function ExpensesContent({ tripId }: { tripId: string }) {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 h-auto p-1 bg-muted/50">
-          <TabsTrigger value="actual" className="py-2">
-            <History className="h-4 w-4 mr-2" />
+        <TabsList className="grid w-full grid-cols-4 h-auto p-1 bg-muted/50">
+          <TabsTrigger value="actual" className="py-2 text-xs sm:text-sm">
+            <History className="h-4 w-4 mr-1 sm:mr-2" />
             Real
           </TabsTrigger>
-          <TabsTrigger value="planned" className="py-2">
-            <Calculator className="h-4 w-4 mr-2" />
+          <TabsTrigger value="planned" className="py-2 text-xs sm:text-sm">
+            <Calculator className="h-4 w-4 mr-1 sm:mr-2" />
             Planned
           </TabsTrigger>
-          <TabsTrigger value="overview" className="py-2">
-            <LayoutDashboard className="h-4 w-4 mr-2" />
+          <TabsTrigger value="overview" className="py-2 text-xs sm:text-sm">
+            <LayoutDashboard className="h-4 w-4 mr-1 sm:mr-2" />
             Overview
+          </TabsTrigger>
+          <TabsTrigger value="settings" className="py-2 text-xs sm:text-sm">
+            <Settings className="h-4 w-4 mr-1 sm:mr-2" />
+            Settings
           </TabsTrigger>
         </TabsList>
 
@@ -190,6 +196,26 @@ function ExpensesContent({ tripId }: { tripId: string }) {
               tripId={tripId}
               expectedBudget={trip?.expectedBudget ?? 0}
             />
+          </TabsContent>
+
+          <TabsContent value="settings" className="m-0 space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold">Trip Settings</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex items-center justify-between p-4 rounded-xl border border-border/50 bg-muted/20">
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold">Expense Categories</p>
+                    <p className="text-xs text-muted-foreground">Add or remove custom categories for this trip.</p>
+                  </div>
+                  <CategoryManagementDialog 
+                    tripId={tripId} 
+                    customCategories={trip?.customExpenseCategories || []} 
+                  />
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
         </div>
       </Tabs>

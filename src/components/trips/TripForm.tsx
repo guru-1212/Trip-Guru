@@ -257,7 +257,20 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
             </div>
             <div>
               <Label htmlFor="currency">Currency</Label>
-              <Input id="currency" {...register('currency')} />
+              <Select
+                value={watch('currency')}
+                onValueChange={(v) => setValue('currency', v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="INR">INR (₹)</SelectItem>
+                  <SelectItem value="USD">USD ($)</SelectItem>
+                  <SelectItem value="EUR">EUR (€)</SelectItem>
+                  <SelectItem value="GBP">GBP (£)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
