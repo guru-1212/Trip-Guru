@@ -81,6 +81,7 @@ function DashboardContent() {
     .sort((a, b) => a.startDate.toMillis() - b.startDate.toMillis());
   
   const totalPersonalSpent = Object.values(userSpentByTrip).reduce((a, b) => a + b, 0);
+  const totalRealSpent = Object.values(spentByTrip).reduce((a, b) => a + b, 0);
   const totalUpcomingBudget = upcomingTrips.reduce((sum, t) => sum + t.expectedBudget, 0);
   
   const planAccuracy = useMemo(() => {
@@ -198,16 +199,22 @@ function DashboardContent() {
           )}
         </motion.div>
 
-        {/* Total Spent Stat */}
+        {/* Total Real Spent Stat */}
         <motion.div variants={item}>
           <Card className="h-full rounded-[24px] md:rounded-[28px] border-border/40 shadow-sm p-6 md:p-8 flex flex-col justify-between group">
              <div>
-               <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest block mb-3 md:mb-4">Personal Spends</span>
+               <div className="flex justify-between items-start mb-3 md:mb-4">
+                 <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Total Real-time Spent</span>
+                 <div className="flex items-center gap-1.5">
+                   <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                   <span className="text-[9px] font-black uppercase text-emerald-500 tracking-tighter">Live</span>
+                 </div>
+               </div>
                <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white leading-none">
-                 {formatCurrency(totalPersonalSpent)}
+                 {formatCurrency(totalRealSpent)}
                </h3>
-               <p className="text-emerald-500 text-[10px] md:text-xs font-bold mt-2 md:mt-3 flex items-center gap-1">
-                 <TrendingUp className="h-3 w-3" /> +12% from last trip
+               <p className="text-muted-foreground text-[10px] font-bold mt-3 uppercase tracking-tight">
+                 Across all journeys
                </p>
              </div>
              <div className="h-10 md:h-12 w-full bg-indigo-50 dark:bg-indigo-500/10 rounded-xl mt-4 md:mt-6 overflow-hidden flex items-end gap-1 px-1 py-1">
