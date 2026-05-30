@@ -28,23 +28,6 @@ export function Navbar() {
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-3 sm:px-4 lg:px-8">
         <div className="flex items-center gap-2 sm:gap-4">
-          <Sheet open={open} onOpenChange={setOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="lg:hidden rounded-xl h-9 w-9">
-                <Menu className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="p-0 w-[280px] sm:w-72 border-r-0">
-              <div className="p-6 border-b border-border/40 flex items-center justify-between">
-                 <Link href="/dashboard" className="flex items-center gap-2 font-black text-xl text-primary" onClick={() => setOpen(false)}>
-                  <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white text-base shadow-lg shadow-primary/20">T</div>
-                  TripMate
-                </Link>
-              </div>
-              <Sidebar mobile onLinkClick={() => setOpen(false)} />
-            </SheetContent>
-          </Sheet>
-
           <Link href="/dashboard" className="flex items-center gap-2 font-black text-lg sm:text-xl text-primary">
             <div className="w-9 h-9 sm:w-10 sm:h-10 bg-primary rounded-xl flex items-center justify-center text-white text-base sm:text-lg shadow-lg shadow-primary/20 transition-transform active:scale-95">T</div>
             <span className="hidden xs:inline tracking-tighter">TripMate</span>
@@ -80,6 +63,23 @@ export function Navbar() {
                 </Avatar>
               </div>
             </Link>
+
+            <Sheet open={open} onOpenChange={setOpen}>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="lg:hidden rounded-xl h-9 w-9">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="p-0 w-[280px] sm:w-72 border-l-0">
+                <div className="p-6 border-b border-border/40 flex items-center justify-between">
+                  <Link href="/dashboard" className="flex items-center gap-2 font-black text-xl text-primary" onClick={() => setOpen(false)}>
+                    <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center text-white text-base shadow-lg shadow-primary/20">T</div>
+                    TripMate
+                  </Link>
+                </div>
+                <Sidebar mobile onLinkClick={() => setOpen(false)} />
+              </SheetContent>
+            </Sheet>
           </div>
         </div>
       </div>

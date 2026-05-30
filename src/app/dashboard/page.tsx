@@ -11,7 +11,8 @@ import {
   ChevronRight,
   Calendar,
   MapPin,
-  Sparkles
+  Sparkles,
+  Globe
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import { ProtectedRoute } from '@/components/common/ProtectedRoute';
@@ -46,6 +47,7 @@ function DashboardContent() {
   const [spentByTrip, setSpentByTrip] = useState<Record<string, number>>({});
   const [userSpentByTrip, setUserSpentByTrip] = useState<Record<string, number>>({});
   const [loadingStats, setLoadingStats] = useState(true);
+  const [viewMode, setViewMode] = useState<'real' | 'test'>('real');
 
   useEffect(() => {
     if (uid) dispatch(fetchUserTrips(uid));
@@ -75,17 +77,19 @@ function DashboardContent() {
     else if (trips.length === 0) setLoadingStats(false);
   }, [trips, uid]);
 
-  const ongoingTrip = trips.find(t => t.status === 'ongoing');
+  const ongoingTrip = trips.find(t => t.status === 'ongoing' && (t.classification || 'real') === viewMode);
   const upcomingTrips = trips
-    .filter(t => t.status === 'planned' && t.classification !== 'test')
+    .filter(t => t.status === 'planned' && (t.classification || 'real') === viewMode)
     .sort((a, b) => a.startDate.toMillis() - b.startDate.toMillis());
   
-  const totalPersonalSpent = Object.values(userSpentByTrip).reduce((a, b) => a + b, 0);
-  const totalRealSpent = Object.values(spentByTrip).reduce((a, b) => a + b, 0);
+  const filteredTripsForStats = trips.filter(t => (t.classification || 'real') === viewMode);
+  
+  const totalPersonalSpent = filteredTripsForStats.reduce((acc, t) => acc + (userSpentByTrip[t.tripId] || 0), 0);
+  const totalRealSpent = filteredTripsForStats.reduce((acc, t) => acc + (spentByTrip[t.tripId] || 0), 0);
   const totalUpcomingBudget = upcomingTrips.reduce((sum, t) => sum + t.expectedBudget, 0);
   
   const planAccuracy = useMemo(() => {
-    const completed = trips.filter(t => t.status === 'completed');
+    const completed = filteredTripsForStats.filter(t => t.status === 'completed');
     if (completed.length === 0) return 100;
     const accuracies = completed.map(t => {
       const actual = spentByTrip[t.tripId] || 0;
@@ -93,7 +97,7 @@ function DashboardContent() {
       return Math.max(0, 100 - Math.abs(((actual - expected) / expected) * 100));
     });
     return Math.round(accuracies.reduce((a, b) => a + b, 0) / accuracies.length);
-  }, [trips, spentByTrip]);
+  }, [filteredTripsForStats, spentByTrip]);
 
   if (loading && trips.length === 0) return <DashboardSkeleton />;
 
@@ -127,7 +131,25 @@ function DashboardContent() {
             Your "Travel OS" is ready for adventure.
           </p>
         </motion.div>
-        <motion.div variants={item}>
+        <motion.div variants={item} className="flex flex-col sm:flex-row gap-3">
+          <div className="bg-muted p-1 rounded-2xl flex gap-1 self-start sm:self-center shadow-inner">
+            <Button 
+              variant={viewMode === 'real' ? 'default' : 'ghost'} 
+              size="sm" 
+              className="rounded-xl px-4 h-9 text-xs font-bold"
+              onClick={() => setViewMode('real')}
+            >
+              Real Trips
+            </Button>
+            <Button 
+              variant={viewMode === 'test' ? 'default' : 'ghost'} 
+              size="sm" 
+              className="rounded-xl px-4 h-9 text-xs font-bold"
+              onClick={() => setViewMode('test')}
+            >
+              Test Trips
+            </Button>
+          </div>
           <Link href="/trips/new" className="w-full sm:w-auto">
             <Button size="lg" className="w-full sm:w-auto rounded-2xl px-8 h-12 md:h-14 font-bold shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95">
               <PlusCircle className="h-5 w-5 mr-3" /> Plan New Trip
@@ -187,13 +209,19 @@ function DashboardContent() {
               </Card>
             </Link>
           ) : (
-            <Card className="h-full min-h-[300px] md:min-h-[340px] rounded-[24px] md:rounded-[32px] bg-muted/30 border-dashed border-2 flex items-center justify-center text-center p-6 md:p-12">
-               <div className="space-y-4 max-w-xs">
-                 <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                   <Target className="h-7 w-7 text-muted-foreground" />
-                 </div>
-                 <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">No active journey</h3>
-                 <p className="text-muted-foreground font-medium text-xs leading-relaxed">Start an ongoing trip to see your live travel execution stats here.</p>
+            <Card className="h-full min-h-[300px] md:min-h-[340px] rounded-[24px] md:rounded-[32px] bg-muted/30 border-dashed border-2 flex items-center justify-center text-center p-6 md:p-12 group overflow-hidden relative transition-all hover:bg-muted/40">
+               <div className="absolute inset-0 bg-gradient-to-b from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+               <div className="relative z-10 space-y-4 max-w-xs">
+                 <AnimatedGlobe />
+                 <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 tracking-tight">Adventure Awaits</h3>
+                 <p className="text-muted-foreground font-medium text-sm leading-relaxed">
+                   Your dashboard is ready, but your next journey hasn't started. Create or start a trip to begin!
+                 </p>
+                 <Link href="/trips/new" className="inline-block mt-2">
+                   <Button variant="outline" className="rounded-xl font-bold border-primary/20 hover:bg-primary/5 shadow-sm">
+                     Plan Your First Trip
+                   </Button>
+                 </Link>
                </div>
             </Card>
           )}
@@ -361,6 +389,60 @@ function DashboardSkeleton() {
         <div className="h-36 bg-muted/50 rounded-[24px] md:rounded-[28px]" />
         <div className="h-36 bg-muted/50 rounded-[24px] md:rounded-[28px]" />
       </div>
+    </div>
+  );
+}
+
+function AnimatedGlobe() {
+  return (
+    <div className="relative w-24 h-24 mx-auto mb-6">
+      {/* Outer rotating ring */}
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+        className="absolute inset-0 border-2 border-dashed border-primary/20 rounded-full"
+      />
+      
+      {/* Middle rotating ring (reverse) */}
+      <motion.div
+        animate={{ rotate: -360 }}
+        transition={{ duration: 25, repeat: Infinity, ease: "linear" }}
+        className="absolute inset-4 border border-primary/10 rounded-full"
+      />
+      
+      {/* Inner glowing globe */}
+      <motion.div
+        animate={{ 
+          scale: [1, 1.08, 1],
+        }}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute inset-6 bg-gradient-to-br from-primary/20 via-primary/5 to-transparent rounded-full flex items-center justify-center shadow-[0_0_30px_rgba(99,102,241,0.15)]"
+      >
+        <Globe className="h-10 w-10 text-primary animate-pulse" strokeWidth={1.5} />
+      </motion.div>
+      
+      {/* Floating particles */}
+      {[...Array(4)].map((_, i) => (
+        <motion.div
+          key={i}
+          animate={{
+            y: [0, -20, 0],
+            opacity: [0, 1, 0],
+            scale: [0, 1, 0]
+          }}
+          transition={{
+            duration: 3 + i,
+            repeat: Infinity,
+            delay: i * 0.7,
+            ease: "easeInOut"
+          }}
+          className="absolute w-1 h-1 bg-primary/40 rounded-full shadow-[0_0_8px_rgba(99,102,241,0.6)]"
+          style={{
+            top: `${15 + Math.random() * 70}%`,
+            left: `${15 + Math.random() * 70}%`,
+          }}
+        />
+      ))}
     </div>
   );
 }

@@ -22,8 +22,16 @@ import { uploadProfilePhoto } from '@/firebase/storage';
 import { updateProfileLocal } from '@/features/auth/authSlice';
 import { useAppDispatch } from '@/store';
 import { TripMember } from '@/types/member';
-import { LogOut, Bell } from 'lucide-react';
+import { LogOut, Bell, Camera, User as UserIcon } from 'lucide-react';
 import Link from 'next/link';
+import { ImageCropper } from '@/components/profile/ImageCropper';
+import { requestFCMToken, notifyTripMembersOfExpense } from '@/services/fcmService';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function ProfilePage() {
   return (
@@ -46,6 +54,8 @@ function ProfileContent() {
   const [inviteTripNames, setInviteTripNames] = useState<Record<string, string>>({});
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [cropImage, setCropImage] = useState<string | null>(null);
+  const [isCropOpen, setIsCropOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -93,12 +103,75 @@ function ProfileContent() {
     }
   };
 
-  const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !uid) return;
-    const url = await uploadProfilePhoto(uid, file);
-    await updateUser(uid, { photoURL: url });
-    dispatch(updateProfileLocal({ photoURL: url }));
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropImage(reader.result as string);
+      setIsCropOpen(true);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = ''; 
+  };
+
+  const handleCropComplete = async (blob: Blob) => {
+    if (!uid) return;
+    setIsCropOpen(false);
+    setSaving(true);
+    try {
+      const file = new File([blob], 'profile.jpg', { type: 'image/jpeg' });
+      const url = await uploadProfilePhoto(uid, file);
+      await updateUser(uid, { photoURL: url });
+      dispatch(updateProfileLocal({ photoURL: url }));
+    } finally {
+      setSaving(false);
+      setCropImage(null);
+    }
+  };
+
+  const handleToggleNotify = async (enabled: boolean) => {
+    // 1. Update local UI state immediately so checkbox feels responsive
+    setNotifyEnabled(enabled);
+
+    if (!uid) return;
+
+    try {
+      if (enabled) {
+        // 2. Request FCM Token
+        const token = await requestFCMToken(uid);
+        if (!token) {
+          // If token fails, revert the toggle
+          setNotifyEnabled(false);
+          await updateUser(uid, { notifyEnabled: false });
+          dispatch(updateProfileLocal({ notifyEnabled: false }));
+          return;
+        }
+      }
+      
+      // 3. Update Firestore and Redux
+      await updateUser(uid, { notifyEnabled: enabled });
+      dispatch(updateProfileLocal({ notifyEnabled: enabled }));
+    } catch (error) {
+      console.error('Failed to update notification settings:', error);
+      // Revert UI on error
+      setNotifyEnabled(!enabled);
+    }
+  };
+
+  const handleTestNotification = async () => {
+    if (!uid) return;
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission !== 'granted') {
+        alert('Please enable notifications first.');
+        return;
+      }
+      new Notification('TripMate Test', {
+        body: 'If you see this, notifications are working!',
+        icon: '/icons/icon-192x192.png',
+      });
+    }
   };
 
   const handleSignOut = async () => {
@@ -107,108 +180,107 @@ function ProfileContent() {
   };
 
   return (
-    <div className="max-w-lg mx-auto space-y-6">
-      <h1 className="text-2xl font-bold">Profile</h1>
+    <div className="max-w-xl mx-auto space-y-8 md:space-y-12">
+      <div className="space-y-2 text-center sm:text-left">
+        <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">Account</h1>
+        <p className="text-muted-foreground font-medium">Manage your personal "Travel OS" settings.</p>
+      </div>
 
-      <Card>
-        <CardContent className="p-6 flex flex-col items-center gap-4">
-          <Avatar className="h-24 w-24">
-            <AvatarImage src={user?.photoURL} />
-            <AvatarFallback className="text-2xl">
-              {user?.name?.[0]?.toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <Label htmlFor="photo" className="cursor-pointer text-primary text-sm">
-              Change photo
+      <Card className="rounded-[32px] overflow-hidden border-border/40 shadow-xl shadow-slate-200/20 dark:shadow-none bg-white dark:bg-slate-900/50">
+        <CardContent className="p-10 flex flex-col items-center text-center gap-6">
+          <div className="relative group">
+            <Avatar className="h-32 w-32 border-4 border-background shadow-2xl ring-1 ring-border/10">
+              <AvatarImage src={user?.photoURL} className="object-cover" />
+              <AvatarFallback className="bg-primary/5 text-primary text-4xl font-black">
+                {user?.name?.[0]?.toUpperCase()}
+              </AvatarFallback>
+            </Avatar>
+            <Label 
+              htmlFor="photo" 
+              className="absolute bottom-1 right-1 w-10 h-10 bg-primary text-white rounded-2xl flex items-center justify-center cursor-pointer shadow-lg hover:scale-110 active:scale-95 transition-all"
+            >
+              <Camera className="h-5 w-5" />
             </Label>
             <Input
               id="photo"
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={handlePhoto}
+              onChange={handlePhotoSelect}
             />
+          </div>
+          
+          <div className="space-y-1">
+            <h2 className="text-2xl font-black text-slate-900 dark:text-white leading-none">{user?.name}</h2>
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">{user?.email}</p>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Personal info</CardTitle>
+      <Dialog open={isCropOpen} onOpenChange={setIsCropOpen}>
+        <DialogContent className="max-w-md p-0 overflow-hidden rounded-[32px] border-0 shadow-2xl">
+          <DialogHeader className="p-6 pb-0">
+            <DialogTitle className="text-xl font-black text-center">Crop Profile Photo</DialogTitle>
+          </DialogHeader>
+          {cropImage && (
+            <ImageCropper 
+              imageSrc={cropImage} 
+              onCrop={handleCropComplete} 
+              onCancel={() => setIsCropOpen(false)} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Card className="rounded-[32px] border-border/40 shadow-sm bg-white dark:bg-slate-900/50">
+        <CardHeader className="px-8 pt-8 flex flex-row items-center justify-between">
+          <CardTitle className="text-xl font-black">Personal Info</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="name">Name</Label>
-            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+        <CardContent className="px-8 pb-8 space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="name" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Full Name</Label>
+            <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="rounded-xl h-12 font-bold" />
           </div>
-          <div>
-            <Label htmlFor="phone">Phone</Label>
-            <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <div className="space-y-2">
+            <Label htmlFor="phone" className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Phone Number</Label>
+            <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="rounded-xl h-12 font-bold" />
           </div>
-          <p className="text-sm text-muted-foreground">{user?.email}</p>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? 'Saving...' : 'Save changes'}
+          <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto rounded-xl px-8 h-12 font-bold shadow-lg shadow-primary/20 transition-all active:scale-95">
+            {saving ? 'Saving...' : 'Save Changes'}
           </Button>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Bell className="h-5 w-5" /> Notifications
+      <Card className="rounded-[32px] border-border/40 shadow-sm bg-white dark:bg-slate-900/50">
+        <CardHeader className="px-8 pt-8 flex flex-row items-center justify-between">
+          <CardTitle className="text-xl font-black flex items-center gap-2">
+            <Bell className="h-5 w-5 text-primary" /> Notifications
           </CardTitle>
+          <Button variant="outline" size="sm" className="rounded-xl text-[10px] font-black uppercase h-8" onClick={handleTestNotification}>
+            Test Alert
+          </Button>
         </CardHeader>
-        <CardContent>
-          <label className="flex items-center gap-3 cursor-pointer">
+        <CardContent className="px-8 pb-8">
+          <label className="flex items-center gap-4 cursor-pointer group bg-muted/30 p-4 rounded-2xl hover:bg-muted/50 transition-colors">
             <input
               type="checkbox"
               checked={notifyEnabled}
-              onChange={(e) => setNotifyEnabled(e.target.checked)}
-              className="h-4 w-4 rounded border-border"
+              onChange={(e) => handleToggleNotify(e.target.checked)}
+              className="h-5 w-5 rounded-lg border-primary accent-primary cursor-pointer"
             />
-            <span className="text-sm">Enable push notifications</span>
+            <div className="space-y-0.5">
+              <p className="text-sm font-bold">Enable Push Notifications</p>
+              <p className="text-[10px] font-medium text-muted-foreground leading-none">Get alerts for new expenses and trip invites.</p>
+            </div>
           </label>
         </CardContent>
       </Card>
 
-      {pendingInvites.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Pending trip invites</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {pendingInvites.map((inv) => (
-              <div
-                key={inv.id}
-                className="flex items-center justify-between gap-2 p-3 rounded-md border flex-wrap"
-              >
-                <span className="text-sm font-medium">
-                  {inviteTripNames[inv.id] ?? 'Trip invite'}
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    disabled={acceptingId === inv.id}
-                    onClick={() => handleAcceptInvite(inv.id)}
-                  >
-                    {acceptingId === inv.id ? 'Accepting...' : 'Accept'}
-                  </Button>
-                  <Link href={`/trips/${inv.tripId}`}>
-                    <Badge className="cursor-pointer h-9 flex items-center px-3">
-                      View
-                    </Badge>
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      <Button variant="destructive" className="w-full" onClick={handleSignOut}>
-        <LogOut className="h-4 w-4 mr-2" /> Sign out
-      </Button>
+      <div className="pt-4 flex flex-col gap-4">
+        <Button variant="ghost" className="w-full rounded-2xl font-black text-xs uppercase tracking-widest h-12 hover:bg-destructive/5 hover:text-destructive transition-all" onClick={handleSignOut}>
+          <LogOut className="h-4 w-4 mr-2" /> Sign out from device
+        </Button>
+      </div>
     </div>
   );
 }
