@@ -13,6 +13,7 @@ import {
   FolderPen,
   TestTube,
   CheckCircle,
+  Pencil,
 } from 'lucide-react';
 import { Trip } from '@/types/trip';
 import { useAuth } from '@/hooks/useAuth';
@@ -31,6 +32,13 @@ import { EditCategoryDialog } from './EditCategoryDialog';
 import { formatCurrency } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import dayjs from 'dayjs';
+import { TripForm } from './TripForm';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 const tripTypeIcons: Record<string, string> = {
   friends: '👥',
@@ -44,23 +52,19 @@ const tripTypeIcons: Record<string, string> = {
 interface TripCardProps {
   trip: Trip;
   spent?: number;
+  planned?: number;
   index?: number;
 }
 
-export function TripCard({ trip, spent = 0, index = 0 }: TripCardProps) {
+export function TripCard({ trip, spent = 0, planned = 0, index = 0 }: TripCardProps) {
   const { uid } = useAuth();
   const dispatch = useAppDispatch();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
 
   const progress = Math.min((spent / trip.expectedBudget) * 100, 100);
   const isOverBudget = spent > trip.expectedBudget;
   const isOwner = trip.createdBy === uid;
-
-  const handleMenuSelect = (e: Event) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDialogOpen(true);
-  };
 
   const handleSetClassification = (classification: 'real' | 'test') => {
     dispatch(updateTripClassification({ tripId: trip.tripId, classification }));
@@ -111,9 +115,13 @@ export function TripCard({ trip, spent = 0, index = 0 }: TripCardProps) {
                         e.stopPropagation();
                       }}
                     >
-                      <DropdownMenuItem onSelect={handleMenuSelect}>
+                      <DropdownMenuItem onSelect={() => setIsCategoryDialogOpen(true)}>
                         <FolderPen className="h-4 w-4 mr-2" />
                         Edit Category
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setIsDetailsDialogOpen(true)}>
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit Details
                       </DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => handleSetClassification('test')}>
                         <TestTube className="h-4 w-4 mr-2" />
@@ -139,14 +147,14 @@ export function TripCard({ trip, spent = 0, index = 0 }: TripCardProps) {
                   {trip.category}
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-lg">
+              <div className="grid grid-cols-1 xs:grid-cols-2 gap-3">
+                <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-lg min-w-0">
                   <MapPin className="h-4 w-4 text-primary shrink-0" />
                   <span className="truncate">{trip.destination}</span>
                 </div>
-                <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-lg">
+                <div className="flex items-center gap-2 bg-muted/30 p-2 rounded-lg min-w-0">
                   <Users className="h-4 w-4 text-primary shrink-0" />
-                  <span>{trip.membersCount} members</span>
+                  <span className="truncate">{trip.membersCount} members</span>
                 </div>
               </div>
 
@@ -158,11 +166,11 @@ export function TripCard({ trip, spent = 0, index = 0 }: TripCardProps) {
                 </span>
               </div>
 
-              <div className="pt-2 space-y-2">
+              <div className="pt-2 space-y-3">
                 <div className="flex justify-between items-end">
                   <div className="space-y-0.5">
                     <p className="text-xs uppercase tracking-wider font-semibold opacity-70">
-                      Budget Status
+                      Actual Spent
                     </p>
                     <p className="text-lg font-bold text-foreground">
                       {formatCurrency(spent, trip.currency)}
@@ -178,6 +186,14 @@ export function TripCard({ trip, spent = 0, index = 0 }: TripCardProps) {
                     </div>
                   )}
                 </div>
+
+                <div className="flex justify-between items-center text-xs bg-muted/20 p-2 rounded-md border border-muted">
+                  <span className="font-medium opacity-70 italic">Planned Expenses Total:</span>
+                  <span className="font-bold text-primary">
+                    {formatCurrency(planned, trip.currency)}
+                  </span>
+                </div>
+
                 <Progress
                   value={progress}
                   className={`h-2 ${
@@ -192,12 +208,25 @@ export function TripCard({ trip, spent = 0, index = 0 }: TripCardProps) {
         </Link>
       </motion.div>
       {isOwner && (
-        <EditCategoryDialog
-          tripId={trip.tripId}
-          currentCategory={trip.category ?? ''}
-          isOpen={isDialogOpen}
-          onOpenChange={setIsDialogOpen}
-        />
+        <>
+          <EditCategoryDialog
+            tripId={trip.tripId}
+            currentCategory={trip.category ?? ''}
+            isOpen={isCategoryDialogOpen}
+            onOpenChange={setIsCategoryDialogOpen}
+          />
+          <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+            <DialogContent className="max-w-md" onClick={(e) => e.stopPropagation()}>
+              <DialogHeader>
+                <DialogTitle>Edit Trip Details</DialogTitle>
+              </DialogHeader>
+              <TripForm 
+                initialData={trip} 
+                onSuccess={() => setIsDetailsDialogOpen(false)} 
+              />
+            </DialogContent>
+          </Dialog>
+        </>
       )}
     </>
   );

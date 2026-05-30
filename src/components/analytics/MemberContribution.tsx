@@ -13,7 +13,9 @@ interface MemberContributionProps {
 
 export function MemberContribution({ expenses, members }: MemberContributionProps) {
   const paid = expenses.reduce<Record<string, number>>((acc, e) => {
-    acc[e.paidBy] = (acc[e.paidBy] ?? 0) + e.amount;
+    if (e.paidBy) {
+      acc[e.paidBy] = (acc[e.paidBy] ?? 0) + e.amount;
+    }
     return acc;
   }, {});
 

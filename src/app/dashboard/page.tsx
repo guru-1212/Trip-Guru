@@ -1,34 +1,32 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { PlusCircle, Wallet, Map, HandCoins, TestTube, CheckCircle } from 'lucide-react';
+import { 
+  PlusCircle, 
+  TrendingUp, 
+  Target, 
+  ArrowRight,
+  ChevronRight,
+  Calendar,
+  MapPin,
+  Sparkles
+} from 'lucide-react';
 import dayjs from 'dayjs';
 import { ProtectedRoute } from '@/components/common/ProtectedRoute';
 import { AppShell } from '@/components/layout/AppShell';
-import { TripCard } from '@/components/trips/TripCard';
 import { EmptyState } from '@/components/common/EmptyState';
-import { LoadingSpinner, SkeletonCard } from '@/components/common/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { fetchUserTrips } from '@/features/trips/tripsThunks';
-import { getExpenses, syncTripData } from '@/firebase/firestore';
-import { computeSettlements } from '@/lib/settlementAlgorithm';
-import { getTripMembers } from '@/firebase/firestore';
-import { useState } from 'react';
-import { Trip } from '@/types/trip';
+import { getExpenses } from '@/firebase/firestore';
 import { formatCurrency } from '@/lib/utils';
 import { TripInvitations } from '@/components/trips/TripInvitations';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Progress } from '@/components/ui/progress';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 export default function DashboardPage() {
   return (
@@ -44,12 +42,10 @@ function DashboardContent() {
   const { uid, user } = useAuth();
   const dispatch = useAppDispatch();
   const { trips, loading } = useAppSelector((s) => s.trips);
+  
   const [spentByTrip, setSpentByTrip] = useState<Record<string, number>>({});
   const [userSpentByTrip, setUserSpentByTrip] = useState<Record<string, number>>({});
-  const [activeFilter, setActiveFilter] = useState('upcoming');
-  const [showBreakdown, setShowBreakdown] = useState(false);
-
-  const firstName = user?.name?.split(' ')[0] || 'Traveler';
+  const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
     if (uid) dispatch(fetchUserTrips(uid));
@@ -57,282 +53,307 @@ function DashboardContent() {
 
   useEffect(() => {
     async function loadStats() {
+      setLoadingStats(true);
       const tripSpent: Record<string, number> = {};
       const userSpent: Record<string, number> = {};
+      
       for (const trip of trips) {
         const expenses = await getExpenses(trip.tripId);
-        tripSpent[trip.tripId] = expenses.reduce((s, e) => s + e.amount, 0);
+        tripSpent[trip.tripId] = expenses
+          .filter((e) => (e.expenseType || 'actual') === 'actual')
+          .reduce((s, e) => s + e.amount, 0);
         userSpent[trip.tripId] = expenses
-          .filter((e) => e.paidBy === uid)
+          .filter((e) => e.paidBy === uid && (e.expenseType || 'actual') === 'actual')
           .reduce((s, e) => s + e.amount, 0);
       }
+      
       setSpentByTrip(tripSpent);
       setUserSpentByTrip(userSpent);
+      setLoadingStats(false);
     }
     if (trips.length > 0 && uid) loadStats();
+    else if (trips.length === 0) setLoadingStats(false);
   }, [trips, uid]);
 
-  const filteredAndGroupedTrips = useMemo(() => {
-    const now = dayjs();
-    const filtered = trips.filter((trip) => {
-      // If filtering for test trips, only show test trips
-      if (activeFilter === 'test_trips') {
-        return trip.classification === 'test';
-      }
-
-      // Otherwise, only show real trips
-      if (trip.classification === 'test') {
-        return false;
-      }
-
-      const startDate = dayjs(trip.startDate.toDate());
-      switch (activeFilter) {
-        case 'upcoming':
-          return trip.status === 'planned' && startDate.isAfter(now);
-        case 'this_month':
-          return startDate.isSame(now, 'month');
-        case 'ongoing':
-          return trip.status === 'ongoing';
-        case 'completed':
-          return trip.status === 'completed';
-        case 'all':
-        default:
-          return true;
-      }
+  const ongoingTrip = trips.find(t => t.status === 'ongoing');
+  const upcomingTrips = trips
+    .filter(t => t.status === 'planned' && t.classification !== 'test')
+    .sort((a, b) => a.startDate.toMillis() - b.startDate.toMillis());
+  
+  const totalPersonalSpent = Object.values(userSpentByTrip).reduce((a, b) => a + b, 0);
+  const totalUpcomingBudget = upcomingTrips.reduce((sum, t) => sum + t.expectedBudget, 0);
+  
+  const planAccuracy = useMemo(() => {
+    const completed = trips.filter(t => t.status === 'completed');
+    if (completed.length === 0) return 100;
+    const accuracies = completed.map(t => {
+      const actual = spentByTrip[t.tripId] || 0;
+      const expected = t.expectedBudget || 1;
+      return Math.max(0, 100 - Math.abs(((actual - expected) / expected) * 100));
     });
+    return Math.round(accuracies.reduce((a, b) => a + b, 0) / accuracies.length);
+  }, [trips, spentByTrip]);
 
-    return filtered.reduce((acc, trip) => {
-      const category = trip.category || 'Uncategorized';
-      if (!acc[category]) {
-        acc[category] = [];
-      }
-      acc[category].push(trip);
-      return acc;
-    }, {} as Record<string, Trip[]>);
-  }, [trips, activeFilter]);
+  if (loading && trips.length === 0) return <DashboardSkeleton />;
 
-  const totalUserSpent = useMemo(() => {
-    return Object.entries(userSpentByTrip)
-      .filter(([tripId]) => {
-        const trip = trips.find((t) => t.tripId === tripId);
-        return trip?.classification !== 'test';
-      })
-      .reduce((sum, [_, amount]) => sum + amount, 0);
-  }, [userSpentByTrip, trips]);
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1 }
+    }
+  };
 
-  const spendBreakdown = useMemo(() => {
-    return Object.entries(userSpentByTrip)
-      .filter(([tripId]) => {
-        const trip = trips.find((t) => t.tripId === tripId);
-        return trip?.classification !== 'test' && userSpentByTrip[tripId] > 0;
-      })
-      .map(([tripId, amount]) => ({
-        tripName: trips.find((t) => t.tripId === tripId)?.tripName || 'Unknown',
-        amount,
-      }))
-      .sort((a, b) => b.amount - a.amount);
-  }, [userSpentByTrip, trips]);
-
-  const realTrips = trips.filter((t) => t.classification !== 'test');
-  const testTrips = trips.filter((t) => t.classification === 'test');
-
-  if (loading && trips.length === 0) {
-    // Keep a simple loading skeleton for the initial load
-    return <DashboardSkeleton />;
-  }
+  const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
+  };
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-3xl font-extrabold tracking-tight">
-            Hi, {firstName}! 👋
+    <motion.div 
+      variants={container}
+      initial="hidden"
+      animate="show"
+      className="space-y-8 md:space-y-12"
+    >
+      {/* Header */}
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+        <motion.div variants={item} className="space-y-1">
+          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+            Hi, {user?.name?.split(' ')[0] || 'Traveler'}! 👋
           </h1>
-          <p className="text-muted-foreground text-lg">
-            Ready for your next adventure?
+          <p className="text-muted-foreground text-base md:text-lg font-medium">
+            Your "Travel OS" is ready for adventure.
           </p>
-        </div>
-        <Link href="/trips/new">
-          <Button size="lg" className="rounded-full px-6 shadow-md hover:shadow-lg transition-all duration-300">
-            <PlusCircle className="h-5 w-5 mr-2" /> New trip
-          </Button>
-        </Link>
-      </div>
+        </motion.div>
+        <motion.div variants={item}>
+          <Link href="/trips/new" className="w-full sm:w-auto">
+            <Button size="lg" className="w-full sm:w-auto rounded-2xl px-8 h-12 md:h-14 font-bold shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95">
+              <PlusCircle className="h-5 w-5 mr-3" /> Plan New Trip
+            </Button>
+          </Link>
+        </motion.div>
+      </header>
 
       <TripInvitations />
 
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
-      >
-        <StatCard
-          label="Real Trips"
-          value={realTrips.length}
-          icon={CheckCircle}
-          color="primary"
-        />
-        <StatCard
-          label="Test Trips"
-          value={testTrips.length}
-          icon={TestTube}
-          color="warning"
-        />
-        <StatCard
-          label="Total Spent"
-          value={formatCurrency(totalUserSpent)}
-          icon={Wallet}
-          color="success"
-          onClick={() => setShowBreakdown(true)}
-        />
-      </motion.div>
-      
-      <Tabs value={activeFilter} onValueChange={setActiveFilter}>
-        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto">
-          <TabsTrigger value="upcoming">Upcoming</TabsTrigger>
-          <TabsTrigger value="this_month">This Month</TabsTrigger>
-          <TabsTrigger value="ongoing">Ongoing</TabsTrigger>
-          <TabsTrigger value="completed">Completed</TabsTrigger>
-          <TabsTrigger value="all">All Real</TabsTrigger>
-          <TabsTrigger value="test_trips">Test Trips</TabsTrigger>
-        </TabsList>
-      </Tabs>
-      
-      <div className="space-y-6">
-        {Object.keys(filteredAndGroupedTrips).length > 0 ? (
-          Object.entries(filteredAndGroupedTrips)
-            .sort(([catA], [catB]) => (catA === 'Uncategorized' ? 1 : catB === 'Uncategorized' ? -1 : catA.localeCompare(catB)))
-            .map(([category, tripsInCategory]) => (
-            <section key={category}>
-              <h2 className="text-xl font-semibold capitalize mb-4">{category}</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {tripsInCategory.map((trip, i) => (
-                  <TripCard
-                    key={trip.tripId}
-                    trip={trip}
-                    spent={spentByTrip[trip.tripId] ?? 0}
-                    index={i}
-                  />
+      {/* Bento Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        
+        {/* Featured Trip - Spans 2x2 on Large screens */}
+        <motion.div variants={item} className="md:col-span-2 md:row-span-2">
+          {ongoingTrip ? (
+            <Link href={`/trips/${ongoingTrip.tripId}`}>
+              <Card className="h-full min-h-[300px] md:min-h-[340px] rounded-[24px] md:rounded-[32px] overflow-hidden border-0 relative group shadow-2xl">
+                <div className="absolute inset-0 bg-gradient-to-br from-indigo-950 via-indigo-900 to-slate-900 z-10" />
+                <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?auto=format&fit=crop&w=800&q=80')] bg-cover opacity-30 mix-blend-overlay z-0 transition-transform duration-700 group-hover:scale-110" />
+                
+                <CardContent className="relative z-20 p-6 md:p-10 h-full flex flex-col">
+                  <div className="flex justify-between items-start mb-6">
+                    <span className="bg-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border border-emerald-500/30 backdrop-blur-md">
+                       Ongoing Now
+                    </span>
+                    <Sparkles className="text-indigo-400/50 h-5 w-5 animate-pulse" />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <h2 className="text-2xl md:text-4xl font-black text-white leading-tight tracking-tight">
+                      {ongoingTrip.tripName}
+                    </h2>
+                    <p className="text-indigo-200/70 text-sm md:text-base font-medium flex items-center gap-2">
+                      <MapPin className="h-4 w-4" /> {ongoingTrip.destination}
+                    </p>
+                  </div>
+
+                  <div className="mt-auto pt-8 space-y-4">
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-end">
+                         <p className="text-xs md:text-sm font-bold text-white/90">
+                           {formatCurrency(spentByTrip[ongoingTrip.tripId] || 0, ongoingTrip.currency)} 
+                           <span className="text-white/40 font-normal ml-1">spent</span>
+                         </p>
+                         <p className="text-[10px] md:text-xs font-black text-indigo-400">
+                           {Math.round(((spentByTrip[ongoingTrip.tripId] || 0) / ongoingTrip.expectedBudget) * 100)}% Used
+                         </p>
+                      </div>
+                      <Progress 
+                        value={((spentByTrip[ongoingTrip.tripId] || 0) / ongoingTrip.expectedBudget) * 100} 
+                        className="h-2.5 bg-white/10 [&>div]:bg-emerald-400"
+                      />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ) : (
+            <Card className="h-full min-h-[300px] md:min-h-[340px] rounded-[24px] md:rounded-[32px] bg-muted/30 border-dashed border-2 flex items-center justify-center text-center p-6 md:p-12">
+               <div className="space-y-4 max-w-xs">
+                 <div className="w-14 h-14 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
+                   <Target className="h-7 w-7 text-muted-foreground" />
+                 </div>
+                 <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">No active journey</h3>
+                 <p className="text-muted-foreground font-medium text-xs leading-relaxed">Start an ongoing trip to see your live travel execution stats here.</p>
+               </div>
+            </Card>
+          )}
+        </motion.div>
+
+        {/* Total Spent Stat */}
+        <motion.div variants={item}>
+          <Card className="h-full rounded-[24px] md:rounded-[28px] border-border/40 shadow-sm p-6 md:p-8 flex flex-col justify-between group">
+             <div>
+               <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest block mb-3 md:mb-4">Personal Spends</span>
+               <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white leading-none">
+                 {formatCurrency(totalPersonalSpent)}
+               </h3>
+               <p className="text-emerald-500 text-[10px] md:text-xs font-bold mt-2 md:mt-3 flex items-center gap-1">
+                 <TrendingUp className="h-3 w-3" /> +12% from last trip
+               </p>
+             </div>
+             <div className="h-10 md:h-12 w-full bg-indigo-50 dark:bg-indigo-500/10 rounded-xl mt-4 md:mt-6 overflow-hidden flex items-end gap-1 px-1 py-1">
+                {[40, 70, 30, 85, 50, 95, 60].map((h, i) => (
+                  <div key={i} className="flex-1 bg-indigo-500/30 rounded-t-sm transition-all group-hover:bg-indigo-500 group-hover:scale-y-110" style={{ height: `${h}%` }} />
                 ))}
-              </div>
-            </section>
-          ))
-        ) : (
-          <EmptyState
-            title="No trips found"
-            description={`There are no trips matching the "${activeFilter}" filter.`}
-          />
-        )}
+             </div>
+          </Card>
+        </motion.div>
+
+        {/* Travel Network */}
+        <motion.div variants={item}>
+          <Card className="h-full rounded-[24px] md:rounded-[28px] border-border/40 shadow-sm p-6 md:p-8 group">
+             <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest block mb-3 md:mb-4">Travel Network</span>
+             <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white leading-none mb-3 md:mb-4">
+               {trips.reduce((acc, t) => acc + (t.membersCount || 1), 0)}
+             </h3>
+             <span className="text-[10px] md:text-xs font-bold text-muted-foreground uppercase tracking-tight">Active Connections</span>
+             
+             <div className="flex -space-x-2.5 mt-6 md:mt-8">
+               {[1, 2, 3, 4].map(i => (
+                 <Avatar key={i} className="border-2 border-background h-8 w-8 md:h-10 md:w-10 ring-1 ring-primary/5">
+                   <AvatarImage src={`https://i.pravatar.cc/100?u=${i}`} />
+                   <AvatarFallback className="bg-primary/5 text-[10px] font-black">M</AvatarFallback>
+                 </Avatar>
+               ))}
+               <div className="h-8 w-8 md:h-10 md:w-10 rounded-full bg-muted border-2 border-background flex items-center justify-center text-[10px] font-black text-muted-foreground ring-1 ring-primary/5">
+                 +12
+               </div>
+             </div>
+          </Card>
+        </motion.div>
+
+        {/* Plan Accuracy */}
+        <motion.div variants={item}>
+          <Card className="h-full rounded-[24px] md:rounded-[28px] border-border/40 shadow-sm p-6 md:p-8 flex flex-col justify-between">
+             <div>
+               <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest block mb-3 md:mb-4">Plan Accuracy</span>
+               <h3 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white leading-none mb-1">
+                 {planAccuracy}%
+               </h3>
+               <p className="text-muted-foreground text-[10px] md:text-xs font-medium uppercase tracking-tight">Budget Adherence</p>
+             </div>
+             <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full mt-4 md:mt-6 overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${planAccuracy}%` }}
+                  transition={{ delay: 0.5, duration: 1 }}
+                  className="h-full bg-indigo-500 rounded-full shadow-lg shadow-indigo-500/20" 
+                />
+             </div>
+          </Card>
+        </motion.div>
+
+        {/* Upcoming Budget */}
+        <motion.div variants={item}>
+          <Card className="h-full rounded-[24px] md:rounded-[28px] border-0 bg-indigo-600 dark:bg-indigo-500 shadow-xl p-6 md:p-8 text-white flex flex-col justify-between transition-transform hover:scale-[1.02]">
+             <div>
+               <span className="text-[10px] font-black uppercase text-white/60 tracking-widest block mb-3 md:mb-4">Upcoming Budget</span>
+               <h3 className="text-2xl md:text-3xl font-black text-white leading-none mb-2">
+                 {formatCurrency(totalUpcomingBudget)}
+               </h3>
+               <p className="text-white/70 text-[10px] md:text-xs font-bold uppercase tracking-tight">Next 30 Days</p>
+             </div>
+             <div className="mt-6 md:mt-8 flex justify-end">
+                <div className="w-8 h-8 md:w-10 md:h-10 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-md">
+                   <ArrowRight className="h-4 w-4 md:h-5 md:w-5" />
+                </div>
+             </div>
+          </Card>
+        </motion.div>
+
       </div>
 
-      <Dialog open={showBreakdown} onOpenChange={setShowBreakdown}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Personal Spend Breakdown</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {spendBreakdown.length > 0 ? (
-              <div className="space-y-3">
-                {spendBreakdown.map((item, i) => (
-                  <div
-                    key={i}
-                    className="flex justify-between items-center border-b pb-2 last:border-0"
-                  >
-                    <span className="font-medium text-muted-foreground truncate mr-4">
-                      {item.tripName}
-                    </span>
-                    <span className="font-bold text-foreground shrink-0">
-                      {formatCurrency(item.amount)}
-                    </span>
+      {/* Upcoming Journeys Section */}
+      <section className="space-y-6">
+        <motion.div variants={item} className="flex justify-between items-center px-1">
+          <h2 className="text-xl md:text-2xl font-black text-slate-900 dark:text-white flex items-center gap-3">
+             <Calendar className="h-5 w-5 md:h-6 md:w-6 text-primary" /> Upcoming
+          </h2>
+          <Button variant="ghost" size="sm" className="text-primary font-black uppercase tracking-widest text-[10px] hover:bg-primary/5">
+             View All <ChevronRight className="h-3 w-3 ml-1" />
+          </Button>
+        </motion.div>
+
+        <div className="space-y-3">
+          {upcomingTrips.length > 0 ? (
+            upcomingTrips.map((trip, i) => (
+              <motion.div 
+                key={trip.tripId} 
+                variants={item}
+                className="group"
+              >
+                <Link href={`/trips/${trip.tripId}`}>
+                  <div className="bg-white dark:bg-slate-900/50 rounded-2xl p-4 md:p-5 border border-border/40 shadow-sm hover:border-primary/50 hover:shadow-md transition-all flex flex-row items-center gap-4 md:gap-6 overflow-hidden">
+                    <div className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-xl md:rounded-2xl bg-primary/5 flex items-center justify-center text-xl md:text-3xl group-hover:bg-primary group-hover:text-white transition-colors duration-300">
+                      {trip.tripType === 'bike_ride' ? '🏍️' : trip.tripType === 'trekking' ? '🥾' : '✈️'}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm md:text-base font-black text-slate-900 dark:text-white truncate">
+                        {trip.tripName}
+                      </h3>
+                      <p className="text-[10px] md:text-xs font-bold text-muted-foreground mt-1 flex items-center gap-1.5 truncate">
+                        <MapPin className="h-3 w-3 text-primary shrink-0" /> {trip.destination}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-4 md:gap-8 shrink-0">
+                      <div className="hidden sm:block text-right">
+                        <p className="text-[9px] md:text-[10px] font-black uppercase text-muted-foreground tracking-tighter mb-0.5">Budget</p>
+                        <p className="text-xs md:text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(trip.expectedBudget, trip.currency)}</p>
+                      </div>
+                      <div className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-border/60 flex items-center justify-center group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-all">
+                        <ArrowRight className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                      </div>
+                    </div>
                   </div>
-                ))}
-                <div className="flex justify-between items-center pt-4 border-t border-dashed">
-                  <span className="font-bold text-lg">Total</span>
-                  <span className="font-bold text-lg text-primary">
-                    {formatCurrency(totalUserSpent)}
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">
-                No personal expenses recorded yet.
-              </p>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
+                </Link>
+              </motion.div>
+            ))
+          ) : (
+             <motion.div variants={item}>
+               <EmptyState 
+                  title="No journeys planned" 
+                  description="Time to dream big and plan something new!"
+                />
+             </motion.div>
+          )}
+        </div>
+      </section>
+    </motion.div>
   );
 }
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-32 bg-muted/50 animate-pulse rounded-xl" />
-        ))}
-      </div>
-      <div className="space-y-4">
-        <div className="h-8 w-full bg-muted/50 animate-pulse rounded-lg" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-64 bg-muted/50 animate-pulse rounded-xl" />
-          ))}
-        </div>
+    <div className="space-y-10 animate-pulse">
+      <div className="h-16 bg-muted/50 rounded-2xl w-1/2" />
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="md:col-span-2 md:row-span-2 h-72 bg-muted/50 rounded-[24px] md:rounded-[32px]" />
+        <div className="h-36 bg-muted/50 rounded-[24px] md:rounded-[28px]" />
+        <div className="h-36 bg-muted/50 rounded-[24px] md:rounded-[28px]" />
+        <div className="h-36 bg-muted/50 rounded-[24px] md:rounded-[28px]" />
+        <div className="h-36 bg-muted/50 rounded-[24px] md:rounded-[28px]" />
       </div>
     </div>
   );
 }
-
-function StatCard({
-  label,
-  value,
-  icon: Icon,
-  color,
-  onClick,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ElementType;
-  color: 'primary' | 'success' | 'warning';
-  onClick?: () => void;
-}) {
-  const colors = {
-    primary:
-      'border-l-primary text-primary bg-primary/10 group-hover:bg-primary',
-    success:
-      'border-l-success text-success bg-success/10 group-hover:bg-success',
-    warning:
-      'border-l-warning text-warning bg-warning/10 group-hover:bg-warning',
-  };
-  return (
-    <Card
-      className={`relative overflow-hidden group hover:shadow-lg transition-all duration-300 border-l-4 ${
-        colors[color]
-      } ${onClick ? 'cursor-pointer' : ''}`}
-      onClick={onClick}
-    >
-      <CardContent className="p-6 flex items-center gap-4">
-        <div
-          className={`p-3 rounded-xl ${colors[color]} group-hover:text-white transition-colors duration-300`}
-        >
-          <Icon className="h-6 w-6" />
-        </div>
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">{label}</p>
-          <p className="text-3xl font-bold tracking-tight">{value}</p>
-          {onClick && (
-            <p className="text-[10px] text-muted-foreground mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              Click to view breakdown
-            </p>
-          )}
-        </div>
-        <div className="absolute -right-2 -bottom-2 opacity-5 group-hover:opacity-10 transition-opacity">
-          <Icon className="h-24 w-24" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-

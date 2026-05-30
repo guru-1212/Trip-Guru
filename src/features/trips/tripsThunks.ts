@@ -9,6 +9,10 @@ import {
   declineTripInvite,
   updateTripCategory as fbUpdateTripCategory,
   updateTripClassification as fbUpdateTripClassification,
+  updateTripExpectedBudget as fbUpdateTripExpectedBudget,
+  updateTrip as fbUpdateTrip,
+  addCustomExpenseCategory as fbAddCustomCategory,
+  removeCustomExpenseCategory as fbRemoveCustomCategory,
 } from '@/firebase/firestore';
 import { transitionAllTrips } from '@/services/tripStatusService';
 import {
@@ -24,6 +28,27 @@ import {
 } from './tripsSlice';
 import { TripInvitation } from '@/types/invitation';
 import { RootState } from '@/store';
+
+export const updateTripExpectedBudget = createAsyncThunk(
+  'trips/updateExpectedBudget',
+  async (
+    { tripId, amount }: { tripId: string; amount: number },
+    { dispatch, getState }
+  ) => {
+    await fbUpdateTripExpectedBudget(tripId, amount);
+    const { trips, currentTrip } = (getState() as RootState).trips;
+    
+    const trip = trips.find((t) => t.tripId === tripId);
+    if (trip) {
+      dispatch(updateTripInList({ ...trip, expectedBudget: amount }));
+    }
+    
+    if (currentTrip?.tripId === tripId) {
+      dispatch(setCurrentTrip({ ...currentTrip, expectedBudget: amount }));
+    }
+  }
+);
+
 
 export const fetchUserTrips = createAsyncThunk(
   'trips/fetchUserTrips',
@@ -144,6 +169,61 @@ export const updateTripClassification = createAsyncThunk(
     if (trip) {
       const updatedTrip = { ...trip, classification };
       dispatch(updateTripInList(updatedTrip));
+    }
+  }
+);
+
+export const addCustomCategory = createAsyncThunk(
+  'trips/addCustomCategory',
+  async (
+    { tripId, category }: { tripId: string; category: string },
+    { dispatch, getState }
+  ) => {
+    await fbAddCustomCategory(tripId, category);
+    const { currentTrip } = (getState() as RootState).trips;
+    if (currentTrip?.tripId === tripId) {
+      const customExpenseCategories = [
+        ...(currentTrip.customExpenseCategories || []),
+        category,
+      ];
+      dispatch(setCurrentTrip({ ...currentTrip, customExpenseCategories }));
+    }
+  }
+);
+
+export const removeCustomCategory = createAsyncThunk(
+  'trips/removeCustomCategory',
+  async (
+    { tripId, category }: { tripId: string; category: string },
+    { dispatch, getState }
+  ) => {
+    await fbRemoveCustomCategory(tripId, category);
+    const { currentTrip } = (getState() as RootState).trips;
+    if (currentTrip?.tripId === tripId) {
+      const customExpenseCategories = (
+        currentTrip.customExpenseCategories || []
+      ).filter((c) => c !== category);
+      dispatch(setCurrentTrip({ ...currentTrip, customExpenseCategories }));
+    }
+  }
+);
+
+export const updateTripThunk = createAsyncThunk(
+  'trips/update',
+  async (
+    { tripId, data }: { tripId: string; data: Partial<Trip> },
+    { dispatch, getState }
+  ) => {
+    await fbUpdateTrip(tripId, data);
+    const { currentTrip, trips } = (getState() as RootState).trips;
+    
+    if (currentTrip?.tripId === tripId) {
+      dispatch(setCurrentTrip({ ...currentTrip, ...data }));
+    }
+    
+    const trip = trips.find((t) => t.tripId === tripId);
+    if (trip) {
+      dispatch(updateTripInList({ ...trip, ...data }));
     }
   }
 );

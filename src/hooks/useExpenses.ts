@@ -9,11 +9,15 @@ export function useExpenses() {
 
   const filtered = useMemo(() => {
     return expenses.filter((e) => {
+      const type = e.expenseType || 'actual';
+      if (filters.expenseType !== 'all' && type !== filters.expenseType) {
+        return false;
+      }
       if (filters.category !== 'all' && e.category !== filters.category) {
         return false;
       }
       if (filters.memberId !== 'all') {
-        const inSplit = e.splitBetween.some((s) => s.uid === filters.memberId);
+        const inSplit = e.splitBetween?.some((s) => s.uid === filters.memberId);
         if (e.paidBy !== filters.memberId && !inSplit) return false;
       }
       if (filters.dateFrom) {
@@ -31,9 +35,18 @@ export function useExpenses() {
   }, [expenses, filters]);
 
   const totalSpent = useMemo(
-    () => expenses.reduce((s, e) => s + e.amount, 0),
+    () => expenses
+      .filter(e => (e.expenseType || 'actual') === 'actual')
+      .reduce((s, e) => s + e.amount, 0),
     [expenses]
   );
 
-  return { expenses: filtered, allExpenses: expenses, totalSpent, loading, filters };
+  const totalPlanned = useMemo(
+    () => expenses
+      .filter(e => e.expenseType === 'planned')
+      .reduce((s, e) => s + e.amount, 0),
+    [expenses]
+  );
+
+  return { expenses: filtered, allExpenses: expenses, totalSpent, totalPlanned, loading, filters };
 }

@@ -11,6 +11,13 @@ export const metadata: Metadata = {
   title: 'TripMate — Group Travel Expenses',
   description: 'Track group travel expenses and settle up with friends',
   manifest: '/manifest.json',
+  icons: {
+    icon: [
+      { url: '/logo.svg', type: 'image/svg+xml' },
+      { url: '/icons/icon-192x192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: '/icons/icon-192x192.png',
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

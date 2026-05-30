@@ -7,16 +7,16 @@ import { cn } from '@/lib/utils';
 
 const links = [
   { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
-  { href: '/trips/new', label: 'New', icon: PlusCircle },
-  { href: '/profile', label: 'Profile', icon: User },
+  { href: '/trips/new', label: 'Plan', icon: PlusCircle },
+  { href: '/profile', label: 'Me', icon: User },
 ];
 
 export function BottomNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-background/95 backdrop-blur">
-      <div className="flex justify-around py-2">
+    <nav className="lg:hidden fixed bottom-6 left-6 right-6 z-40 border border-border/40 bg-background/80 backdrop-blur-xl rounded-[24px] shadow-2xl overflow-hidden">
+      <div className="flex justify-around items-center h-16">
         {links.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href);
           return (
@@ -24,12 +24,17 @@ export function BottomNav() {
               key={href}
               href={href}
               className={cn(
-                'flex flex-col items-center gap-0.5 px-4 py-1 text-xs',
-                active ? 'text-primary' : 'text-muted-foreground'
+                'flex flex-col items-center justify-center gap-1 w-full h-full transition-all duration-300',
+                active ? 'text-primary scale-110' : 'text-muted-foreground'
               )}
             >
-              <Icon className="h-5 w-5" />
-              {label}
+              <div className={cn(
+                "p-2 rounded-xl transition-all",
+                active ? "bg-primary/10 shadow-sm" : ""
+              )}>
+                <Icon className={cn("h-5 w-5", active ? "stroke-[3px]" : "stroke-[2px]")} />
+              </div>
+              <span className={cn("text-[10px] font-black uppercase tracking-tighter transition-all", active ? "opacity-100" : "opacity-0 h-0 overflow-hidden")}>{label}</span>
             </Link>
           );
         })}

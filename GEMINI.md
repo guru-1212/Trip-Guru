@@ -61,6 +61,16 @@ Foundational guidance for the TripMate repository.
 - Validate forms using Zod schemas.
 - Verify Firestore rules in `firestore.rules` when adding new collections.
 
+### Tiered Validation Strategy
+To optimize efficiency and minimize token/time usage, follow this two-phase approach:
+1. **Phase A: Implementation (Fast & Surgical):** During active development, use targeted commands:
+   - `npx eslint <file>`: Check only what changed.
+   - `npx tsc --noEmit`: Perform fast type-checking without a full Next.js build.
+2. **Phase B: Final Validation (Comprehensive):** Reserve full project-wide checks for a single final run once the task is complete:
+   - `npm run lint`
+   - `npm run build`
+
+
 ## Recent Incident Notes (Profile Photo Upload 403)
 
 - **Symptom:** Uploading profile photo from `/profile` failed with `403 Forbidden` from Firebase Storage (`POST .../o?name=users%2F{uid}%2Fprofile.jpg`).

@@ -1,6 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
-import { getExpenses, createExpense, deleteExpense } from '@/firebase/firestore';
-import { setExpenses, addExpense, removeExpense, setLoading } from './expensesSlice';
+import { getExpenses, createExpense, deleteExpense, updateExpense } from '@/firebase/firestore';
+import { setExpenses, addExpense, removeExpense, updateExpense as updateExpenseAction, setLoading } from './expensesSlice';
 import { Expense } from '@/types/expense';
 import { notifyTripMembersOfExpense } from '@/services/fcmService';
 import type { RootState } from '@/store';
@@ -31,17 +31,30 @@ export const addExpenseThunk = createAsyncThunk(
       })
     );
 
-    const state = getState() as RootState;
-    const members = state.trips.members;
-    const payer = members.find((m) => getMemberKey(m) === expense.paidBy);
-    notifyTripMembersOfExpense(
-      expense.tripId,
-      expense.amount,
-      expense.category,
-      payer?.name ?? 'Someone'
-    );
+    if (expense.expenseType === 'actual') {
+      const state = getState() as RootState;
+      const members = state.trips.members;
+      const payer = members.find((m) => getMemberKey(m) === expense.paidBy);
+      notifyTripMembersOfExpense(
+        expense.tripId,
+        expense.amount,
+        expense.category,
+        payer?.name ?? 'Someone'
+      );
+    }
 
     return id;
+  }
+);
+
+export const updateExpenseThunk = createAsyncThunk(
+  'expenses/update',
+  async (
+    { expenseId, data }: { expenseId: string; data: Partial<Expense> },
+    { dispatch }
+  ) => {
+    await updateExpense(expenseId, data);
+    dispatch(updateExpenseAction({ id: expenseId, ...data }));
   }
 );
 

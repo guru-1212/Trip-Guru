@@ -25,4 +25,5 @@ export interface Trip {
   createdAt: Timestamp;
   category?: string;
   classification?: 'real' | 'test';
+  customExpenseCategories?: string[];
 }

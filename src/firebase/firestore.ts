@@ -12,6 +12,8 @@ import {
   Timestamp,
   writeBatch,
   increment,
+  arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '@/firebase/config';
 import { normalizePhone } from '@/lib/utils';
@@ -206,6 +208,13 @@ export async function createExpense(
     createdAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+export async function updateExpense(
+  expenseId: string,
+  data: Partial<Expense>
+): Promise<void> {
+  await updateDoc(doc(db(), 'expenses', expenseId), data);
 }
 
 export async function deleteExpense(expenseId: string): Promise<void> {
@@ -472,9 +481,41 @@ export async function updateTripCategory(
   await updateDoc(doc(db(), 'trips', tripId), { category });
 }
 
+export async function updateTrip(
+  tripId: string,
+  data: Partial<Trip>
+): Promise<void> {
+  await updateDoc(doc(db(), 'trips', tripId), data);
+}
+
+export async function updateTripExpectedBudget(
+  tripId: string,
+  expectedBudget: number
+): Promise<void> {
+  await updateDoc(doc(db(), 'trips', tripId), { expectedBudget });
+}
+
 export async function updateTripClassification(
   tripId: string,
   classification: 'real' | 'test'
 ): Promise<void> {
   await updateDoc(doc(db(), 'trips', tripId), { classification });
+}
+
+export async function addCustomExpenseCategory(
+  tripId: string,
+  category: string
+): Promise<void> {
+  await updateDoc(doc(db(), 'trips', tripId), {
+    customExpenseCategories: arrayUnion(category),
+  });
+}
+
+export async function removeCustomExpenseCategory(
+  tripId: string,
+  category: string
+): Promise<void> {
+  await updateDoc(doc(db(), 'trips', tripId), {
+    customExpenseCategories: arrayRemove(category),
+  });
 }

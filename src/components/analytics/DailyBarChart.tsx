@@ -11,6 +11,7 @@ interface DailyBarChartProps {
 
 export function DailyBarChart({ expenses }: DailyBarChartProps) {
   const byDate = expenses.reduce<Record<string, number>>((acc, e) => {
+    if (!e.createdAt) return acc;
     const date = dayjs(e.createdAt.toDate()).format('YYYY-MM-DD');
     acc[date] = (acc[date] ?? 0) + e.amount;
     return acc;

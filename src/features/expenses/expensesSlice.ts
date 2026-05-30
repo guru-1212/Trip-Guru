@@ -6,6 +6,7 @@ interface ExpenseFilters {
   memberId: string | 'all';
   dateFrom: string | null;
   dateTo: string | null;
+  expenseType: 'all' | 'planned' | 'actual';
 }
 
 interface ExpensesState {
@@ -22,6 +23,7 @@ const initialState: ExpensesState = {
     memberId: 'all',
     dateFrom: null,
     dateTo: null,
+    expenseType: 'all',
   },
   loading: false,
   error: null,
@@ -37,6 +39,12 @@ const expensesSlice = createSlice({
     },
     addExpense: (state, action: PayloadAction<Expense>) => {
       state.expenses.unshift(action.payload);
+    },
+    updateExpense: (state, action: PayloadAction<{ id: string } & Partial<Expense>>) => {
+      const index = state.expenses.findIndex((e) => e.id === action.payload.id);
+      if (index !== -1) {
+        state.expenses[index] = { ...state.expenses[index], ...action.payload };
+      }
     },
     removeExpense: (state, action: PayloadAction<string>) => {
       state.expenses = state.expenses.filter((e) => e.id !== action.payload);
@@ -56,6 +64,7 @@ const expensesSlice = createSlice({
 export const {
   setExpenses,
   addExpense,
+  updateExpense,
   removeExpense,
   setFilters,
   setLoading,
