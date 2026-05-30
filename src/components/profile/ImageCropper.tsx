@@ -42,46 +42,41 @@ export function ImageCropper({ imageSrc, onCrop, onCancel }: ImageCropperProps) 
     if (!imageRef.current || !containerRef.current) return;
 
     const canvas = document.createElement('canvas');
-    const size = 400; // Output size
-    canvas.width = size;
-    canvas.height = size;
+    const outputSize = 400; // Final image resolution
+    canvas.width = outputSize;
+    canvas.height = outputSize;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const img = imageRef.current;
+    const image = imageRef.current;
     const container = containerRef.current;
-    const rect = container.getBoundingClientRect();
-
-    // Calculate source coordinates based on zoom and offset
-    // This is a simplified version for the demo
-    const displayWidth = img.width * zoom;
-    const displayHeight = img.height * zoom;
-
-    ctx.fillStyle = 'white';
-    ctx.fillRect(0, 0, size, size);
     
-    // Draw circular clip
+    const imageRect = image.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+
+    // The ratio of the image's natural dimensions to its displayed dimensions.
+    const scaleX = image.naturalWidth / imageRect.width;
+    const scaleY = image.naturalHeight / imageRect.height;
+
+    // The portion of the image to crop, in the coordinate system of the original, un-scaled image.
+    const sx = (containerRect.left - imageRect.left) * scaleX;
+    const sy = (containerRect.top - imageRect.top) * scaleY;
+    const sWidth = containerRect.width * scaleX;
+    const sHeight = containerRect.height * scaleY;
+
+    ctx.fillStyle = 'white'; // Set a background color for non-transparent images
+    ctx.fillRect(0, 0, outputSize, outputSize);
+
+    // Create a circular clipping path.
     ctx.beginPath();
-    ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+    ctx.arc(outputSize / 2, outputSize / 2, outputSize / 2, 0, Math.PI * 2, true);
     ctx.clip();
-
-    // Map container space to canvas space
-    const scaleX = img.naturalWidth / img.width;
-    const scaleY = img.naturalHeight / img.height;
-
-    // Center of container in image space
-    const centerX = (rect.width / 2 - offset.x) / zoom;
-    const centerY = (rect.height / 2 - offset.y) / zoom;
-
-    const sWidth = (rect.width / zoom) * scaleX;
-    const sHeight = (rect.height / zoom) * scaleY;
-    const sX = (centerX * scaleX) - (sWidth / 2);
-    const sY = (centerY * scaleY) - (sHeight / 2);
-
+    
+    // Draw the cropped portion of the image onto the canvas.
     ctx.drawImage(
-      img,
-      sX, sY, sWidth, sHeight,
-      0, 0, size, size
+      image,
+      sx, sy, sWidth, sHeight,  // Source rectangle from the original image
+      0, 0, outputSize, outputSize // Destination rectangle on the canvas
     );
 
     canvas.toBlob((blob) => {
@@ -93,7 +88,7 @@ export function ImageCropper({ imageSrc, onCrop, onCancel }: ImageCropperProps) 
     <div className="flex flex-col items-center gap-6 p-4">
       <div 
         ref={containerRef}
-        className="relative w-72 h-72 sm:w-80 sm:h-80 rounded-full border-4 border-primary/20 overflow-hidden cursor-move bg-slate-100 touch-none"
+        className="relative w-72 h-72 sm:w-80 sm:h-80 rounded-full border-4 border-dashed border-primary/50 overflow-hidden cursor-move bg-slate-100 dark:bg-slate-800 touch-none"
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
@@ -116,8 +111,6 @@ export function ImageCropper({ imageSrc, onCrop, onCancel }: ImageCropperProps) 
             marginLeft: imageRef.current ? -imageRef.current.width / 2 : 0,
           }}
         />
-        {/* Visual Guide Overlay */}
-        <div className="absolute inset-0 pointer-events-none ring-[100px] ring-black/50" />
       </div>
 
       <div className="w-full space-y-4">

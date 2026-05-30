@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TripStatusBadge } from './TripStatusBadge';
+import { Badge } from '@/components/ui/badge';
 import { EditCategoryDialog } from './EditCategoryDialog';
 import { formatCurrency } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
@@ -92,6 +93,9 @@ export function TripCard({ trip, spent = 0, planned = 0, index = 0 }: TripCardPr
                       {tripTypeIcons[trip.tripType] ?? '✈️'}
                     </span>
                     {trip.tripName}
+                    {trip.classification === 'test' && (
+                      <Badge variant="secondary">Test</Badge>
+                    )}
                   </CardTitle>
                 </div>
                 {isOwner ? (

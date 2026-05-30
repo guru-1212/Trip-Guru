@@ -57,6 +57,9 @@ const tripsSlice = createSlice({
         state.currentTrip = action.payload;
       }
     },
+    addTripToList: (state, action: PayloadAction<Trip>) => {
+      state.trips.unshift(action.payload);
+    },
     setMembers: (state, action: PayloadAction<TripMember[]>) => {
       state.members = action.payload;
     },
@@ -75,6 +78,7 @@ export const {
   removeInvitation,
   setCurrentTrip,
   updateTripInList,
+  addTripToList,
   setMembers,
   setError,
 } = tripsSlice.actions;

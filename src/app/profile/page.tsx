@@ -56,12 +56,14 @@ function ProfileContent() {
   const [saving, setSaving] = useState(false);
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [isCropOpen, setIsCropOpen] = useState(false);
+  const [displayPhotoUrl, setDisplayPhotoUrl] = useState<string | undefined>();
 
   useEffect(() => {
     if (user) {
       setName(user.name);
       setPhone(user.phone);
-      setNotifyEnabled(user.notifyEnabled ?? true);
+      setDisplayPhotoUrl(user.photoURL);
+      setNotifyEnabled(user.notifyEnabled ?? false);
     }
   }, [user]);
 
@@ -69,11 +71,14 @@ function ProfileContent() {
     if (!user?.email) return;
     const invites = await getPendingInvitesForUser(user.email, user.phone);
     setPendingInvites(invites);
+
+    const tripPromises = invites.map((inv) => getTrip(inv.tripId));
+    const trips = await Promise.all(tripPromises);
+
     const names: Record<string, string> = {};
-    for (const inv of invites) {
-      const trip = await getTrip(inv.tripId);
-      names[inv.id] = trip?.tripName ?? 'Trip';
-    }
+    invites.forEach((inv, index) => {
+      names[inv.id] = trips[index]?.tripName ?? 'Trip';
+    });
     setInviteTripNames(names);
   };
 
@@ -125,6 +130,7 @@ function ProfileContent() {
       const url = await uploadProfilePhoto(uid, file);
       await updateUser(uid, { photoURL: url });
       dispatch(updateProfileLocal({ photoURL: url }));
+      setDisplayPhotoUrl(url);
     } finally {
       setSaving(false);
       setCropImage(null);
@@ -132,45 +138,21 @@ function ProfileContent() {
   };
 
   const handleToggleNotify = async (enabled: boolean) => {
-    // 1. Update local UI state immediately so checkbox feels responsive
     setNotifyEnabled(enabled);
-
     if (!uid) return;
 
     try {
       if (enabled) {
-        // 2. Request FCM Token
-        const token = await requestFCMToken(uid);
-        if (!token) {
-          // If token fails, revert the toggle
-          setNotifyEnabled(false);
-          await updateUser(uid, { notifyEnabled: false });
-          dispatch(updateProfileLocal({ notifyEnabled: false }));
-          return;
-        }
+        // This can be fire-and-forget; if it fails, the user won't get notifications,
+        // but we don't need to block the UI or revert the state for that.
+        await requestFCMToken(uid);
       }
-      
-      // 3. Update Firestore and Redux
+      // Persist the user's choice
       await updateUser(uid, { notifyEnabled: enabled });
       dispatch(updateProfileLocal({ notifyEnabled: enabled }));
     } catch (error) {
       console.error('Failed to update notification settings:', error);
-      // Revert UI on error
-      setNotifyEnabled(!enabled);
-    }
-  };
-
-  const handleTestNotification = async () => {
-    if (!uid) return;
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission !== 'granted') {
-        alert('Please enable notifications first.');
-        return;
-      }
-      new Notification('TripMate Test', {
-        body: 'If you see this, notifications are working!',
-        icon: '/icons/icon-192x192.png',
-      });
+      // Do not revert UI state; the user's intent should be preserved.
     }
   };
 
@@ -190,7 +172,7 @@ function ProfileContent() {
         <CardContent className="p-10 flex flex-col items-center text-center gap-6">
           <div className="relative group">
             <Avatar className="h-32 w-32 border-4 border-background shadow-2xl ring-1 ring-border/10">
-              <AvatarImage src={user?.photoURL} className="object-cover" />
+              <AvatarImage src={displayPhotoUrl} className="object-cover" />
               <AvatarFallback className="bg-primary/5 text-primary text-4xl font-black">
                 {user?.name?.[0]?.toUpperCase()}
               </AvatarFallback>
@@ -256,9 +238,6 @@ function ProfileContent() {
           <CardTitle className="text-xl font-black flex items-center gap-2">
             <Bell className="h-5 w-5 text-primary" /> Notifications
           </CardTitle>
-          <Button variant="outline" size="sm" className="rounded-xl text-[10px] font-black uppercase h-8" onClick={handleTestNotification}>
-            Test Alert
-          </Button>
         </CardHeader>
         <CardContent className="px-8 pb-8">
           <label className="flex items-center gap-4 cursor-pointer group bg-muted/30 p-4 rounded-2xl hover:bg-muted/50 transition-colors">

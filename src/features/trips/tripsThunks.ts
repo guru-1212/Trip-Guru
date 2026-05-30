@@ -1,5 +1,6 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
 import {
+  createTrip as fbCreateTrip,
   getTripsForUser,
   getTrip,
   getTripMembers,
@@ -13,6 +14,7 @@ import {
   updateTrip as fbUpdateTrip,
   addCustomExpenseCategory as fbAddCustomCategory,
   removeCustomExpenseCategory as fbRemoveCustomCategory,
+  type CreateTripInput,
 } from '@/firebase/firestore';
 import { transitionAllTrips } from '@/services/tripStatusService';
 import {
@@ -25,6 +27,7 @@ import {
   setInvitationsLoading,
   removeInvitation,
   updateTripInList,
+  addTripToList,
 } from './tripsSlice';
 import { TripInvitation } from '@/types/invitation';
 import { Trip } from '@/types/trip';
@@ -226,5 +229,14 @@ export const updateTripThunk = createAsyncThunk(
     if (trip) {
       dispatch(updateTripInList({ ...trip, ...data }));
     }
+  }
+);
+
+export const createTripThunk = createAsyncThunk(
+  'trips/create',
+  async (input: CreateTripInput, { dispatch }) => {
+    const newTrip = await fbCreateTrip(input);
+    dispatch(addTripToList(newTrip));
+    return newTrip;
   }
 );

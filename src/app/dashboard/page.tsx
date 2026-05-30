@@ -12,7 +12,12 @@ import {
   Calendar,
   MapPin,
   Sparkles,
-  Globe
+  Globe,
+  MoreVertical,
+  TestTube,
+  CheckCircle,
+  FolderPen,
+  Pencil
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import { ProtectedRoute } from '@/components/common/ProtectedRoute';

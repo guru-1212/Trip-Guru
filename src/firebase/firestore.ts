@@ -127,6 +127,7 @@ export async function findUserByEmailOrPhone(
 export interface CreateTripInput {
   tripName: string;
   tripType: Trip['tripType'];
+  classification: 'real' | 'test';
   destination: string;
   startDate: Date;
   endDate: Date;
@@ -139,13 +140,12 @@ export interface CreateTripInput {
   members: { name: string; email: string; phone: string }[];
 }
 
-export async function createTrip(input: CreateTripInput): Promise<string> {
+export async function createTrip(input: CreateTripInput): Promise<Trip> {
   const tripRef = doc(collection(db(), 'trips'));
   const tripId = tripRef.id;
   const batch = writeBatch(db());
 
-  batch.set(tripRef, {
-    tripId,
+  const tripData: Omit<Trip, 'tripId' | 'createdAt'> = {
     tripName: input.tripName,
     tripType: input.tripType,
     createdBy: input.createdBy,
@@ -156,8 +156,13 @@ export async function createTrip(input: CreateTripInput): Promise<string> {
     expectedBudget: input.expectedBudget,
     currency: input.currency,
     membersCount: input.members.length + 1,
+    classification: input.classification,
+  };
+
+  batch.set(tripRef, {
+    ...tripData,
+    tripId,
     createdAt: serverTimestamp(),
-    classification: 'real',
   });
 
   const ownerMemberId = `${tripId}_${input.createdBy}`;
@@ -196,7 +201,14 @@ export async function createTrip(input: CreateTripInput): Promise<string> {
   }
 
   await batch.commit();
-  return tripId;
+  
+  const finalTrip: Trip = {
+    ...tripData,
+    tripId,
+    createdAt: Timestamp.now(), // Use client-side timestamp for immediate return
+  };
+
+  return finalTrip;
 }
 
 export async function createExpense(

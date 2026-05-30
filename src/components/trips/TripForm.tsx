@@ -17,20 +17,27 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { createTrip, updateTrip } from '@/firebase/firestore';
+import { createTripThunk, updateTripThunk } from '@/features/trips/tripsThunks';
 import { sendTripInviteNotification } from '@/services/fcmService';
 import { findUserByEmailOrPhone } from '@/firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 import { TripType, Trip } from '@/types/trip';
 import { useAppDispatch } from '@/store';
-import { updateTripThunk } from '@/features/trips/tripsThunks';
 import dayjs from 'dayjs';
 import { Timestamp } from 'firebase/firestore';
 
 const tripSchema = z
   .object({
     tripName: z.string().min(2, 'Trip name required'),
-    tripType: z.enum(['friends', 'family', 'office', 'bike_ride', 'trekking', 'custom']),
+    tripType: z.enum([
+      'friends',
+      'family',
+      'office',
+      'bike_ride',
+      'trekking',
+      'custom',
+    ]),
+    classification: z.enum(['real', 'test']),
     destination: z.string().min(2, 'Destination required'),
     startDate: z.string().min(1, 'Start date required'),
     endDate: z.string().min(1, 'End date required'),
@@ -81,12 +88,13 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
     defaultValues: {
       tripName: initialData?.tripName ?? '',
       tripType: initialData?.tripType ?? 'friends',
+      classification: initialData?.classification ?? 'real',
       destination: initialData?.destination ?? '',
-      startDate: initialData?.startDate 
-        ? dayjs(initialData.startDate.toDate()).format('YYYY-MM-DD') 
+      startDate: initialData?.startDate
+        ? dayjs(initialData.startDate.toDate()).format('YYYY-MM-DD')
         : '',
-      endDate: initialData?.endDate 
-        ? dayjs(initialData.endDate.toDate()).format('YYYY-MM-DD') 
+      endDate: initialData?.endDate
+        ? dayjs(initialData.endDate.toDate()).format('YYYY-MM-DD')
         : '',
       expectedBudget: initialData?.expectedBudget ?? 0,
       currency: initialData?.currency ?? 'INR',
@@ -94,6 +102,7 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
   });
 
   const tripType = watch('tripType');
+  const classification = watch('classification');
 
   const addMember = () => {
     if (!memberDraft.name.trim()) return;
@@ -111,47 +120,57 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
     setError('');
     try {
       if (isEditing) {
-        await dispatch(updateTripThunk({
-          tripId: initialData!.tripId,
-          data: {
+        await dispatch(
+          updateTripThunk({
+            tripId: initialData!.tripId,
+            data: {
+              tripName: data.tripName,
+              tripType: data.tripType as TripType,
+              classification: data.classification,
+              destination: data.destination,
+              startDate: Timestamp.fromDate(new Date(data.startDate)),
+              endDate: Timestamp.fromDate(new Date(data.endDate)),
+              expectedBudget: data.expectedBudget,
+              currency: data.currency,
+            },
+          }),
+        ).unwrap();
+        onSuccess?.();
+      } else {
+        const newTrip = await dispatch(
+          createTripThunk({
             tripName: data.tripName,
             tripType: data.tripType as TripType,
             destination: data.destination,
-            startDate: Timestamp.fromDate(new Date(data.startDate)),
-            endDate: Timestamp.fromDate(new Date(data.endDate)),
+            startDate: new Date(data.startDate),
+            endDate: new Date(data.endDate),
             expectedBudget: data.expectedBudget,
             currency: data.currency,
-          }
-        })).unwrap();
-        onSuccess?.();
-      } else {
-        const tripId = await createTrip({
-          tripName: data.tripName,
-          tripType: data.tripType as TripType,
-          destination: data.destination,
-          startDate: new Date(data.startDate),
-          endDate: new Date(data.endDate),
-          expectedBudget: data.expectedBudget,
-          currency: data.currency,
-          createdBy: uid,
-          ownerName: user?.name ?? 'Owner',
-          ownerEmail: user?.email ?? '',
-          ownerPhone: user?.phone ?? '',
-          members: members.map((m) => ({
-            ...m,
-            name: m.name,
-            email: m.email.toLowerCase(),
-          })),
-        });
+            classification: data.classification,
+            createdBy: uid,
+            ownerName: user?.name ?? 'Owner',
+            ownerEmail: user?.email ?? '',
+            ownerPhone: user?.phone ?? '',
+            members: members.map((m) => ({
+              ...m,
+              name: m.name,
+              email: m.email.toLowerCase(),
+            })),
+          }),
+        ).unwrap();
 
         for (const m of members) {
           const matchedId = await findUserByEmailOrPhone(m.email, m.phone);
           if (matchedId) {
-            await sendTripInviteNotification(matchedId, tripId, data.tripName);
+            await sendTripInviteNotification(
+              matchedId,
+              newTrip.tripId,
+              data.tripName,
+            );
           }
         }
 
-        router.push(`/trips/${tripId}`);
+        router.push(`/trips/${newTrip.tripId}`);
       }
     } catch (e) {
       setError((e as Error).message);
@@ -191,6 +210,23 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
                     {t.replace('_', ' ')}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Classification</Label>
+            <Select
+              value={classification}
+              onValueChange={(v) =>
+                setValue('classification', v as TripFormData['classification'])
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="real">Real Trip</SelectItem>
+                <SelectItem value="test">Test Trip</SelectItem>
               </SelectContent>
             </Select>
           </div>
