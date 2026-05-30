@@ -30,7 +30,7 @@ export function exportTripExpensesPDF(
     body: expenses.map((e) => [
       dayjs(e.createdAt.toDate()).format('DD MMM YYYY'),
       e.category,
-      memberMap.get(e.paidBy) ?? e.paidBy,
+      memberMap.get(e.paidBy ?? '') ?? e.paidBy ?? 'N/A',
       `${trip.currency} ${e.amount.toFixed(2)}`,
       e.note || '—',
     ]),

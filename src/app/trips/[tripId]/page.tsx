@@ -142,7 +142,7 @@ function OverviewContent({ tripId }: { tripId: string }) {
                   className="flex justify-between text-sm border-b border-border pb-2 last:border-0"
                 >
                   <span>
-                    {getName(e.paidBy)} paid {formatCurrency(e.amount, trip.currency)}{' '}
+                    {getName(e.paidBy ?? '')} paid {formatCurrency(e.amount, trip.currency)}{' '}
                     for {e.category}
                   </span>
                   <span className="text-muted-foreground">

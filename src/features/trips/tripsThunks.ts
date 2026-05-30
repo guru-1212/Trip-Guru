@@ -27,6 +27,7 @@ import {
   updateTripInList,
 } from './tripsSlice';
 import { TripInvitation } from '@/types/invitation';
+import { Trip } from '@/types/trip';
 import { RootState } from '@/store';
 
 export const updateTripExpectedBudget = createAsyncThunk(

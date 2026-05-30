@@ -16,7 +16,7 @@ export function exportTripExpensesExcel(
   const rows = expenses.map((e) => ({
     Date: dayjs(e.createdAt.toDate()).format('YYYY-MM-DD'),
     Category: e.category,
-    'Paid By': memberMap.get(e.paidBy) ?? e.paidBy,
+    'Paid By': memberMap.get(e.paidBy ?? '') ?? e.paidBy ?? 'N/A',
     Amount: e.amount,
     'Split Type': e.splitType,
     Note: e.note,

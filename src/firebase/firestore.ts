@@ -234,7 +234,7 @@ export async function removeTripMember(memberId: string): Promise<void> {
 
   // 1. Redistribute Equal Split expenses
   for (const exp of expenses) {
-    if (exp.splitType === 'equal') {
+    if (exp.splitType === 'equal' && exp.splitBetween) {
       const uids = exp.splitBetween.map((s) => s.uid);
       if (uids.includes(memberKey)) {
         const remainingUids = uids.filter((uid) => uid !== memberKey);
@@ -416,7 +416,7 @@ export async function recalculateEqualExpenses(
   let count = 0;
 
   for (const exp of equalExpenses) {
-    const existingUids = exp.splitBetween.map((s) => s.uid);
+    const existingUids = exp.splitBetween?.map((s) => s.uid) || [];
     if (!existingUids.includes(newMemberKey)) {
       const updatedUids = [...existingUids, newMemberKey];
       const newSplit = calculateEqualSplit(exp.amount, updatedUids);

@@ -22,7 +22,7 @@ export function calculateNetBalances(
 
   // 2. Process each expense against the balances
   expenses.forEach((expense) => {
-    const payerKey = expense.paidBy;
+    const payerKey = expense.paidBy ?? '';
 
     // A. Credit the person who paid
     if (activeKeys.has(payerKey)) {
@@ -30,7 +30,7 @@ export function calculateNetBalances(
     }
 
     // B. Debit the people who were part of the split
-    expense.splitBetween.forEach((split) => {
+    expense.splitBetween?.forEach((split) => {
       if (activeKeys.has(split.uid)) {
         balances.set(split.uid, (balances.get(split.uid) ?? 0) - split.amount);
       }
