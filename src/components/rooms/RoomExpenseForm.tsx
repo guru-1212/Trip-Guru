@@ -17,12 +17,15 @@ import {
 } from '@/components/ui/select';
 import { SplitSelector } from '@/components/expenses/SplitSelector';
 import { RoomMember } from '@/types/roomMember';
-import { ROOM_EXPENSE_CATEGORIES } from '@/types/roomExpense';
+import { ROOM_EXPENSE_CATEGORIES, RoomExpense } from '@/types/roomExpense';
 import { SplitType } from '@/types/expense';
 import { calculateSplit, SplitValidationError } from '@/lib/splitCalculator';
 import { getMemberKey } from '@/lib/utils';
 import { useAppDispatch } from '@/store';
-import { addRoomExpenseThunk } from '@/features/roomExpenses/roomExpensesThunks';
+import {
+  addRoomExpenseThunk,
+  updateRoomExpenseThunk,
+} from '@/features/roomExpenses/roomExpensesThunks';
 import { uploadRoomReceipt } from '@/firebase/storage';
 import { Timestamp } from 'firebase/firestore';
 import dayjs from 'dayjs';
@@ -45,23 +48,46 @@ export function RoomExpenseForm({
   members,
   createdBy,
   onSuccess,
+  initialData,
 }: {
   roomId: string;
   cycleId: string;
   members: RoomMember[];
   createdBy: string;
   onSuccess?: () => void;
+  initialData?: RoomExpense;
 }) {
   const dispatch = useAppDispatch();
-  const [splitType, setSplitType] = useState<SplitType>('equal');
+  const isEditing = !!initialData?.id;
+
+  const [splitType, setSplitType] = useState<SplitType>(
+    initialData?.splitType ?? 'equal'
+  );
   const [selectedMembers, setSelectedMembers] = useState<string[]>(
-    members.map(getMemberKey)
+    initialData?.splitBetween?.map((s) => s.uid) ?? members.map(getMemberKey)
   );
   const [unequalAmounts, setUnequalAmounts] = useState<Record<string, number>>(
-    {}
+    initialData?.splitType === 'unequal'
+      ? Object.fromEntries(
+          initialData.splitBetween?.map((s) => [s.uid, s.amount]) ?? []
+        )
+      : {}
   );
-  const [percents, setPercents] = useState<Record<string, number>>({});
-  const [singleDebtor, setSingleDebtor] = useState('');
+  const [percents, setPercents] = useState<Record<string, number>>(
+    initialData?.splitType === 'percent'
+      ? Object.fromEntries(
+          initialData.splitBetween?.map((s) => [
+            s.uid,
+            (s.amount / (initialData.amount || 1)) * 100,
+          ]) ?? []
+        )
+      : {}
+  );
+  const [singleDebtor, setSingleDebtor] = useState(
+    initialData?.splitType === 'single'
+      ? initialData.splitBetween?.[0]?.uid ?? ''
+      : ''
+  );
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -75,12 +101,16 @@ export function RoomExpenseForm({
   } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: {
-      title: '',
-      category: 'Groceries',
-      expenseDate: dayjs().format('YYYY-MM-DD'),
-      expenseTime: dayjs().format('HH:mm'),
-      paidBy: '',
-      note: '',
+      title: initialData?.title ?? '',
+      amount: initialData?.amount,
+      category: initialData?.category ?? 'Groceries',
+      expenseDate: initialData?.expenseDate
+        ? dayjs(initialData.expenseDate.toDate()).format('YYYY-MM-DD')
+        : dayjs().format('YYYY-MM-DD'),
+      expenseTime:
+        initialData?.expenseTime ?? dayjs().format('HH:mm'),
+      paidBy: initialData?.paidBy ?? '',
+      note: initialData?.note ?? '',
     },
   });
 
@@ -120,29 +150,42 @@ export function RoomExpenseForm({
         });
       }
 
-      const tempId = `temp_${Date.now()}`;
-      let receiptURL = '';
+      let receiptURL = initialData?.receiptURL ?? '';
       if (receiptFile) {
-        receiptURL = await uploadRoomReceipt(roomId, tempId, receiptFile);
+        const uploadId = initialData?.id ?? `temp_${Date.now()}`;
+        receiptURL = await uploadRoomReceipt(roomId, uploadId, receiptFile);
       }
 
-      await dispatch(
-        addRoomExpenseThunk({
-          roomId,
-          cycleId,
-          title: data.title,
-          amount: data.amount,
-          category: data.category,
-          expenseDate: Timestamp.fromDate(new Date(data.expenseDate)),
-          expenseTime: data.expenseTime,
-          note: data.note ?? '',
-          receiptURL,
-          paidBy: data.paidBy,
-          splitType,
-          splitBetween,
-          createdBy,
-        })
-      ).unwrap();
+      const expensePayload = {
+        title: data.title,
+        amount: data.amount,
+        category: data.category,
+        expenseDate: Timestamp.fromDate(new Date(data.expenseDate)),
+        expenseTime: data.expenseTime,
+        note: data.note ?? '',
+        receiptURL,
+        paidBy: data.paidBy,
+        splitType,
+        splitBetween,
+      };
+
+      if (isEditing) {
+        await dispatch(
+          updateRoomExpenseThunk({
+            expenseId: initialData!.id,
+            data: expensePayload,
+          })
+        ).unwrap();
+      } else {
+        await dispatch(
+          addRoomExpenseThunk({
+            roomId,
+            cycleId,
+            ...expensePayload,
+            createdBy,
+          })
+        ).unwrap();
+      }
 
       onSuccess?.();
     } catch (e) {
@@ -251,7 +294,7 @@ export function RoomExpenseForm({
       </div>
       {error && <p className="text-danger text-sm">{error}</p>}
       <Button type="submit" disabled={submitting}>
-        {submitting ? 'Saving...' : 'Add expense'}
+        {submitting ? 'Saving...' : isEditing ? 'Save changes' : 'Add expense'}
       </Button>
     </form>
   );

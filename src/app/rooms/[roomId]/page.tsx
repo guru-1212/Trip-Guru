@@ -1,10 +1,15 @@
 'use client';
 
+import { useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { RoomPageShell } from '@/components/rooms/RoomPageShell';
 import { useAppSelector } from '@/store';
-import { getTotalSpent } from '@/lib/settlementAlgorithm';
+import { useAuth } from '@/hooks/useAuth';
+import { useRoomSettlement } from '@/hooks/useRoomSettlement';
+import { getTotalSpent, getMemberPaidTotals } from '@/lib/settlementAlgorithm';
+import { isSettlementOpen } from '@/lib/mergeRoomSettlements';
+import { getMemberKey } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCycleLabel } from '@/firebase/firestore';
@@ -33,17 +38,33 @@ export default function RoomOverviewPage() {
 }
 
 function OverviewContent() {
+  const { uid } = useAuth();
   const room = useAppSelector((s) => s.rooms.currentRoom);
   const cycle = useAppSelector((s) => s.rooms.activeCycle);
   const expenses = useAppSelector((s) => s.roomExpenses.expenses);
   const members = useAppSelector((s) => s.rooms.members);
+  const roomId = room?.roomId ?? '';
+  const { displaySettlements, getMemberName } = useRoomSettlement(roomId);
+  const myMemberKey = members.find((m) => m.userId === uid)?.id;
   const carryForward = useAppSelector((s) =>
     s.roomSettlements.carryForward.filter((c) => c.status !== 'settled')
   );
+
+  const openDues = displaySettlements.filter((s) => isSettlementOpen(s.status));
+  const myDues = openDues.filter((s) => s.fromMemberKey === myMemberKey);
   
   const total = getTotalSpent(expenses);
   const rentExpense = expenses.find(e => e.category === 'Rent');
   const currency = room?.currency ?? 'INR';
+  const paidByMember = useMemo(() => {
+    const accepted = members.filter((m) => m.inviteStatus === 'accepted');
+    return getMemberPaidTotals(expenses, accepted);
+  }, [expenses, members]);
+
+  const getMemberName = (memberKey: string) =>
+    members
+      .filter((m) => m.inviteStatus === 'accepted')
+      .find((m) => getMemberKey(m) === memberKey)?.name ?? memberKey;
 
   const container = {
     hidden: { opacity: 0 },
@@ -77,9 +98,34 @@ function OverviewContent() {
             <CardDescription className="text-primary font-bold uppercase tracking-wider">
               {cycle ? formatCycleLabel(cycle) : 'Current cycle'}
             </CardDescription>
+            <CardDescription className="text-muted-foreground font-semibold normal-case tracking-normal">
+              Total spent this cycle
+            </CardDescription>
             <CardTitle className="text-4xl font-black">
               {currency} {total.toLocaleString()}
             </CardTitle>
+            {paidByMember.some((m) => m.amount > 0) && (
+              <div className="mt-4 pt-4 border-t border-primary/10 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Paid by
+                </p>
+                <ul className="space-y-1.5">
+                  {paidByMember
+                    .filter((m) => m.amount > 0)
+                    .map(({ memberKey, amount }) => (
+                    <li
+                      key={memberKey}
+                      className="flex items-center justify-between gap-4 text-sm font-semibold max-w-md"
+                    >
+                      <span className="text-foreground">{getMemberName(memberKey)}</span>
+                      <span className="text-muted-foreground tabular-nums">
+                        {currency} {amount.toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-3">
@@ -126,18 +172,62 @@ function OverviewContent() {
       </motion.div>
 
       {/* Pending Dues Card */}
-      <motion.div variants={item}>
+      <motion.div variants={item} className="lg:col-span-2">
         <Card className="h-full">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2">
-              <HandCoins className="h-4 w-4 text-amber-500" /> Pending Dues
+              <HandCoins className="h-4 w-4 text-amber-500" /> Pending dues
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-black">{carryForward.length}</p>
-            <p className="text-xs text-muted-foreground mt-1">Cross-month balances</p>
-            <Button variant="link" asChild className="p-0 h-auto text-xs font-bold text-primary mt-2">
-              <Link href={`/rooms/${room?.roomId}/settlement`}>Settle now <ArrowRight className="h-3 w-3 ml-1" /></Link>
+          <CardContent className="space-y-3">
+            {openDues.length === 0 && carryForward.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No pending payments this cycle.</p>
+            ) : (
+              <>
+                {openDues.length > 0 && (
+                  <ul className="space-y-2">
+                    {openDues.map((s) => (
+                      <li
+                        key={s.id}
+                        className="flex justify-between gap-2 text-sm font-semibold"
+                      >
+                        <span>
+                          {getMemberName(s.fromMemberKey)}
+                          <span className="text-muted-foreground font-normal">
+                            {' '}
+                            → pay to {getMemberName(s.toMemberKey)}
+                          </span>
+                          {s.status === 'awaiting_confirmation' && (
+                            <span className="block text-xs text-amber-600 font-medium">
+                              Awaiting confirmation
+                            </span>
+                          )}
+                        </span>
+                        <span className="tabular-nums shrink-0">
+                          {currency} {s.amount.toLocaleString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {myDues.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    You have {myDues.length} payment
+                    {myDues.length > 1 ? 's' : ''} to make.
+                  </p>
+                )}
+                {carryForward.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Plus {carryForward.length} balance
+                    {carryForward.length > 1 ? 's' : ''} from earlier months.
+                  </p>
+                )}
+              </>
+            )}
+            <Button variant="link" asChild className="p-0 h-auto text-xs font-bold text-primary">
+              <Link href={`/rooms/${room?.roomId}/settlement`}>
+                Open settlements <ArrowRight className="h-3 w-3 ml-1" />
+              </Link>
             </Button>
           </CardContent>
         </Card>

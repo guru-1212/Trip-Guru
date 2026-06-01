@@ -93,5 +93,12 @@ export {
 export {
   getRoomSettlements,
   saveRoomSettlements,
-  markRoomSettlementPaid,
+  syncRoomSettlements,
+  claimRoomSettlementPayment,
+  confirmRoomSettlementPayment,
 } from '@/firebase/roomSettlements.firestore';
+
+export {
+  createRoomAuditLog,
+  getRoomAuditLogs,
+} from '@/firebase/roomAuditLog.firestore';

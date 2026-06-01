@@ -7,8 +7,8 @@ import { useRoom } from '@/hooks/useRoom';
 import { useRealtimeRoom } from '@/hooks/useRealtimeRoom';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { formatCycleLabel } from '@/firebase/firestore';
-import Link from 'next/link';
-import { ChevronLeft, Home } from 'lucide-react';
+import { PageBackNav } from '@/components/common/PageBackNav';
+import { Home } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export function RoomPageShell({
@@ -54,13 +54,7 @@ function RoomPageContent({
         animate={{ opacity: 1, y: 0 }}
         className="space-y-4"
       >
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors group"
-        >
-          <ChevronLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
-          Back to Dashboard
-        </Link>
+        <PageBackNav />
 
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="space-y-2">

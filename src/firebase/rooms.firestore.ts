@@ -213,7 +213,7 @@ export async function declineRoomInvite(memberId: string): Promise<void> {
 export async function addMemberToRoom(
   roomId: string,
   member: { name: string; email: string; phone: string }
-): Promise<string | null> {
+): Promise<string> {
   const normalizedEmail = member.email.trim().toLowerCase();
   const normalizedPhone = normalizePhone(member.phone);
   const matchedUserId = await findUserByEmailOrPhone(
@@ -243,7 +243,7 @@ export async function addMemberToRoom(
   });
   batch.update(doc(db(), 'rooms', roomId), { membersCount: increment(1) });
   await batch.commit();
-  return matchedUserId;
+  return memberDocId;
 }
 
 export async function removeRoomMember(memberId: string): Promise<void> {

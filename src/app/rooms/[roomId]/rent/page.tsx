@@ -12,6 +12,8 @@ import {
 } from '@/firebase/firestore';
 import { RentPayment } from '@/types/roomSettlement';
 import { getMemberKey } from '@/lib/utils';
+import { recordRoomAuditLog } from '@/services/roomAuditLogService';
+import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +32,8 @@ export default function RoomRentPage() {
 }
 
 function RentContent({ roomId }: { roomId: string }) {
+  const { uid } = useAuth();
+  const actorName = useAppSelector((s) => s.auth.user?.name ?? 'Someone');
   const room = useAppSelector((s) => s.rooms.currentRoom);
   const cycle = useAppSelector((s) => s.rooms.activeCycle);
   const members = useAppSelector((s) =>
@@ -63,6 +67,18 @@ function RentContent({ roomId }: { roomId: string }) {
         amount: Math.round(perMember * 100) / 100,
       }))
     );
+    if (uid) {
+      await recordRoomAuditLog({
+        roomId,
+        cycleId: cycle.id,
+        action: 'rent.initialized',
+        entityType: 'rent',
+        actorUid: uid,
+        actorName,
+        summary: `${actorName} set monthly rent to ${room?.currency ?? 'INR'} ${total.toLocaleString()} (split among ${members.length})`,
+        metadata: { total, memberCount: members.length },
+      });
+    }
     await load();
   };
 
@@ -149,6 +165,22 @@ function RentContent({ roomId }: { roomId: string }) {
                         size="sm"
                         onClick={async () => {
                           await markRentPaid(p.id);
+                          if (uid) {
+                            await recordRoomAuditLog({
+                              roomId,
+                              cycleId: cycle?.id,
+                              action: 'rent.paid',
+                              entityType: 'rent',
+                              entityId: p.id,
+                              actorUid: uid,
+                              actorName,
+                              summary: `${actorName} marked rent paid for ${getName(p.memberKey)}`,
+                              metadata: {
+                                memberKey: p.memberKey,
+                                amount: p.amount,
+                              },
+                            });
+                          }
                           await load();
                         }}
                       >
@@ -177,9 +209,21 @@ function RentContent({ roomId }: { roomId: string }) {
                       className="max-w-[120px]"
                       defaultValue={payment?.amount ?? 0}
                       onBlur={async (e) => {
-                        if (!cycle) return;
+                        if (!cycle || !uid) return;
                         const amt = parseFloat(e.target.value);
+                        const prev = payment?.amount ?? 0;
+                        if (Number.isNaN(amt) || amt === prev) return;
                         await setRentPaymentAmount(roomId, cycle.id, key, amt);
+                        await recordRoomAuditLog({
+                          roomId,
+                          cycleId: cycle.id,
+                          action: 'rent.amount_updated',
+                          entityType: 'rent',
+                          actorUid: uid,
+                          actorName,
+                          summary: `${actorName} updated ${m.name}'s rent share to ${room?.currency ?? 'INR'} ${amt.toLocaleString()}`,
+                          metadata: { memberKey: key, amount: amt },
+                        });
                         await load();
                       }}
                     />

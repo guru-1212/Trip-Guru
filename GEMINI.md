@@ -2,6 +2,8 @@
 
 **Read this file before changing code.** TripMate is a dual-product app: **Trips** (original) and **Rooms / Roommates** (added in parallel). Breaking trip flows is the highest-risk failure mode.
 
+**Detailed product requirements (especially Rooms):** [`docs/requirements/README.md`](docs/requirements/README.md) — use when user prompts are vague or conflict with implemented behavior.
+
 ---
 
 ## 1. Product overview
@@ -136,7 +138,8 @@ src/firebase/
 - `roomExpenses` — `cycleId`, `title`, `expenseDate`, roommate categories (`src/types/roomExpense.ts`)
 - `carryForwardBalances` — cross-month dues (`pending | partial | settled`)
 - `rentPayments` — per cycle, per member
-- `roomSettlements` — persisted settlement history
+- `roomSettlements` — persisted settlement history (claim → confirm workflow; see `docs/requirements/03-room-settlements.md`)
+- `roomAuditLogs` — append-only activity log (see `docs/requirements/04-room-audit-history.md`)
 
 Indexes: `firestore.indexes.json`. Rules: `firestore.rules` (`isRoomMember`, `isRoomEditor`).
 

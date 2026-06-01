@@ -14,6 +14,8 @@ import {
   setActiveCycle,
   setLoading,
 } from './roomsSlice';
+import { recordRoomAuditLog } from '@/services/roomAuditLogService';
+import type { RootState } from '@/store';
 
 export const fetchUserRooms = createAsyncThunk(
   'rooms/fetchUser',
@@ -43,7 +45,20 @@ export const fetchRoom = createAsyncThunk(
 
 export const createRoomThunk = createAsyncThunk(
   'rooms/create',
-  async (input: CreateRoomInput) => {
-    return createRoom(input);
+  async (input: CreateRoomInput, { getState }) => {
+    const room = await createRoom(input);
+    const state = getState() as RootState;
+    const actorName = state.auth.user?.name ?? 'Someone';
+    await recordRoomAuditLog({
+      roomId: room.roomId,
+      action: 'room.created',
+      entityType: 'room',
+      entityId: room.roomId,
+      actorUid: input.createdBy,
+      actorName,
+      summary: `${actorName} created room "${room.name}"`,
+      metadata: { roomName: room.name },
+    });
+    return room;
   }
 );

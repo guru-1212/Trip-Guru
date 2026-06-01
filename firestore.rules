@@ -87,11 +87,36 @@ service cloud.firestore {
     match /roomExpenses/{expenseId} {
       allow read: if isRoomMember(resource.data.roomId);
       allow create: if isAuth() && isRoomEditor(request.resource.data.roomId);
-      allow update, delete: if isRoomEditor(resource.data.roomId);
+      allow update, delete: if isAuth() && request.auth.uid == resource.data.createdBy;
+    }
+    function roomMemberUserId(memberKey) {
+      return get(/databases/$(database)/documents/roomMembers/$(memberKey)).data.userId;
+    }
+    function isRoomSettlementDebtor(roomId, memberKey) {
+      return isRoomMember(roomId)
+        && roomMemberUserId(memberKey) == request.auth.uid;
+    }
+    function isRoomSettlementCreditor(roomId, memberKey) {
+      return isRoomMember(roomId)
+        && roomMemberUserId(memberKey) == request.auth.uid;
     }
     match /roomSettlements/{settlementId} {
       allow read: if isRoomMember(resource.data.roomId);
-      allow write: if isRoomEditor(resource.data.roomId);
+      allow create: if isAuth() && isRoomMember(request.resource.data.roomId);
+      allow delete: if isRoomEditor(resource.data.roomId);
+      allow update: if isRoomMember(resource.data.roomId) && (
+        isRoomEditor(resource.data.roomId)
+        || (
+          isRoomSettlementDebtor(resource.data.roomId, resource.data.fromMemberKey)
+          && resource.data.status == 'pending'
+          && request.resource.data.status == 'awaiting_confirmation'
+        )
+        || (
+          isRoomSettlementCreditor(resource.data.roomId, resource.data.toMemberKey)
+          && resource.data.status == 'awaiting_confirmation'
+          && request.resource.data.status == 'paid'
+        )
+      );
     }
     match /carryForwardBalances/{balanceId} {
       allow read: if isRoomMember(resource.data.roomId);
@@ -100,6 +125,13 @@ service cloud.firestore {
     match /rentPayments/{paymentId} {
       allow read: if isRoomMember(resource.data.roomId);
       allow write: if isRoomEditor(resource.data.roomId);
+    }
+    match /roomAuditLogs/{logId} {
+      allow read: if isRoomMember(resource.data.roomId);
+      allow create: if isAuth()
+        && isRoomMember(request.resource.data.roomId)
+        && request.auth.uid == request.resource.data.actorUid;
+      allow update, delete: if false;
     }
   }
 }

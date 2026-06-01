@@ -5,6 +5,9 @@ import { useParams } from 'next/navigation';
 import { RoomPageShell } from '@/components/rooms/RoomPageShell';
 import { useAppSelector } from '@/store';
 import { addMemberToRoom } from '@/firebase/firestore';
+import { recordRoomAuditLog } from '@/services/roomAuditLogService';
+import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,15 +26,29 @@ export default function RoomMembersPage() {
 }
 
 function MembersContent({ roomId }: { roomId: string }) {
+  const { uid } = useAuth();
+  const actorName = useAppSelector((s) => s.auth.user?.name ?? 'Someone');
   const members = useAppSelector((s) => s.rooms.members);
+  const cycle = useAppSelector((s) => s.rooms.activeCycle);
   const [draft, setDraft] = useState({ name: '', email: '', phone: '' });
   const [adding, setAdding] = useState(false);
 
   const handleAdd = async () => {
-    if (!draft.name || !draft.email) return;
+    if (!draft.name || !draft.email || !uid) return;
     setAdding(true);
     try {
-      await addMemberToRoom(roomId, draft);
+      const memberId = await addMemberToRoom(roomId, draft);
+      await recordRoomAuditLog({
+        roomId,
+        cycleId: cycle?.id,
+        action: 'member.invited',
+        entityType: 'member',
+        entityId: memberId,
+        actorUid: uid,
+        actorName,
+        summary: `${actorName} invited ${draft.name} (${draft.email})`,
+        metadata: { memberName: draft.name, email: draft.email },
+      });
       setDraft({ name: '', email: '', phone: '' });
     } finally {
       setAdding(false);

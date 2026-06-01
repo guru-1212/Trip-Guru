@@ -28,9 +28,24 @@ const roomSettlementsSlice = createSlice({
     setCarryForward(state, action: PayloadAction<CarryForwardBalance[]>) {
       state.carryForward = action.payload;
     },
+    updateRoomSettlement(
+      state,
+      action: PayloadAction<Partial<RoomSettlement> & { id: string }>
+    ) {
+      const idx = state.settlements.findIndex(
+        (s) => s.id === action.payload.id
+      );
+      if (idx >= 0) {
+        state.settlements[idx] = { ...state.settlements[idx], ...action.payload };
+      }
+    },
   },
 });
 
-export const { setComputed, setRoomSettlements, setCarryForward } =
-  roomSettlementsSlice.actions;
+export const {
+  setComputed,
+  setRoomSettlements,
+  setCarryForward,
+  updateRoomSettlement,
+} = roomSettlementsSlice.actions;
 export default roomSettlementsSlice.reducer;

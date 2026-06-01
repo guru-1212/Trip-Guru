@@ -197,3 +197,59 @@ export function getTotalSpent(expenses: SplittableExpense[]): number {
     .filter((e) => (e.expenseType || 'actual') === 'actual')
     .reduce((sum, e) => sum + e.amount, 0);
 }
+
+export interface MemberSpendTotal {
+  memberKey: string;
+  amount: number;
+}
+
+/** Sum each member's share from expense splits (current cycle expenses). */
+export function getMemberSpendTotals<T extends MemberLike>(
+  expenses: SplittableExpense[],
+  members: T[]
+): MemberSpendTotal[] {
+  const totals = new Map<string, number>();
+  const activeKeys = new Set(members.map(getMemberKey));
+  activeKeys.forEach((key) => totals.set(key, 0));
+
+  expenses.forEach((expense) => {
+    if ((expense.expenseType || 'actual') !== 'actual') return;
+    expense.splitBetween?.forEach((split) => {
+      if (activeKeys.has(split.uid)) {
+        totals.set(split.uid, (totals.get(split.uid) ?? 0) + split.amount);
+      }
+    });
+  });
+
+  return members
+    .map((m) => ({
+      memberKey: getMemberKey(m),
+      amount: Math.round((totals.get(getMemberKey(m)) ?? 0) * 100) / 100,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+/** Sum each member's out-of-pocket payments (paidBy) for the cycle. */
+export function getMemberPaidTotals<T extends MemberLike>(
+  expenses: SplittableExpense[],
+  members: T[]
+): MemberSpendTotal[] {
+  const totals = new Map<string, number>();
+  const activeKeys = new Set(members.map(getMemberKey));
+  activeKeys.forEach((key) => totals.set(key, 0));
+
+  expenses.forEach((expense) => {
+    if ((expense.expenseType || 'actual') !== 'actual') return;
+    const payerKey = expense.paidBy ?? '';
+    if (activeKeys.has(payerKey)) {
+      totals.set(payerKey, (totals.get(payerKey) ?? 0) + expense.amount);
+    }
+  });
+
+  return members
+    .map((m) => ({
+      memberKey: getMemberKey(m),
+      amount: Math.round((totals.get(getMemberKey(m)) ?? 0) * 100) / 100,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+}
