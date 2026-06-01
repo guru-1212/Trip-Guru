@@ -22,6 +22,11 @@ export function calculateNetBalances(
 
   // 2. Process each expense against the balances
   expenses.forEach((expense) => {
+    // Only include actual expenses in settlements
+    // Default to 'actual' for older expenses that don't have this field
+    const type = expense.expenseType || 'actual';
+    if (type !== 'actual') return;
+
     const payerKey = expense.paidBy ?? '';
 
     // A. Credit the person who paid
@@ -99,5 +104,7 @@ export function computeSettlements(
 }
 
 export function getTotalSpent(expenses: Expense[]): number {
-  return expenses.reduce((sum, e) => sum + e.amount, 0);
+  return expenses
+    .filter((e) => (e.expenseType || 'actual') === 'actual')
+    .reduce((sum, e) => sum + e.amount, 0);
 }

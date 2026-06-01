@@ -335,40 +335,72 @@ function DashboardContent() {
 
         <div className="space-y-3">
           {upcomingTrips.length > 0 ? (
-            upcomingTrips.map((trip, i) => (
-              <motion.div 
-                key={trip.tripId} 
-                variants={item}
-                className="group"
-              >
-                <Link href={`/trips/${trip.tripId}`}>
-                  <div className="bg-white dark:bg-slate-900/50 rounded-2xl p-4 md:p-5 border border-border/40 shadow-sm hover:border-primary/50 hover:shadow-md transition-all flex flex-row items-center gap-4 md:gap-6 overflow-hidden">
-                    <div className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-xl md:rounded-2xl bg-primary/5 flex items-center justify-center text-xl md:text-3xl group-hover:bg-primary group-hover:text-white transition-colors duration-300">
-                      {trip.tripType === 'bike_ride' ? '🏍️' : trip.tripType === 'trekking' ? '🥾' : '✈️'}
-                    </div>
-                    
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm md:text-base font-black text-slate-900 dark:text-white truncate">
-                        {trip.tripName}
-                      </h3>
-                      <p className="text-[10px] md:text-xs font-bold text-muted-foreground mt-1 flex items-center gap-1.5 truncate">
-                        <MapPin className="h-3 w-3 text-primary shrink-0" /> {trip.destination}
-                      </p>
-                    </div>
+            upcomingTrips.map((trip, i) => {
+              const startDate = dayjs(trip.startDate.toDate());
+              const now = dayjs();
+              const diffInDays = startDate.diff(now, 'day');
+              
+              let countdownText = '';
+              if (diffInDays > 0) {
+                const years = startDate.diff(now, 'year');
+                const months = startDate.diff(now.add(years, 'year'), 'month');
+                const days = startDate.diff(now.add(years, 'year').add(months, 'month'), 'day');
+                
+                const parts = [];
+                if (years > 0) parts.push(`${years}y`);
+                if (months > 0) parts.push(`${months}m`);
+                if (days > 0 || parts.length === 0) parts.push(`${days}d`);
+                countdownText = `${parts.join(' ')} to go`;
+              } else if (diffInDays === 0) {
+                countdownText = 'Starts today';
+              } else {
+                countdownText = 'In progress';
+              }
+              
+              return (
+                <motion.div 
+                  key={trip.tripId} 
+                  variants={item}
+                  className="group"
+                >
+                  <Link href={`/trips/${trip.tripId}`}>
+                    <div className="bg-white dark:bg-slate-900/50 rounded-2xl p-4 md:p-5 border border-border/40 shadow-sm hover:border-primary/50 hover:shadow-md transition-all flex flex-row items-center gap-4 md:gap-6 overflow-hidden">
+                      <div className="w-10 h-10 md:w-14 md:h-14 shrink-0 rounded-xl md:rounded-2xl bg-primary/5 flex items-center justify-center text-xl md:text-3xl group-hover:bg-primary group-hover:text-white transition-colors duration-300">
+                        {trip.tripType === 'bike_ride' ? '🏍️' : trip.tripType === 'trekking' ? '🥾' : '✈️'}
+                      </div>
+                      
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm md:text-base font-black text-slate-900 dark:text-white truncate">
+                          {trip.tripName}
+                        </h3>
+                        <p className="text-[10px] md:text-xs font-bold text-muted-foreground mt-1 flex items-center gap-1.5 truncate">
+                          <MapPin className="h-3 w-3 text-primary shrink-0" /> {trip.destination}
+                        </p>
+                      </div>
 
-                    <div className="flex items-center gap-4 md:gap-8 shrink-0">
-                      <div className="hidden sm:block text-right">
-                        <p className="text-[9px] md:text-[10px] font-black uppercase text-muted-foreground tracking-tighter mb-0.5">Budget</p>
-                        <p className="text-xs md:text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(trip.expectedBudget, trip.currency)}</p>
-                      </div>
-                      <div className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-border/60 flex items-center justify-center group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-all">
-                        <ArrowRight className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                      <div className="flex items-center gap-4 md:gap-8 shrink-0">
+                        <div className="hidden sm:flex flex-col items-end gap-1.5">
+                          <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                            diffInDays > 0 
+                              ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20' 
+                              : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                          }`}>
+                            {countdownText}
+                          </div>
+                          <div className="text-right">
+                            <p className="text-[9px] md:text-[10px] font-black uppercase text-muted-foreground tracking-tighter mb-0.5">Budget</p>
+                            <p className="text-xs md:text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(trip.expectedBudget, trip.currency)}</p>
+                          </div>
+                        </div>
+                        <div className="w-8 h-8 md:w-10 md:h-10 rounded-full border border-border/60 flex items-center justify-center group-hover:bg-primary group-hover:border-primary group-hover:text-white transition-all">
+                          <ArrowRight className="h-3.5 w-3.5 md:h-4 md:w-4" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              </motion.div>
-            ))
+                  </Link>
+                </motion.div>
+              );
+            })
           ) : (
              <motion.div variants={item}>
                <EmptyState 
