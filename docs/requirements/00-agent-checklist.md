@@ -26,7 +26,11 @@ If the user says “expenses” without context → check route or `useAppMode()
 
 ## 4. After code changes
 
+- [ ] **`npm run build`** (not only `tsc`) — catches duplicate symbols + Badge variant mismatches  
 - [ ] `npm run test` if `settlementAlgorithm.ts` or split logic changed  
+- [ ] No duplicate imports in the same file (`useAppSelector`, hooks)  
+- [ ] Badge uses `danger`, not `destructive` (`src/components/ui/badge.tsx`)  
+- [ ] Extending `RoomComputedSettlement` with wider `status` → use `Omit<..., 'status'>`  
 - [ ] Remind deploy if `firestore.rules` or `firestore.indexes.json` changed:  
   `firebase deploy --only firestore:rules,firestore:indexes`  
 

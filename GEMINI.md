@@ -232,12 +232,27 @@ Styling: Tailwind + Framer Motion; primary `#6366F1`; dark mode via `dark` class
 
 1. `npx tsc --noEmit` — types
 2. `npm run test` — settlement tests (if touching `settlementAlgorithm.ts`)
-3. `npm run build` — full Next build (run once when done)
+3. **`npm run build`** — full Next build (**required**; catches duplicate identifiers and strict UI types that `tsc` alone may miss in IDE)
 4. If new Firestore queries → update `firestore.indexes.json` and deploy rules/indexes
 5. If new storage paths → update `storage.rules` and deploy storage
 6. Confirm trip flows still work: create trip, add expense, settlement page
 7. Confirm room flows: create room, cycle auto-create, expense, settlement with carry-forward
 8. If both-mode: toggle Trips/Rooms and confirm the other module’s routes redirect
+
+### 12.1 Production build pitfalls (avoid repeat failures)
+
+`npm run build` runs **lint + TypeScript on all app files**. These errors have broken production builds before:
+
+| Error | Cause | Fix |
+|-------|--------|-----|
+| `the name X is defined multiple times` | Duplicate `import` or duplicate `const`/function in the same file (often after merging features) | Remove duplicate import; reuse hook helper instead of redefining (e.g. one `getMemberName` from `useRoomSettlement`, not a second local function) |
+| `Badge variant "destructive"` not assignable | shadcn `Badge` in this repo uses **`danger`**, not `destructive` (Button uses `destructive`) | Use `variant="danger"` or type via `VariantProps<typeof badgeVariants>` from `@/components/ui/badge` |
+| `DisplayRoomSettlement` incorrectly extends `RoomComputedSettlement` | `RoomComputedSettlement.status` is literal `'pending'`; merged UI status is `RoomSettlementStatus` | `extends Omit<RoomComputedSettlement, 'status'>` then add `status: RoomSettlementStatus` |
+
+**After editing room pages:** grep the file for duplicate imports (`useAppSelector`, `getMemberName`) before committing.
+
+**UI variants reference:** `src/components/ui/badge.tsx` → `default | secondary | success | warning | danger | outline`.  
+`src/components/ui/button.tsx` → includes `destructive` (different from Badge).
 
 ---
 

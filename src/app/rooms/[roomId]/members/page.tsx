@@ -7,7 +7,6 @@ import { useAppSelector } from '@/store';
 import { addMemberToRoom } from '@/firebase/firestore';
 import { recordRoomAuditLog } from '@/services/roomAuditLogService';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';

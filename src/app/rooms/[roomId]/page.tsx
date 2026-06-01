@@ -9,7 +9,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRoomSettlement } from '@/hooks/useRoomSettlement';
 import { getTotalSpent, getMemberPaidTotals } from '@/lib/settlementAlgorithm';
 import { isSettlementOpen } from '@/lib/mergeRoomSettlements';
-import { getMemberKey } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCycleLabel } from '@/firebase/firestore';
@@ -60,11 +59,6 @@ function OverviewContent() {
     const accepted = members.filter((m) => m.inviteStatus === 'accepted');
     return getMemberPaidTotals(expenses, accepted);
   }, [expenses, members]);
-
-  const getMemberName = (memberKey: string) =>
-    members
-      .filter((m) => m.inviteStatus === 'accepted')
-      .find((m) => getMemberKey(m) === memberKey)?.name ?? memberKey;
 
   const container = {
     hidden: { opacity: 0 },

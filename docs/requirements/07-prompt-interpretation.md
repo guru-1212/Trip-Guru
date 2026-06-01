@@ -46,6 +46,14 @@ Ask **one** short question only if:
 
 Otherwise follow `docs/requirements/` and note assumptions in the PR/summary.
 
+## Build mistakes (run `npm run build`)
+
+| Symptom | Fix |
+|---------|-----|
+| Duplicate `useAppSelector` / `getMemberName` | Remove extra import or local function; use hook export once |
+| Badge `destructive` type error | Use `danger` variant (see `GEMINI.md` §12.1) |
+| `DisplayRoomSettlement` extends error | `Omit<RoomComputedSettlement, 'status'>` |
+
 ## Keeping docs current
 
 If you implement behavior **not** described here, add or update the relevant `docs/requirements/*.md` file in the same change.

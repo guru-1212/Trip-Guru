@@ -2,7 +2,8 @@ import { RoomComputedSettlement } from '@/lib/settlementAlgorithm';
 import { RoomSettlement, RoomSettlementStatus } from '@/types/roomSettlement';
 import { Timestamp } from 'firebase/firestore';
 
-export interface DisplayRoomSettlement extends RoomComputedSettlement {
+export interface DisplayRoomSettlement
+  extends Omit<RoomComputedSettlement, 'status'> {
   status: RoomSettlementStatus;
   claimedAt?: Timestamp | null;
   confirmedAt?: Timestamp | null;

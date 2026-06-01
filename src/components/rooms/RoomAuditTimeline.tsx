@@ -2,7 +2,10 @@
 
 import { RoomAuditLog } from '@/types/roomAuditLog';
 import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Badge, badgeVariants } from '@/components/ui/badge';
+import type { VariantProps } from 'class-variance-authority';
+
+type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>['variant']>;
 import dayjs from 'dayjs';
 import {
   CreditCard,
@@ -18,14 +21,14 @@ import type { LucideIcon } from 'lucide-react';
 
 const actionConfig: Record<
   RoomAuditLog['action'],
-  { label: string; icon: LucideIcon; variant: 'default' | 'secondary' | 'outline' | 'destructive' }
+  { label: string; icon: LucideIcon; variant: BadgeVariant }
 > = {
   'room.created': { label: 'Room', icon: Home, variant: 'default' },
   'expense.created': { label: 'Expense', icon: Plus, variant: 'default' },
   'expense.updated': { label: 'Expense', icon: Pencil, variant: 'secondary' },
-  'expense.deleted': { label: 'Expense', icon: Trash2, variant: 'destructive' },
+  'expense.deleted': { label: 'Expense', icon: Trash2, variant: 'danger' },
   'member.invited': { label: 'Member', icon: UserPlus, variant: 'default' },
-  'member.removed': { label: 'Member', icon: Trash2, variant: 'destructive' },
+  'member.removed': { label: 'Member', icon: Trash2, variant: 'danger' },
   'settlement.saved': { label: 'Settlement', icon: HandCoins, variant: 'secondary' },
   'settlement.marked_paid': { label: 'Settlement', icon: HandCoins, variant: 'default' },
   'settlement.payment_claimed': { label: 'Settlement', icon: HandCoins, variant: 'secondary' },
