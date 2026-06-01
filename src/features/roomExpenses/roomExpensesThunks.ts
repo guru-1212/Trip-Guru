@@ -18,6 +18,7 @@ import {
   recordRoomAuditLog,
 } from '@/services/roomAuditLogService';
 import type { RootState } from '@/store';
+
 function getAuditActor(state: RootState) {
   return {
     uid: state.auth.firebaseUid ?? '',

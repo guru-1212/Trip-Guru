@@ -28,7 +28,7 @@ import { writeStoredMode } from '@/lib/appMode';
 import { LogOut, Bell, Camera, User as UserIcon, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { ImageCropper } from '@/components/profile/ImageCropper';
-import { requestFCMToken } from '@/services/fcmService';
+import { isPushConfigured, requestFCMToken } from '@/services/fcmService';
 import {
   Dialog,
   DialogContent,
@@ -317,6 +317,15 @@ function ProfileContent() {
               </p>
             </div>
           </label>
+          {!isPushConfigured() && (
+            <p className="mt-3 text-xs text-amber-700 dark:text-amber-400 font-medium rounded-xl bg-amber-500/10 p-3">
+              Push is not configured: add{' '}
+              <code className="text-[10px]">NEXT_PUBLIC_FIREBASE_VAPID_KEY</code>{' '}
+              to <code className="text-[10px]">.env.local</code> from Firebase Console →
+              Project settings → Cloud Messaging → Web Push certificates, then rebuild
+              the app.
+            </p>
+          )}
         </CardContent>
       </Card>
 

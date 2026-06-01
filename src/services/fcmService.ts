@@ -106,6 +106,67 @@ export async function onForegroundMessage(
   return onMessage(messaging, callback);
 }
 
+/** Notify room members (callable; also backed by onRoomAuditLogCreated when functions are deployed). */
+export async function notifyRoomMembersOfExpense(
+  roomId: string,
+  amount: number,
+  category: string,
+  paidByName: string,
+  title?: string
+): Promise<void> {
+  try {
+    const fn = httpsCallable(getFirebaseFunctions(), 'onRoomExpenseCreated');
+    await fn({
+      roomId,
+      amount,
+      category,
+      paidByName,
+      title: title ?? category,
+    });
+  } catch (error) {
+    console.warn('Room expense notification failed:', error);
+  }
+}
+
+export async function notifyRoomMembersOfActivity(
+  roomId: string,
+  title: string,
+  body: string,
+  path?: string
+): Promise<void> {
+  try {
+    const fn = httpsCallable(getFirebaseFunctions(), 'onRoomActivityNotify');
+    await fn({ roomId, title, body, path: path ?? '' });
+  } catch (error) {
+    console.warn('Room activity notification failed:', error);
+  }
+}
+
+export async function notifyTripMembersOfExpense(
+  tripId: string,
+  amount: number,
+  category: string,
+  paidByName: string,
+  title?: string
+): Promise<void> {
+  try {
+    const fn = httpsCallable(getFirebaseFunctions(), 'onExpenseCreated');
+    await fn({
+      tripId,
+      amount,
+      category,
+      paidByName,
+      title: title ?? category,
+    });
+  } catch (error) {
+    console.warn('Trip expense notification failed:', error);
+  }
+}
+
+export function isPushConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY);
+}
+
 export async function sendTripInviteNotification(
   targetUserId: string,
   tripId: string,

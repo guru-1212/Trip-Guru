@@ -194,52 +194,82 @@ export const onTripExpenseDeleted = onDocumentDeleted(
   }
 );
 
-/** @deprecated Prefer Firestore triggers; kept for older clients. */
+/** Client fallback for trip expenses. */
 export const onExpenseCreated = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
-  const { tripId, amount, category, paidByName } = request.data as {
+  const { tripId, amount, category, paidByName, title } = request.data as {
     tripId: string;
     amount: number;
     category: string;
     paidByName: string;
+    title?: string;
   };
   if (!tripId) {
     throw new HttpsError('invalid-argument', 'tripId is required.');
   }
   const tokens = await collectTripMemberTokens(tripId, request.auth.uid);
+  const label = title || category;
   return {
     sent: await sendMulticastPush(tokens, {
-      title: 'New expense',
-      body: `${paidByName} added ${category} — ${amount}`,
+      title: 'New trip expense',
+      body: `${paidByName} added "${label}" — ${amount}`,
       link: `/trips/${tripId}/expenses`,
       data: { type: 'expense', tripId },
     }),
   };
 });
 
-/** @deprecated Prefer onRoomAuditLogCreated trigger. */
+/** Client fallback when audit trigger has not run yet. */
 export const onRoomExpenseCreated = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError('unauthenticated', 'Must be signed in.');
   }
-  const { roomId, amount, category, paidByName } = request.data as {
+  const { roomId, amount, category, paidByName, title } = request.data as {
     roomId: string;
     amount: number;
     category: string;
     paidByName: string;
+    title?: string;
   };
   if (!roomId) {
     throw new HttpsError('invalid-argument', 'roomId is required.');
   }
   const tokens = await collectRoomMemberTokens(roomId, request.auth.uid);
+  const label = title || category;
   return {
     sent: await sendMulticastPush(tokens, {
       title: 'New room expense',
-      body: `${paidByName} added ${category} — ${amount}`,
+      body: `${paidByName} added "${label}" — ${amount}`,
       link: `/rooms/${roomId}/expenses`,
       data: { type: 'room_expense', roomId },
+    }),
+  };
+});
+
+/** Generic room activity push from client (settlements, bring list, etc.). */
+export const onRoomActivityNotify = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+  const { roomId, title, body, path } = request.data as {
+    roomId: string;
+    title: string;
+    body: string;
+    path?: string;
+  };
+  if (!roomId || !title || !body) {
+    throw new HttpsError('invalid-argument', 'roomId, title, and body are required.');
+  }
+  const tokens = await collectRoomMemberTokens(roomId, request.auth.uid);
+  const link = `/rooms/${roomId}${path ?? ''}`;
+  return {
+    sent: await sendMulticastPush(tokens, {
+      title,
+      body,
+      link,
+      data: { type: 'room_activity', roomId },
     }),
   };
 });

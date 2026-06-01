@@ -3,12 +3,12 @@ importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: '',
-  authDomain: '',
-  projectId: '',
-  storageBucket: '',
-  messagingSenderId: '',
-  appId: '',
+  apiKey: 'AIzaSyBjSas18bsO6_S67Su23oUN7Nt7hN2BKec',
+  authDomain: 'trip-planner-gurunath-h.firebaseapp.com',
+  projectId: 'trip-planner-gurunath-h',
+  storageBucket: 'trip-planner-gurunath-h.firebasestorage.app',
+  messagingSenderId: '790808381962',
+  appId: '1:790808381962:web:ccc07395fcda28720dadf3',
 });
 
 const messaging = firebase.messaging();

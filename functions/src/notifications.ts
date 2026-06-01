@@ -1,6 +1,8 @@
 import * as admin from 'firebase-admin';
 
-const db = admin.firestore();
+function db() {
+  return admin.firestore();
+}
 
 export interface PushPayload {
   title: string;
@@ -26,7 +28,7 @@ export async function collectRoomMemberTokens(
   roomId: string,
   excludeUid?: string
 ): Promise<string[]> {
-  const membersSnap = await db
+  const membersSnap = await db()
     .collection('roomMembers')
     .where('roomId', '==', roomId)
     .where('inviteStatus', '==', 'accepted')
@@ -36,7 +38,7 @@ export async function collectRoomMemberTokens(
   for (const memberDoc of membersSnap.docs) {
     const userId = memberDoc.data().userId as string | null;
     if (!userId || userId === excludeUid) continue;
-    const userSnap = await db.doc(`users/${userId}`).get();
+    const userSnap = await db().doc(`users/${userId}`).get();
     tokens.push(...tokensFromUserData(userSnap.data()));
   }
   return uniqueTokens(tokens);
@@ -46,7 +48,7 @@ export async function collectTripMemberTokens(
   tripId: string,
   excludeUid?: string
 ): Promise<string[]> {
-  const membersSnap = await db
+  const membersSnap = await db()
     .collection('tripMembers')
     .where('tripId', '==', tripId)
     .where('inviteStatus', '==', 'accepted')
@@ -56,14 +58,14 @@ export async function collectTripMemberTokens(
   for (const memberDoc of membersSnap.docs) {
     const userId = memberDoc.data().userId as string | null;
     if (!userId || userId === excludeUid) continue;
-    const userSnap = await db.doc(`users/${userId}`).get();
+    const userSnap = await db().doc(`users/${userId}`).get();
     tokens.push(...tokensFromUserData(userSnap.data()));
   }
   return uniqueTokens(tokens);
 }
 
 export async function getUserDisplayName(uid: string): Promise<string> {
-  const snap = await db.doc(`users/${uid}`).get();
+  const snap = await db().doc(`users/${uid}`).get();
   return (snap.data()?.name as string) || 'Someone';
 }
 
