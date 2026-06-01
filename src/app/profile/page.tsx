@@ -22,7 +22,7 @@ import { uploadProfilePhoto } from '@/firebase/storage';
 import { updateProfileLocal } from '@/features/auth/authSlice';
 import { useAppDispatch } from '@/store';
 import { TripMember } from '@/types/member';
-import { LogOut, Bell, Camera, User as UserIcon } from 'lucide-react';
+import { LogOut, Bell, Camera, User as UserIcon, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { ImageCropper } from '@/components/profile/ImageCropper';
 import { requestFCMToken, notifyTripMembersOfExpense } from '@/services/fcmService';
