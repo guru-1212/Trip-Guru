@@ -163,9 +163,18 @@ function ProfileContent() {
 
   return (
     <div className="max-w-xl mx-auto space-y-8 md:space-y-12">
-      <div className="space-y-2 text-center sm:text-left">
-        <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">Account</h1>
-        <p className="text-muted-foreground font-medium">Manage your personal "Travel OS" settings.</p>
+      <div className="space-y-4 text-center sm:text-left">
+        <Link 
+          href="/dashboard"
+          className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors group"
+        >
+          <ChevronLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
+          Back to Dashboard
+        </Link>
+        <div className="space-y-2">
+          <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">Account</h1>
+          <p className="text-muted-foreground font-medium">Manage your personal "Travel OS" settings.</p>
+        </div>
       </div>
 
       <Card className="rounded-[32px] overflow-hidden border-border/40 shadow-xl shadow-slate-200/20 dark:shadow-none bg-white dark:bg-slate-900/50">

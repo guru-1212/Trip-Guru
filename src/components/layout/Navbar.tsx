@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useEffect, useState } from 'react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
+import { BackButton } from '../common/BackButton';
 
 export function Navbar() {
   const { user } = useAuth();
@@ -27,7 +28,8 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto flex h-16 items-center justify-between px-3 sm:px-4 lg:px-8">
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="flex items-center gap-1 sm:gap-2">
+          <BackButton />
           <Link href="/dashboard" className="flex items-center gap-2 font-black text-lg sm:text-xl text-primary">
             <div className="w-9 h-9 sm:w-10 sm:h-10 bg-primary rounded-xl flex items-center justify-center text-white text-base sm:text-lg shadow-lg shadow-primary/20 transition-transform active:scale-95">T</div>
             <span className="hidden xs:inline tracking-tighter">TripMate</span>

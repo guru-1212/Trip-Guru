@@ -21,6 +21,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { TripForm } from './TripForm';
 import { motion } from 'framer-motion';
+import { ChevronLeft } from 'lucide-react';
+import Link from 'next/link';
 
 export function TripPageShell({
   tripId,
@@ -63,12 +65,20 @@ function TripPageContent({
   const isOwner = trip.createdBy === uid;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <motion.div 
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="relative"
+        className="space-y-4"
       >
+        <Link 
+          href="/dashboard"
+          className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-widest text-muted-foreground hover:text-primary transition-colors group"
+        >
+          <ChevronLeft className="h-3 w-3 transition-transform group-hover:-translate-x-0.5" />
+          Back to Dashboard
+        </Link>
+
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-0 space-y-2">
             <div className="flex items-center gap-3">
