@@ -22,6 +22,7 @@ export interface SplitEntry {
 }
 
 export type ExpenseType = 'planned' | 'actual';
+// kk
 
 export interface Expense {
   id: string;
