@@ -378,16 +378,16 @@ function DashboardContent() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-4 md:gap-8 shrink-0">
-                        <div className="hidden sm:flex flex-col items-end gap-1.5">
-                          <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                      <div className="flex items-center gap-2 md:gap-8 shrink-0">
+                        <div className="flex flex-col items-end gap-1 md:gap-1.5">
+                          <div className={`px-1.5 py-0.5 md:px-2 md:py-0.5 rounded-full text-[7px] md:text-[9px] font-black uppercase tracking-widest border ${
                             diffInDays > 0 
                               ? 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20' 
                               : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
                           }`}>
                             {countdownText}
                           </div>
-                          <div className="text-right">
+                          <div className="text-right hidden sm:block">
                             <p className="text-[9px] md:text-[10px] font-black uppercase text-muted-foreground tracking-tighter mb-0.5">Budget</p>
                             <p className="text-xs md:text-sm font-black text-slate-800 dark:text-slate-200">{formatCurrency(trip.expectedBudget, trip.currency)}</p>
                           </div>
