@@ -19,6 +19,15 @@ export async function uploadReceipt(
   return uploadFile(`trips/${tripId}/receipts/${expenseId}.${ext}`, file);
 }
 
+export async function uploadRoomReceipt(
+  roomId: string,
+  expenseId: string,
+  file: File
+): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg';
+  return uploadFile(`rooms/${roomId}/receipts/${expenseId}.${ext}`, file);
+}
+
 export async function uploadProfilePhoto(
   uid: string,
   file: File

@@ -5,6 +5,10 @@ import tripsReducer from '@/features/trips/tripsSlice';
 import expensesReducer from '@/features/expenses/expensesSlice';
 import settlementsReducer from '@/features/settlements/settlementsSlice';
 import memoriesReducer from '@/features/memories/memoriesSlice';
+import roomsReducer from '@/features/rooms/roomsSlice';
+import roomExpensesReducer from '@/features/roomExpenses/roomExpensesSlice';
+import roomSettlementsReducer from '@/features/roomSettlements/roomSettlementsSlice';
+import appModeReducer from '@/features/appMode/appModeSlice';
 
 export const store = configureStore({
   reducer: {
@@ -13,6 +17,10 @@ export const store = configureStore({
     expenses: expensesReducer,
     settlements: settlementsReducer,
     memories: memoriesReducer,
+    rooms: roomsReducer,
+    roomExpenses: roomExpensesReducer,
+    roomSettlements: roomSettlementsReducer,
+    appMode: appModeReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

@@ -3,10 +3,12 @@
 import { Navbar } from './Navbar';
 import { Sidebar } from './Sidebar';
 import { BottomNav } from './BottomNav';
+import { WorkspaceGuard } from './WorkspaceGuard';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/10 selection:text-primary">
+      <WorkspaceGuard />
       <Navbar />
       <div className="flex">
         <Sidebar />

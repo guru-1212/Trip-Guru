@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { FirebaseError } from 'firebase/app';
 import { registerWithEmail } from '@/firebase/auth';
+import { PrimaryUseCase } from '@/types/user';
 
 const schema = z
   .object({
@@ -40,6 +41,7 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [primaryUseCase, setPrimaryUseCase] = useState<PrimaryUseCase>('trips');
 
   const {
     register,
@@ -51,7 +53,13 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      await registerWithEmail(data.email, data.password, data.name, data.phone);
+      await registerWithEmail(
+        data.email,
+        data.password,
+        data.name,
+        data.phone,
+        primaryUseCase
+      );
       router.push('/dashboard');
     } catch (e) {
       if (e instanceof FirebaseError && e.code === 'auth/email-already-in-use') {
@@ -76,6 +84,31 @@ export default function RegisterPage() {
       </CardHeader>
       <CardContent className="space-y-4">
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <Label>What will you primarily use TripMate for?</Label>
+            <div className="grid grid-cols-1 gap-2 mt-2">
+              {(
+                [
+                  ['trips', 'Travel & Trips'],
+                  ['roommate', 'Roommate Expenses'],
+                  ['both', 'Both'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setPrimaryUseCase(value)}
+                  className={`p-3 rounded-xl border text-left text-sm font-bold transition-colors ${
+                    primaryUseCase === value
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div>
             <Label htmlFor="name">Full name</Label>
             <Input id="name" autoComplete="name" {...register('name')} />

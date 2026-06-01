@@ -22,6 +22,9 @@ import { uploadProfilePhoto } from '@/firebase/storage';
 import { updateProfileLocal } from '@/features/auth/authSlice';
 import { useAppDispatch } from '@/store';
 import { TripMember } from '@/types/member';
+import { PrimaryUseCase, AppMode } from '@/types/user';
+import { setAppMode } from '@/features/appMode/appModeSlice';
+import { writeStoredMode } from '@/lib/appMode';
 import { LogOut, Bell, Camera, User as UserIcon, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { ImageCropper } from '@/components/profile/ImageCropper';
@@ -50,6 +53,7 @@ function ProfileContent() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [notifyEnabled, setNotifyEnabled] = useState(true);
+  const [primaryUseCase, setPrimaryUseCase] = useState<PrimaryUseCase>('trips');
   const [pendingInvites, setPendingInvites] = useState<TripMember[]>([]);
   const [inviteTripNames, setInviteTripNames] = useState<Record<string, string>>({});
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
@@ -64,6 +68,7 @@ function ProfileContent() {
       setPhone(user.phone);
       setDisplayPhotoUrl(user.photoURL);
       setNotifyEnabled(user.notifyEnabled ?? false);
+      setPrimaryUseCase(user.primaryUseCase ?? 'trips');
     }
   }, [user]);
 
@@ -101,8 +106,25 @@ function ProfileContent() {
     if (!uid) return;
     setSaving(true);
     try {
-      await updateUser(uid, { name, phone, notifyEnabled });
-      dispatch(updateProfileLocal({ name, phone, notifyEnabled }));
+      let activeMode: AppMode | undefined;
+      if (primaryUseCase === 'trips') activeMode = 'trip';
+      else if (primaryUseCase === 'roommate') activeMode = 'room';
+
+      const payload = {
+        name,
+        phone,
+        notifyEnabled,
+        primaryUseCase,
+        ...(activeMode ? { activeMode } : {}),
+      };
+
+      await updateUser(uid, payload);
+      dispatch(updateProfileLocal(payload));
+
+      if (activeMode) {
+        dispatch(setAppMode(activeMode));
+        writeStoredMode(uid, activeMode);
+      }
     } finally {
       setSaving(false);
     }
@@ -239,6 +261,38 @@ function ProfileContent() {
           <Button onClick={handleSave} disabled={saving} className="w-full sm:w-auto rounded-xl px-8 h-12 font-bold shadow-lg shadow-primary/20 transition-all active:scale-95">
             {saving ? 'Saving...' : 'Save Changes'}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card className="rounded-[32px] border-border/40 shadow-sm bg-white dark:bg-slate-900/50">
+        <CardHeader className="px-8 pt-8">
+          <CardTitle className="text-xl font-black">Primary use</CardTitle>
+        </CardHeader>
+        <CardContent className="px-8 pb-8 space-y-2">
+          <p className="text-xs text-muted-foreground font-medium pb-2">
+            Choose &quot;Both&quot; to show the Trips / Rooms switch in the app bar.
+            Existing accounts without this field default to trips-only until you change it here.
+          </p>
+          {(
+            [
+              ['trips', 'Travel & Trips'],
+              ['roommate', 'Roommate Expenses'],
+              ['both', 'Both'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setPrimaryUseCase(value)}
+              className={`w-full p-3 rounded-xl border text-left text-sm font-bold transition-colors ${
+                primaryUseCase === value
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border hover:border-primary/50'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </CardContent>
       </Card>
 

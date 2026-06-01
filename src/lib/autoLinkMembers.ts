@@ -15,46 +15,51 @@ export async function autoLinkMembersOnRegister(
   phone: string,
   name: string
 ): Promise<number> {
-  const membersRef = collection(getFirebaseDb(), 'tripMembers');
+  const db = getFirebaseDb();
+  const collections = ['tripMembers', 'roomMembers'] as const;
   let linked = 0;
 
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedPhone = normalizePhone(phone);
 
-  const queries = [];
-  if (normalizedEmail) {
-    queries.push(
-      query(
-        membersRef,
-        where('email', '==', normalizedEmail),
-        where('inviteStatus', '==', 'pending')
-      )
-    );
-  }
-  if (normalizedPhone) {
-    queries.push(
-      query(
-        membersRef,
-        where('phone', '==', normalizedPhone),
-        where('inviteStatus', '==', 'pending')
-      )
-    );
-  }
-
   const seenIds = new Set<string>();
 
-  for (const q of queries) {
-    const snapshot = await getDocs(q);
-    for (const memberDoc of snapshot.docs) {
-      if (seenIds.has(memberDoc.id)) continue;
-      seenIds.add(memberDoc.id);
+  for (const coll of collections) {
+    const membersRef = collection(db, coll);
+    const collQueries = [];
+    if (normalizedEmail) {
+      collQueries.push(
+        query(
+          membersRef,
+          where('email', '==', normalizedEmail),
+          where('inviteStatus', '==', 'pending')
+        )
+      );
+    }
+    if (normalizedPhone) {
+      collQueries.push(
+        query(
+          membersRef,
+          where('phone', '==', normalizedPhone),
+          where('inviteStatus', '==', 'pending')
+        )
+      );
+    }
 
-      await updateDoc(doc(getFirebaseDb(), 'tripMembers', memberDoc.id), {
-        userId: uid,
-        name: name, // Sync real name on link
-        inviteStatus: 'accepted',
-      });
-      linked++;
+    for (const q of collQueries) {
+      const snapshot = await getDocs(q);
+      for (const memberDoc of snapshot.docs) {
+        const key = `${coll}_${memberDoc.id}`;
+        if (seenIds.has(key)) continue;
+        seenIds.add(key);
+
+        await updateDoc(doc(db, coll, memberDoc.id), {
+          userId: uid,
+          name,
+          inviteStatus: 'accepted',
+        });
+        linked++;
+      }
     }
   }
 

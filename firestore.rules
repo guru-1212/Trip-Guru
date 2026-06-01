@@ -16,6 +16,18 @@ service cloud.firestore {
     function isTripOwner(tripId) {
       return get(/databases/$(database)/documents/trips/$(tripId)).data.createdBy == request.auth.uid;
     }
+    function isRoomMember(roomId) {
+      return exists(/databases/$(database)/documents/roomMembers/$(roomId + '_' + request.auth.uid));
+    }
+    function getRoomMemberData(roomId) {
+      return get(/databases/$(database)/documents/roomMembers/$(roomId + '_' + request.auth.uid)).data;
+    }
+    function isRoomEditor(roomId) {
+      return isRoomMember(roomId) && (getRoomMemberData(roomId).role == 'owner' || getRoomMemberData(roomId).role == 'editor');
+    }
+    function isRoomOwner(roomId) {
+      return get(/databases/$(database)/documents/rooms/$(roomId)).data.createdBy == request.auth.uid;
+    }
 
     match /users/{uid} {
       allow read: if isAuth();
@@ -47,6 +59,42 @@ service cloud.firestore {
       allow read: if isAuth();
       allow create: if isAuth();
       allow delete: if request.auth.uid == resource.data.uploadedBy;
+    }
+
+    match /rooms/{roomId} {
+      allow read: if isRoomMember(roomId);
+      allow create: if isAuth();
+      allow update: if isRoomEditor(roomId);
+      allow delete: if isRoomOwner(roomId);
+    }
+    match /roomMembers/{memberId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
+      allow delete: if isAuth();
+    }
+    match /cycles/{cycleId} {
+      allow read: if isRoomMember(resource.data.roomId);
+      allow create: if isAuth() && isRoomEditor(request.resource.data.roomId);
+      allow update: if isRoomEditor(resource.data.roomId);
+      allow delete: if isRoomOwner(resource.data.roomId);
+    }
+    match /roomExpenses/{expenseId} {
+      allow read: if isRoomMember(resource.data.roomId);
+      allow create: if isAuth() && isRoomEditor(request.resource.data.roomId);
+      allow update, delete: if isRoomEditor(resource.data.roomId);
+    }
+    match /roomSettlements/{settlementId} {
+      allow read: if isRoomMember(resource.data.roomId);
+      allow write: if isRoomEditor(resource.data.roomId);
+    }
+    match /carryForwardBalances/{balanceId} {
+      allow read: if isRoomMember(resource.data.roomId);
+      allow write: if isRoomEditor(resource.data.roomId);
+    }
+    match /rentPayments/{paymentId} {
+      allow read: if isRoomMember(resource.data.roomId);
+      allow write: if isRoomEditor(resource.data.roomId);
     }
   }
 }

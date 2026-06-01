@@ -4,6 +4,7 @@ import './globals.css';
 import { ReduxProvider } from '@/components/providers/ReduxProvider';
 import { FCMProvider } from '@/components/providers/FCMProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
+import { AppModeProvider } from '@/components/providers/AppModeProvider';
 import { PWAInstallPrompt } from '@/components/common/PWAInstallPrompt';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -45,10 +46,12 @@ export default function RootLayout({
       <body className={inter.className}>
         <ReduxProvider>
           <AuthProvider>
+            <AppModeProvider>
             <FCMProvider>
               {children}
               <PWAInstallPrompt />
             </FCMProvider>
+            </AppModeProvider>
           </AuthProvider>
         </ReduxProvider>
       </body>

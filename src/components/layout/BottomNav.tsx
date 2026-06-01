@@ -2,23 +2,31 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, PlusCircle, User } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, User, Home } from 'lucide-react';
 import { cn } from '@/lib/utils';
-
-const links = [
-  { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
-  { href: '/trips/new', label: 'Plan', icon: PlusCircle },
-  { href: '/profile', label: 'Me', icon: User },
-];
+import { useAppMode } from '@/hooks/useAppMode';
 
 export function BottomNav() {
   const pathname = usePathname();
+  const { isRoomMode } = useAppMode();
+
+  const links = isRoomMode
+    ? [
+        { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+        { href: '/rooms/new', label: 'Room', icon: Home },
+        { href: '/profile', label: 'Me', icon: User },
+      ]
+    : [
+        { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
+        { href: '/trips/new', label: 'Trip', icon: PlusCircle },
+        { href: '/profile', label: 'Me', icon: User },
+      ];
 
   return (
     <nav className="lg:hidden fixed bottom-6 left-6 right-6 z-40 border border-border/40 bg-background/80 backdrop-blur-xl rounded-[24px] shadow-2xl overflow-hidden">
       <div className="flex justify-around items-center h-16">
         {links.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href);
+          const active = pathname === href || pathname.startsWith(href + '/');
           return (
             <Link
               key={href}

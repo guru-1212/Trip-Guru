@@ -100,3 +100,17 @@ export async function notifyTripMembersOfExpense(
     // Non-blocking; functions may not be deployed yet
   }
 }
+
+export async function notifyRoomMembersOfExpense(
+  roomId: string,
+  amount: number,
+  category: string,
+  paidByName: string
+): Promise<void> {
+  try {
+    const fn = httpsCallable(getFirebaseFunctions(), 'onRoomExpenseCreated');
+    await fn({ roomId, amount, category, paidByName });
+  } catch {
+    // Non-blocking
+  }
+}

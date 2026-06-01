@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { 
-  PlusCircle, 
   TrendingUp, 
   Target, 
   ArrowRight,
@@ -31,6 +30,9 @@ import { fetchUserTrips } from '@/features/trips/tripsThunks';
 import { getExpenses } from '@/firebase/firestore';
 import { formatCurrency } from '@/lib/utils';
 import { TripInvitations } from '@/components/trips/TripInvitations';
+import { RoomsDashboardSection } from '@/components/rooms/RoomsDashboardSection';
+import { useAppMode } from '@/hooks/useAppMode';
+import { Home, PlusCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
@@ -104,7 +106,9 @@ function DashboardContent() {
     return Math.round(accuracies.reduce((a, b) => a + b, 0) / accuracies.length);
   }, [filteredTripsForStats, spentByTrip]);
 
-  if (loading && trips.length === 0) return <DashboardSkeleton />;
+  const { isTripMode, isRoomMode, canSwitch } = useAppMode();
+
+  if (loading && trips.length === 0 && isTripMode) return <DashboardSkeleton />;
 
   const container = {
     hidden: { opacity: 0 },
@@ -133,38 +137,61 @@ function DashboardContent() {
             Hi, {user?.name?.split(' ')[0] || 'Traveler'}! 👋
           </h1>
           <p className="text-muted-foreground text-base md:text-lg font-medium">
-            Your "Travel OS" is ready for adventure.
+            {isRoomMode
+              ? 'Manage rent, expenses, and settlements for your home.'
+              : 'Your "Travel OS" is ready for adventure.'}
           </p>
         </motion.div>
         <motion.div variants={item} className="flex flex-col sm:flex-row gap-3">
-          <div className="bg-muted p-1 rounded-2xl flex gap-1 self-start sm:self-center shadow-inner">
-            <Button 
-              variant={viewMode === 'real' ? 'default' : 'ghost'} 
-              size="sm" 
-              className="rounded-xl px-4 h-9 text-xs font-bold"
-              onClick={() => setViewMode('real')}
-            >
-              Real Trips
-            </Button>
-            <Button 
-              variant={viewMode === 'test' ? 'default' : 'ghost'} 
-              size="sm" 
-              className="rounded-xl px-4 h-9 text-xs font-bold"
-              onClick={() => setViewMode('test')}
-            >
-              Test Trips
-            </Button>
-          </div>
-          <Link href="/trips/new" className="w-full sm:w-auto">
-            <Button size="lg" className="w-full sm:w-auto rounded-2xl px-8 h-12 md:h-14 font-bold shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95">
-              <PlusCircle className="h-5 w-5 mr-3" /> Plan New Trip
-            </Button>
-          </Link>
+          {isTripMode && (
+            <>
+              <div className="bg-muted p-1 rounded-2xl flex gap-1 self-start sm:self-center shadow-inner">
+                <Button 
+                  variant={viewMode === 'real' ? 'default' : 'ghost'} 
+                  size="sm" 
+                  className="rounded-xl px-4 h-9 text-xs font-bold"
+                  onClick={() => setViewMode('real')}
+                >
+                  Real Trips
+                </Button>
+                <Button 
+                  variant={viewMode === 'test' ? 'default' : 'ghost'} 
+                  size="sm" 
+                  className="rounded-xl px-4 h-9 text-xs font-bold"
+                  onClick={() => setViewMode('test')}
+                >
+                  Test Trips
+                </Button>
+              </div>
+              <Link href="/trips/new" className="w-full sm:w-auto">
+                <Button size="lg" className="w-full sm:w-auto rounded-2xl px-8 h-12 md:h-14 font-bold shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95">
+                  <PlusCircle className="h-5 w-5 mr-3" /> Plan New Trip
+                </Button>
+              </Link>
+            </>
+          )}
+          {isRoomMode && (
+            <Link href="/rooms/new" className="w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto rounded-2xl px-8 h-12 md:h-14 font-bold shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95">
+                <Home className="h-5 w-5 mr-3" /> Create Room
+              </Button>
+            </Link>
+          )}
         </motion.div>
       </header>
 
-      <TripInvitations />
+      {canSwitch && (
+        <p className="text-xs text-muted-foreground font-medium -mt-4">
+          Use the Trips / Rooms toggle in the top bar to switch workspaces.
+        </p>
+      )}
 
+      {isTripMode && <TripInvitations />}
+
+      {isRoomMode && <RoomsDashboardSection />}
+
+      {isTripMode && (
+      <>
       {/* Bento Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
         
@@ -411,6 +438,8 @@ function DashboardContent() {
           )}
         </div>
       </section>
+      </>
+      )}
     </motion.div>
   );
 }

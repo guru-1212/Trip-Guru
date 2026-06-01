@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Sidebar } from './Sidebar';
 import { BackButton } from '../common/BackButton';
+import { WorkspaceModeSwitch } from './WorkspaceModeSwitch';
 
 export function Navbar() {
   const { user } = useAuth();
@@ -37,6 +38,7 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2 md:gap-6">
+          <WorkspaceModeSwitch className="hidden sm:flex" />
           <div className="hidden md:flex relative items-center group">
             <Search className="absolute left-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <input 
