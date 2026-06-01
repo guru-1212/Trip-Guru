@@ -8,6 +8,7 @@ import {
   getUser,
   acceptTripInvite,
   declineTripInvite,
+  syncMemberProfile,
   updateTripCategory as fbUpdateTripCategory,
   updateTripClassification as fbUpdateTripClassification,
   updateTripExpectedBudget as fbUpdateTripExpectedBudget,
@@ -72,7 +73,7 @@ export const fetchUserTrips = createAsyncThunk(
 
 export const fetchTripById = createAsyncThunk(
   'trips/fetchTripById',
-  async (tripId: string, { dispatch }) => {
+  async (tripId: string, { dispatch, getState }) => {
     dispatch(setLoading(true));
     try {
       const trip = await getTrip(tripId);
@@ -80,6 +81,12 @@ export const fetchTripById = createAsyncThunk(
         const { transitionTripStatus } = await import('@/services/tripStatusService');
         const updated = await transitionTripStatus(trip);
         dispatch(setCurrentTrip(updated));
+
+        // Self-heal: Sync current user's profile to their trip membership
+        const { auth } = getState() as RootState;
+        if (auth.user) {
+          await syncMemberProfile(tripId, auth.user.uid, auth.user);
+        }
       } else {
         dispatch(setCurrentTrip(null));
       }

@@ -13,7 +13,12 @@ Foundational guidance for the TripMate repository.
 
 ## Technical Patterns
 
-### 1. PWA & Installation
+### 1. TypeScript & Type Safety
+- **Strict Typing:** Avoid using `any`. Define interfaces or use existing types from `src/types` for all data structures.
+- **Object Modifications:** When extending objects, ensure the base object is typed correctly (e.g., using `as TripMember` or `Partial<TripMember>`) so that adding properties doesn't trigger "Property does not exist" errors.
+- **Verification:** Always run `npx tsc --noEmit` locally before finalizing a change to catch type mismatches early.
+
+### 2. PWA & Installation
 - **Service Worker:** Managed by `next-pwa`. Configured in `next.config.js`.
 - **Install Prompt:** Custom logic in `src/components/common/PWAInstallPrompt.tsx` handles the `beforeinstallprompt` event.
 - **Manifest:** Located at `public/manifest.json`. Defines app identity and standalone behavior.

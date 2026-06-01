@@ -64,7 +64,7 @@ export async function registerWithEmail(
   try {
     await updateProfile(result.user, { displayName: name });
     await createUserDocument(result.user, name, normalizedPhone);
-    await autoLinkMembersOnRegister(result.user.uid, normalizedEmail, normalizedPhone);
+    await autoLinkMembersOnRegister(result.user.uid, normalizedEmail, normalizedPhone, name);
     return result.user;
   } catch (error) {
     try {

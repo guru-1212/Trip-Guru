@@ -37,7 +37,26 @@ export async function updateUser(
   uid: string,
   data: Partial<User>
 ): Promise<void> {
-  await updateDoc(doc(db(), 'users', uid), data);
+  const batch = writeBatch(db());
+  const userRef = doc(db(), 'users', uid);
+  
+  batch.update(userRef, data);
+
+  // Sync profile changes (name/phone) to all trip member records for this user
+  if (data.name || data.phone) {
+    const q = query(collection(db(), 'tripMembers'), where('userId', '==', uid));
+    const snap = await getDocs(q);
+    
+    const update: any = {};
+    if (data.name) update.name = data.name;
+    if (data.phone) update.phone = normalizePhone(data.phone);
+
+    snap.docs.forEach((d) => {
+      batch.update(d.ref, update);
+    });
+  }
+
+  await batch.commit();
 }
 
 export async function getTrip(tripId: string): Promise<Trip | null> {
@@ -383,21 +402,27 @@ export async function acceptTripInvite(
 
   const tripId = memberSnap.data().tripId as string;
   const newMemberId = `${tripId}_${userId}`;
+  
+  // Use current user profile data when accepting
+  const user = await getUser(userId);
+  const updatedData: any = {
+    ...memberSnap.data(),
+    userId,
+    inviteStatus: 'accepted' as const,
+  };
+
+  if (user) {
+    updatedData.name = user.name;
+    updatedData.phone = user.phone;
+  }
 
   if (memberId !== newMemberId) {
     const batch = writeBatch(db());
-    batch.set(doc(db(), 'tripMembers', newMemberId), {
-      ...memberSnap.data(),
-      userId,
-      inviteStatus: 'accepted',
-    });
+    batch.set(doc(db(), 'tripMembers', newMemberId), updatedData);
     batch.delete(memberRef);
     await batch.commit();
   } else {
-    await updateDoc(memberRef, {
-      userId,
-      inviteStatus: 'accepted',
-    });
+    await updateDoc(memberRef, updatedData);
   }
 }
 
@@ -454,6 +479,14 @@ export async function addMemberToTrip(
   const normalizedPhone = normalizePhone(member.phone);
 
   const matchedUserId = await findUserByEmailOrPhone(normalizedEmail, normalizedPhone);
+  
+  // If user exists, use their real profile name
+  let memberName = member.name;
+  if (matchedUserId) {
+    const user = await getUser(matchedUserId);
+    if (user) memberName = user.name;
+  }
+
   const memberDocId = matchedUserId
     ? `${tripId}_${matchedUserId}`
     : doc(collection(db(), 'tripMembers')).id;
@@ -463,11 +496,11 @@ export async function addMemberToTrip(
   batch.set(doc(db(), 'tripMembers', memberDocId), {
     tripId,
     userId: matchedUserId,
-    name: member.name,
+    name: memberName,
     email: normalizedEmail,
     phone: normalizedPhone,
     role: 'editor',
-    inviteStatus: 'pending',
+    inviteStatus: matchedUserId ? 'accepted' : 'pending',
   });
 
   const tripRef = doc(db(), 'trips', tripId);
@@ -530,4 +563,27 @@ export async function removeCustomExpenseCategory(
   await updateDoc(doc(db(), 'trips', tripId), {
     customExpenseCategories: arrayRemove(category),
   });
+}
+
+export async function syncMemberProfile(
+  tripId: string,
+  userId: string,
+  profile: Partial<User>
+): Promise<void> {
+  const memberId = `${tripId}_${userId}`;
+  const memberRef = doc(db(), 'tripMembers', memberId);
+  const snap = await getDoc(memberRef);
+
+  if (snap.exists()) {
+    const data = snap.data();
+    if (
+      (profile.name && data.name !== profile.name) ||
+      (profile.phone && data.phone !== normalizePhone(profile.phone))
+    ) {
+      await updateDoc(memberRef, {
+        name: profile.name,
+        phone: profile.phone ? normalizePhone(profile.phone) : data.phone,
+      });
+    }
+  }
 }

@@ -12,7 +12,8 @@ import { normalizePhone } from '@/lib/utils';
 export async function autoLinkMembersOnRegister(
   uid: string,
   email: string,
-  phone: string
+  phone: string,
+  name: string
 ): Promise<number> {
   const membersRef = collection(getFirebaseDb(), 'tripMembers');
   let linked = 0;
@@ -50,6 +51,7 @@ export async function autoLinkMembersOnRegister(
 
       await updateDoc(doc(getFirebaseDb(), 'tripMembers', memberDoc.id), {
         userId: uid,
+        name: name, // Sync real name on link
         inviteStatus: 'accepted',
       });
       linked++;
