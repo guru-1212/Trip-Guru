@@ -3,7 +3,7 @@
 ## Page shell
 
 - `RoomPageShell` → `AppShell` + `useRoom` + `useRealtimeRoom`  
-- Tabs: `RoomNav` — Overview, Expenses, Settlement, Rent, Members, History
+- Tabs: `RoomNav` — Overview, Expenses, To bring, Settlement, Rent, Members, History
 
 ## Back navigation (do not put in navbar)
 

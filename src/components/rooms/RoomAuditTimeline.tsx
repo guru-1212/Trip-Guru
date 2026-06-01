@@ -16,6 +16,7 @@ import {
   Trash2,
   UserPlus,
   Home,
+  Package,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -37,6 +38,10 @@ const actionConfig: Record<
   'rent.paid': { label: 'Rent', icon: CreditCard, variant: 'default' },
   'rent.amount_updated': { label: 'Rent', icon: Pencil, variant: 'secondary' },
   'cycle.closed': { label: 'Cycle', icon: History, variant: 'outline' },
+  'bring_item.created': { label: 'To bring', icon: Package, variant: 'default' },
+  'bring_item.updated': { label: 'To bring', icon: Pencil, variant: 'secondary' },
+  'bring_item.brought': { label: 'To bring', icon: Package, variant: 'default' },
+  'bring_item.deleted': { label: 'To bring', icon: Trash2, variant: 'danger' },
 };
 
 export function RoomAuditTimeline({ logs }: { logs: RoomAuditLog[] }) {

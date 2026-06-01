@@ -19,6 +19,8 @@
 | [04-room-audit-history.md](./04-room-audit-history.md) | Activity log, cycle history |
 | [05-room-ui-navigation.md](./05-room-ui-navigation.md) | Back links, overview stats (paid by, pending dues) |
 | [06-firestore-and-security.md](./06-firestore-and-security.md) | Collections, rules, indexes |
+| [07-room-bring-list.md](./07-room-bring-list.md) | Things to bring checklist |
+| [08-push-notifications.md](./08-push-notifications.md) | FCM push when app is closed |
 
 ## If the user prompt conflicts with these docs
 

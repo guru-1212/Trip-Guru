@@ -11,6 +11,8 @@ export interface User {
   phone: string;
   photoURL: string;
   fcmToken: string;
+  /** All devices/browsers that opted in to push (deduped server-side). */
+  fcmTokens?: string[];
   createdAt: Timestamp;
   notifyEnabled?: boolean;
   primaryUseCase?: PrimaryUseCase;

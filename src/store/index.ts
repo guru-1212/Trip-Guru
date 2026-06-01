@@ -8,6 +8,7 @@ import memoriesReducer from '@/features/memories/memoriesSlice';
 import roomsReducer from '@/features/rooms/roomsSlice';
 import roomExpensesReducer from '@/features/roomExpenses/roomExpensesSlice';
 import roomSettlementsReducer from '@/features/roomSettlements/roomSettlementsSlice';
+import roomBringItemsReducer from '@/features/roomBringItems/roomBringItemsSlice';
 import appModeReducer from '@/features/appMode/appModeSlice';
 
 export const store = configureStore({
@@ -20,6 +21,7 @@ export const store = configureStore({
     rooms: roomsReducer,
     roomExpenses: roomExpensesReducer,
     roomSettlements: roomSettlementsReducer,
+    roomBringItems: roomBringItemsReducer,
     appMode: appModeReducer,
   },
   middleware: (getDefaultMiddleware) =>

@@ -12,6 +12,7 @@
 | `carryForwardBalances` | Cross-cycle dues |
 | `rentPayments` | Per-member rent rows per cycle |
 | `roomAuditLogs` | Immutable activity log |
+| `roomBringItems` | Per-cycle “things to bring” checklist |
 
 Re-exports: `src/firebase/firestore.ts`  
 Implementations: `src/firebase/*.firestore.ts`

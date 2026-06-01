@@ -15,6 +15,10 @@ export const ROOM_AUDIT_ACTIONS = [
   'rent.paid',
   'rent.amount_updated',
   'cycle.closed',
+  'bring_item.created',
+  'bring_item.updated',
+  'bring_item.brought',
+  'bring_item.deleted',
 ] as const;
 
 export type RoomAuditAction = (typeof ROOM_AUDIT_ACTIONS)[number];
@@ -25,7 +29,8 @@ export type RoomAuditEntityType =
   | 'member'
   | 'settlement'
   | 'rent'
-  | 'cycle';
+  | 'cycle'
+  | 'bring_item';
 
 export interface RoomAuditLog {
   id: string;

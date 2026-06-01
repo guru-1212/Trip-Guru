@@ -1,5 +1,5 @@
 import { getToken, onMessage, Messaging } from 'firebase/messaging';
-import { doc, updateDoc } from 'firebase/firestore';
+import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { getFirebaseDb, getFirebaseFunctions } from '@/firebase/config';
 import { initializeApp, getApps, getApp } from 'firebase/app';
@@ -31,33 +31,71 @@ async function getMessaging(): Promise<Messaging | null> {
   }
 }
 
+async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return null;
+  }
+  try {
+    // PWA (next-pwa) registers /sw.js and imports firebase-messaging-sw.js
+    const existing = await navigator.serviceWorker.getRegistration('/');
+    if (existing) return existing;
+    return navigator.serviceWorker.register('/sw.js');
+  } catch {
+    try {
+      return navigator.serviceWorker.register('/firebase-messaging-sw.js');
+    } catch {
+      return null;
+    }
+  }
+}
+
 export async function requestFCMToken(uid: string): Promise<string | null> {
   const messaging = await getMessaging();
   if (!messaging) return null;
 
   const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
-  if (!vapidKey) return null;
+  if (!vapidKey) {
+    console.warn('NEXT_PUBLIC_FIREBASE_VAPID_KEY is not set — push disabled.');
+    return null;
+  }
 
   try {
     if (typeof Notification === 'undefined') return null;
-    const permission = await Notification.requestPermission();
+    let permission = Notification.permission;
+    if (permission === 'default') {
+      permission = await Notification.requestPermission();
+    }
     if (permission !== 'granted') return null;
+
+    const registration = await getServiceWorkerRegistration();
+    if (!registration) return null;
+
+    await navigator.serviceWorker.ready;
 
     const token = await getToken(messaging, {
       vapidKey,
-      serviceWorkerRegistration: await navigator.serviceWorker.register(
-        '/firebase-messaging-sw.js'
-      ),
+      serviceWorkerRegistration: registration,
     });
 
     if (token) {
-      await updateDoc(doc(getFirebaseDb(), 'users', uid), { fcmToken: token });
+      const userRef = doc(getFirebaseDb(), 'users', uid);
+      await updateDoc(userRef, {
+        fcmToken: token,
+        fcmTokens: arrayUnion(token),
+        notifyEnabled: true,
+      });
     }
     return token;
   } catch (error) {
     console.warn('FCM token registration failed:', error);
     return null;
   }
+}
+
+export function openNotificationTarget(url: string): void {
+  if (typeof window === 'undefined' || !url) return;
+  const path = url.startsWith('/') ? url : `/${url}`;
+  window.location.href = path;
 }
 
 export async function onForegroundMessage(
@@ -84,33 +122,5 @@ export async function sendTripInviteNotification(
   } catch (error) {
     console.warn('Trip invite notification failed (deploy Cloud Functions):', error);
     return { sent: false };
-  }
-}
-
-export async function notifyTripMembersOfExpense(
-  tripId: string,
-  amount: number,
-  category: string,
-  paidByName: string
-): Promise<void> {
-  try {
-    const fn = httpsCallable(getFirebaseFunctions(), 'onExpenseCreated');
-    await fn({ tripId, amount, category, paidByName });
-  } catch {
-    // Non-blocking; functions may not be deployed yet
-  }
-}
-
-export async function notifyRoomMembersOfExpense(
-  roomId: string,
-  amount: number,
-  category: string,
-  paidByName: string
-): Promise<void> {
-  try {
-    const fn = httpsCallable(getFirebaseFunctions(), 'onRoomExpenseCreated');
-    await fn({ roomId, amount, category, paidByName });
-  } catch {
-    // Non-blocking
   }
 }

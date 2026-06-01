@@ -13,14 +13,11 @@ import {
   setLoading,
 } from './roomExpensesSlice';
 import { RoomExpense } from '@/types/roomExpense';
-import { notifyRoomMembersOfExpense } from '@/services/fcmService';
 import {
   formatExpenseAuditSummary,
   recordRoomAuditLog,
 } from '@/services/roomAuditLogService';
 import type { RootState } from '@/store';
-import { getMemberKey } from '@/lib/utils';
-
 function getAuditActor(state: RootState) {
   return {
     uid: state.auth.firebaseUid ?? '',
@@ -58,15 +55,6 @@ export const addRoomExpenseThunk = createAsyncThunk(
     );
 
     const state = getState() as RootState;
-    const members = state.rooms.members;
-    const payer = members.find((m) => getMemberKey(m) === expense.paidBy);
-    notifyRoomMembersOfExpense(
-      expense.roomId,
-      expense.amount,
-      expense.category,
-      payer?.name ?? 'Someone'
-    );
-
     const actor = getAuditActor(state);
     const currency = state.rooms.currentRoom?.currency ?? 'INR';
     await recordRoomAuditLog({

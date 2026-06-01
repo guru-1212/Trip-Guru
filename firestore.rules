@@ -126,6 +126,11 @@ service cloud.firestore {
       allow read: if isRoomMember(resource.data.roomId);
       allow write: if isRoomEditor(resource.data.roomId);
     }
+    match /roomBringItems/{itemId} {
+      allow read: if isRoomMember(resource.data.roomId);
+      allow create: if isAuth() && isRoomEditor(request.resource.data.roomId);
+      allow update, delete: if isRoomEditor(resource.data.roomId);
+    }
     match /roomAuditLogs/{logId} {
       allow read: if isRoomMember(resource.data.roomId);
       allow create: if isAuth()

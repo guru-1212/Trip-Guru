@@ -4,6 +4,8 @@ const withPWA = require('next-pwa')({
   skipWaiting: true,
   disable: process.env.NODE_ENV === 'development',
   buildExcludes: [/middleware-manifest\.json$/],
+  // FCM background push when PWA is closed (handlers in firebase-messaging-sw.js)
+  importScripts: ['/firebase-messaging-sw.js'],
 });
 
 /** @type {import('next').NextConfig} */

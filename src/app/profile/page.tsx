@@ -28,7 +28,7 @@ import { writeStoredMode } from '@/lib/appMode';
 import { LogOut, Bell, Camera, User as UserIcon, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { ImageCropper } from '@/components/profile/ImageCropper';
-import { requestFCMToken, notifyTripMembersOfExpense } from '@/services/fcmService';
+import { requestFCMToken } from '@/services/fcmService';
 import {
   Dialog,
   DialogContent,
@@ -312,7 +312,9 @@ function ProfileContent() {
             />
             <div className="space-y-0.5">
               <p className="text-sm font-bold">Enable Push Notifications</p>
-              <p className="text-[10px] font-medium text-muted-foreground leading-none">Get alerts for new expenses and trip invites.</p>
+              <p className="text-[10px] font-medium text-muted-foreground leading-none">
+                Get alerts when roommates add or change expenses, settlements, bring-list items, rent, and trip expenses — even when the app is closed.
+              </p>
             </div>
           </label>
         </CardContent>

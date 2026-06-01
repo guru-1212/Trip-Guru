@@ -2,10 +2,6 @@ import { createAsyncThunk } from '@reduxjs/toolkit';
 import { getExpenses, createExpense, deleteExpense, updateExpense } from '@/firebase/firestore';
 import { setExpenses, addExpense, removeExpense, updateExpense as updateExpenseAction, setLoading } from './expensesSlice';
 import { Expense } from '@/types/expense';
-import { notifyTripMembersOfExpense } from '@/services/fcmService';
-import type { RootState } from '@/store';
-import { getMemberKey } from '@/lib/utils';
-
 export const fetchExpenses = createAsyncThunk(
   'expenses/fetch',
   async (tripId: string, { dispatch }) => {
@@ -20,7 +16,7 @@ export const addExpenseThunk = createAsyncThunk(
   'expenses/add',
   async (
     expense: Omit<Expense, 'id' | 'createdAt'>,
-    { dispatch, getState }
+    { dispatch }
   ) => {
     const id = await createExpense(expense);
     dispatch(
@@ -30,18 +26,6 @@ export const addExpenseThunk = createAsyncThunk(
         createdAt: { toDate: () => new Date() } as Expense['createdAt'],
       })
     );
-
-    if (expense.expenseType === 'actual') {
-      const state = getState() as RootState;
-      const members = state.trips.members;
-      const payer = members.find((m) => getMemberKey(m) === expense.paidBy);
-      notifyTripMembersOfExpense(
-        expense.tripId,
-        expense.amount,
-        expense.category,
-        payer?.name ?? 'Someone'
-      );
-    }
 
     return id;
   }

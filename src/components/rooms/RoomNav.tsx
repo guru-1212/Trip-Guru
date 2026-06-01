@@ -9,13 +9,15 @@ import {
   HandCoins, 
   CreditCard, 
   Users, 
-  History 
+  History,
+  Package,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const tabs = [
   { href: '', label: 'Overview', icon: LayoutDashboard },
   { href: '/expenses', label: 'Expenses', icon: Receipt },
+  { href: '/bring', label: 'To bring', icon: Package },
   { href: '/settlement', label: 'Settlement', icon: HandCoins },
   { href: '/rent', label: 'Rent', icon: CreditCard },
   { href: '/members', label: 'Members', icon: Users },

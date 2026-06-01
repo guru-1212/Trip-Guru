@@ -22,7 +22,8 @@ import {
   History, 
   CreditCard,
   ArrowRight,
-  TrendingUp
+  TrendingUp,
+  Package,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -42,6 +43,7 @@ function OverviewContent() {
   const room = useAppSelector((s) => s.rooms.currentRoom);
   const cycle = useAppSelector((s) => s.rooms.activeCycle);
   const expenses = useAppSelector((s) => s.roomExpenses.expenses);
+  const bringItems = useAppSelector((s) => s.roomBringItems.items);
   const members = useAppSelector((s) => s.rooms.members);
   const roomId = room?.roomId ?? '';
   const { displaySettlements, getMemberName } = useRoomSettlement(roomId);
@@ -59,6 +61,12 @@ function OverviewContent() {
   const paidByMember = useMemo(
     () => getMemberPaidTotals(expenses, members),
     [expenses, members]
+  );
+
+  const bringPlanned = bringItems.filter((i) => i.status === 'planned');
+  const bringPlannedTotal = bringPlanned.reduce(
+    (sum, i) => sum + i.estimatedAmount,
+    0
   );
 
   const container = {
@@ -162,6 +170,36 @@ function OverviewContent() {
                 </Button>
               </div>
             )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Things to bring */}
+      <motion.div variants={item}>
+        <Card className="h-full">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2">
+              <Package className="h-4 w-4 text-violet-500" /> Things to bring
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {bringPlanned.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nothing on the list this cycle.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                <p className="text-2xl font-black">{bringPlanned.length}</p>
+                <p className="text-xs text-muted-foreground">
+                  items · ~{currency} {bringPlannedTotal.toLocaleString()} estimated
+                </p>
+              </div>
+            )}
+            <Button variant="link" asChild className="p-0 h-auto text-xs font-bold text-primary mt-2">
+              <Link href={`/rooms/${room?.roomId}/bring`}>
+                Open bring list <ArrowRight className="h-3 w-3 ml-1" />
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </motion.div>

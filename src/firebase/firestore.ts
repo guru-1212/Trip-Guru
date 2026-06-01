@@ -102,3 +102,11 @@ export {
   createRoomAuditLog,
   getRoomAuditLogs,
 } from '@/firebase/roomAuditLog.firestore';
+
+export {
+  getRoomBringItems,
+  createRoomBringItem,
+  updateRoomBringItem,
+  setRoomBringItemStatus,
+  deleteRoomBringItem,
+} from '@/firebase/roomBringItems.firestore';

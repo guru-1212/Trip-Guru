@@ -81,6 +81,14 @@
       ]
     },
     {
+      "collectionGroup": "roomBringItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "roomId", "order": "ASCENDING" },
+        { "fieldPath": "cycleId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "roomAuditLogs",
       "queryScope": "COLLECTION",
       "fields": [
