@@ -60,6 +60,11 @@ service cloud.firestore {
       allow create: if isAuth();
       allow delete: if request.auth.uid == resource.data.uploadedBy;
     }
+    match /tripPlans/{tripId} {
+      allow read: if isTripMember(tripId);
+      allow create, update: if isTripEditor(tripId);
+      allow delete: if isTripOwner(tripId);
+    }
 
     match /rooms/{roomId} {
       allow read: if isRoomMember(roomId);

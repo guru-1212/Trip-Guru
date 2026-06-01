@@ -44,3 +44,13 @@ export async function uploadMemoryFile(
   const ext = file.name.split('.').pop() ?? 'bin';
   return uploadFile(`trips/${tripId}/memories/${memoryId}.${ext}`, file);
 }
+
+export async function uploadTripPlanImage(
+  tripId: string,
+  assetKey: string,
+  file: File
+): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg';
+  const safeKey = assetKey.replace(/[^a-zA-Z0-9/_-]/g, '_');
+  return uploadFile(`trips/${tripId}/plan/${safeKey}.${ext}`, file);
+}

@@ -40,6 +40,13 @@ export {
 export type { CreateTripInput } from '@/firebase/trips.firestore';
 
 export {
+  getTripPlan,
+  getTripPlanOrDefault,
+  saveTripPlan,
+  resetTripPlanToDefault,
+} from '@/firebase/tripPlans.firestore';
+
+export {
   getRoom,
   getRoomsForUser,
   getRoomMembers,

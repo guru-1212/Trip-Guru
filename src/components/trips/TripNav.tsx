@@ -9,12 +9,14 @@ import {
   HandCoins,
   Camera,
   BarChart2,
+  Map,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 
 const tabs = [
   { label: 'Overview', segment: '', icon: LayoutDashboard },
+  { label: 'Plan', segment: '/plan', icon: Map },
   { label: 'Expenses', segment: '/expenses', icon: Wallet },
   { label: 'Members', segment: '/members', icon: Users },
   { label: 'Settlement', segment: '/settlement', icon: HandCoins },

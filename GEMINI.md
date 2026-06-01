@@ -8,7 +8,7 @@
 
 | Product | Purpose | Routes | Firestore collections |
 |--------|---------|--------|------------------------|
-| **Trips** | Group travel expenses | `/trips/*`, `/trips/new` | `trips`, `tripMembers`, `expenses`, `settlements`, `memories` |
+| **Trips** | Group travel expenses | `/trips/*`, `/trips/new` | `trips`, `tripMembers`, `expenses`, `settlements`, `memories`, `tripPlans` |
 | **Rooms** | Shared home / PG monthly expenses | `/rooms/*`, `/rooms/new` | `rooms`, `roomMembers`, `cycles`, `roomExpenses`, `roomSettlements`, `carryForwardBalances`, `rentPayments` |
 
 There is **no** unified `workspaces` collection yet. Trips were **not migrated**. Roommate data lives in **parallel collections** only.
@@ -203,7 +203,8 @@ Client wrappers: `src/services/fcmService.ts`. Non-blocking if functions not dep
 
 ## 10. UI patterns
 
-- **Trip shell:** `TripPageShell` + `TripNav`
+- **Trip shell:** `TripPageShell` + `TripNav` (includes **Plan** tab → `/trips/[id]/plan`)
+- **Trip plan:** `tripPlans/{tripId}` doc, CSV import (`src/lib/tripPlanCsv.ts`), default Lonavala sample (`tripPlanDefaults.ts`). **Trips only** — not on room routes.
 - **Room shell:** `RoomPageShell` + `RoomNav`
 - **Dashboard:** trip bento + `TripInvitations` when `isTripMode`; `RoomsDashboardSection` when `isRoomMode`
 - **Sidebar / BottomNav:** links filtered by `useAppMode()` in `Sidebar.tsx`, `BottomNav.tsx`

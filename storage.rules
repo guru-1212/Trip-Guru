@@ -27,5 +27,12 @@ service firebase.storage {
       allow write: if isAuth()
         && request.resource.size < 50 * 1024 * 1024;
     }
+
+    match /trips/{tripId}/plan/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth()
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
   }
 }

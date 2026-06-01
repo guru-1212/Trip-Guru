@@ -176,8 +176,8 @@ function OverviewContent() {
 
       {/* History Shortcut */}
       <motion.div variants={item}>
-        <Card className="h-full hover:bg-muted/50 transition-colors cursor-pointer group" asChild>
-          <Link href={`/rooms/${room?.roomId}/history`}>
+        <Link href={`/rooms/${room?.roomId}/history`} className="block h-full">
+          <Card className="h-full hover:bg-muted/50 transition-colors cursor-pointer group">
             <CardContent className="p-6 flex flex-col items-center justify-center h-full text-center space-y-2">
               <div className="p-3 rounded-full bg-muted group-hover:bg-primary/10 group-hover:text-primary transition-colors">
                 <History className="h-6 w-6" />
@@ -187,8 +187,8 @@ function OverviewContent() {
                 <p className="text-xs text-muted-foreground">View expense history</p>
               </div>
             </CardContent>
-          </Link>
-        </Card>
+          </Card>
+        </Link>
       </motion.div>
     </motion.div>
   );
