@@ -28,7 +28,12 @@ import { writeStoredMode } from '@/lib/appMode';
 import { LogOut, Bell, Camera, User as UserIcon, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { ImageCropper } from '@/components/profile/ImageCropper';
-import { isPushConfigured, requestFCMToken } from '@/services/fcmService';
+import {
+  getPushSetupStatus,
+  isPushConfigured,
+  requestFCMToken,
+  type PushSetupStatus,
+} from '@/services/fcmService';
 import {
   Dialog,
   DialogContent,
@@ -61,6 +66,23 @@ function ProfileContent() {
   const [cropImage, setCropImage] = useState<string | null>(null);
   const [isCropOpen, setIsCropOpen] = useState(false);
   const [displayPhotoUrl, setDisplayPhotoUrl] = useState<string | undefined>();
+  const [pushStatus, setPushStatus] = useState<PushSetupStatus | null>(null);
+  const [pushConfigured, setPushConfigured] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const configured = await isPushConfigured();
+      if (!cancelled) setPushConfigured(configured);
+      if (uid) {
+        const status = await getPushSetupStatus(uid, user?.fcmToken);
+        if (!cancelled) setPushStatus(status);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, user?.fcmToken]);
 
   useEffect(() => {
     if (user) {
@@ -165,13 +187,28 @@ function ProfileContent() {
 
     try {
       if (enabled) {
-        // This can be fire-and-forget; if it fails, the user won't get notifications,
-        // but we don't need to block the UI or revert the state for that.
-        await requestFCMToken(uid);
+        const token = await requestFCMToken(uid);
+        if (!token) {
+          const configured = await isPushConfigured();
+          if (!configured) {
+            alert(
+              'Push is not set up on this build. Redeploy the app after adding your VAPID key to .env.local and running npm run build.'
+            );
+          } else if (Notification.permission !== 'granted') {
+            alert('Please allow notifications in your browser or phone settings.');
+          } else {
+            alert(
+              'Could not register for push on this device. Try reinstalling the app from the browser menu (Add to Home Screen), then enable notifications again.'
+            );
+          }
+        } else {
+          dispatch(updateProfileLocal({ fcmToken: token }));
+        }
       }
-      // Persist the user's choice
       await updateUser(uid, { notifyEnabled: enabled });
       dispatch(updateProfileLocal({ notifyEnabled: enabled }));
+      const status = await getPushSetupStatus(uid, user?.fcmToken);
+      setPushStatus(status);
     } catch (error) {
       console.error('Failed to update notification settings:', error);
       // Do not revert UI state; the user's intent should be preserved.
@@ -317,14 +354,44 @@ function ProfileContent() {
               </p>
             </div>
           </label>
-          {!isPushConfigured() && (
+          {pushConfigured === false && (
             <p className="mt-3 text-xs text-amber-700 dark:text-amber-400 font-medium rounded-xl bg-amber-500/10 p-3">
-              Push is not configured: add{' '}
-              <code className="text-[10px]">NEXT_PUBLIC_FIREBASE_VAPID_KEY</code>{' '}
-              to <code className="text-[10px]">.env.local</code> from Firebase Console →
-              Project settings → Cloud Messaging → Web Push certificates, then rebuild
-              the app.
+              Push is not configured on this install. Add your Web Push key from Firebase
+              (Cloud Messaging → Web Push certificates) to{' '}
+              <code className="text-[10px]">NEXT_PUBLIC_FIREBASE_VAPID_KEY</code> in{' '}
+              <code className="text-[10px]">.env.local</code>, run{' '}
+              <code className="text-[10px]">npm run build</code>, and redeploy the PWA.
             </p>
+          )}
+          {pushStatus && (
+            <ul className="mt-3 text-xs text-muted-foreground space-y-1 rounded-xl bg-muted/30 p-3">
+              <li>
+                VAPID key:{' '}
+                {pushStatus.configured ? (
+                  <span className="text-emerald-600 font-semibold">OK</span>
+                ) : (
+                  <span className="text-amber-600 font-semibold">Missing</span>
+                )}
+              </li>
+              <li>
+                Browser permission:{' '}
+                <span className="font-semibold capitalize">{pushStatus.permission}</span>
+              </li>
+              <li>
+                Device registered:{' '}
+                {pushStatus.hasToken ? (
+                  <span className="text-emerald-600 font-semibold">Yes</span>
+                ) : (
+                  <span className="text-amber-600 font-semibold">No — toggle on above</span>
+                )}
+              </li>
+              {!pushStatus.messagingSupported && (
+                <li className="text-amber-600">
+                  Push not supported in this browser. On iPhone, install TripMate to the Home
+                  Screen first (iOS 16.4+).
+                </li>
+              )}
+            </ul>
           )}
         </CardContent>
       </Card>

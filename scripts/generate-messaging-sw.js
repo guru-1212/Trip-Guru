@@ -120,11 +120,34 @@ self.addEventListener('notificationclick', (event) => {
 const out = path.join(__dirname, '..', 'public', 'firebase-messaging-sw.js');
 fs.writeFileSync(out, content);
 console.log('Wrote', out);
+
+const vapid = (env.NEXT_PUBLIC_FIREBASE_VAPID_KEY || '').trim();
+const pushConfigPath = path.join(__dirname, '..', 'public', 'push-config.json');
+fs.writeFileSync(
+  pushConfigPath,
+  JSON.stringify(
+    {
+      vapidKey: vapid,
+      projectId: env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || '',
+      messagingSenderId: env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || '',
+    },
+    null,
+    2
+  )
+);
+console.log('Wrote', pushConfigPath);
+
 if (env.NEXT_PUBLIC_FIREBASE_PROJECT_ID) {
   console.log('Firebase project:', env.NEXT_PUBLIC_FIREBASE_PROJECT_ID);
 }
-if (!env.NEXT_PUBLIC_FIREBASE_VAPID_KEY) {
+if (!vapid) {
   console.warn(
     'NEXT_PUBLIC_FIREBASE_VAPID_KEY is missing — add Web Push key from Firebase Console > Cloud Messaging'
+  );
+} else if (vapid.length < 80) {
+  console.warn(
+    'NEXT_PUBLIC_FIREBASE_VAPID_KEY looks too short (' +
+      vapid.length +
+      ' chars). Copy the full key pair from Firebase Console.'
   );
 }

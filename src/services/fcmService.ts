@@ -5,6 +5,7 @@ import { getFirebaseDb, getFirebaseFunctions } from '@/firebase/config';
 import { initializeApp, getApps, getApp } from 'firebase/app';
 
 let messagingInstance: Messaging | null = null;
+let cachedVapidKey: string | null | undefined;
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -14,6 +15,77 @@ const firebaseConfig = {
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
+
+function normalizeVapidKey(key: string | undefined | null): string | null {
+  const trimmed = key?.trim() ?? '';
+  return trimmed.length >= 80 ? trimmed : null;
+}
+
+/** VAPID is public; load from build env or /push-config.json (generated at build). */
+export async function getVapidKey(): Promise<string | null> {
+  const fromEnv = normalizeVapidKey(process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY);
+  if (fromEnv) return fromEnv;
+
+  if (cachedVapidKey !== undefined) {
+    return cachedVapidKey;
+  }
+
+  if (typeof window === 'undefined') {
+    cachedVapidKey = null;
+    return null;
+  }
+
+  try {
+    const res = await fetch('/push-config.json', { cache: 'no-store' });
+    if (res.ok) {
+      const data = (await res.json()) as { vapidKey?: string };
+      cachedVapidKey = normalizeVapidKey(data.vapidKey);
+      return cachedVapidKey;
+    }
+  } catch {
+    // ignore
+  }
+
+  cachedVapidKey = null;
+  return null;
+}
+
+export async function isPushConfigured(): Promise<boolean> {
+  return (await getVapidKey()) !== null;
+}
+
+export type PushSetupStatus = {
+  configured: boolean;
+  permission: NotificationPermission | 'unsupported';
+  hasToken: boolean;
+  messagingSupported: boolean;
+};
+
+export async function getPushSetupStatus(
+  uid: string | undefined,
+  userFcmToken?: string
+): Promise<PushSetupStatus> {
+  const configured = await isPushConfigured();
+  const permission =
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported';
+
+  let messagingSupported = false;
+  if (typeof window !== 'undefined') {
+    try {
+      const { isSupported } = await import('firebase/messaging');
+      messagingSupported = await isSupported();
+    } catch {
+      messagingSupported = false;
+    }
+  }
+
+  return {
+    configured,
+    permission,
+    hasToken: Boolean(userFcmToken?.trim()),
+    messagingSupported,
+  };
+}
 
 async function getMessaging(): Promise<Messaging | null> {
   if (typeof window === 'undefined') return null;
@@ -36,13 +108,12 @@ async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration
     return null;
   }
   try {
-    // PWA (next-pwa) registers /sw.js and imports firebase-messaging-sw.js
-    const existing = await navigator.serviceWorker.getRegistration('/');
-    if (existing) return existing;
-    return navigator.serviceWorker.register('/sw.js');
+    await navigator.serviceWorker.register('/sw.js').catch(() => null);
+    const registration = await navigator.serviceWorker.ready;
+    return registration;
   } catch {
     try {
-      return navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      return await navigator.serviceWorker.register('/firebase-messaging-sw.js');
     } catch {
       return null;
     }
@@ -51,11 +122,16 @@ async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration
 
 export async function requestFCMToken(uid: string): Promise<string | null> {
   const messaging = await getMessaging();
-  if (!messaging) return null;
+  if (!messaging) {
+    console.warn('FCM: messaging not supported in this browser.');
+    return null;
+  }
 
-  const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+  const vapidKey = await getVapidKey();
   if (!vapidKey) {
-    console.warn('NEXT_PUBLIC_FIREBASE_VAPID_KEY is not set — push disabled.');
+    console.warn(
+      'FCM: VAPID key missing. Run: node scripts/generate-messaging-sw.js then rebuild, or set NEXT_PUBLIC_FIREBASE_VAPID_KEY.'
+    );
     return null;
   }
 
@@ -69,8 +145,6 @@ export async function requestFCMToken(uid: string): Promise<string | null> {
 
     const registration = await getServiceWorkerRegistration();
     if (!registration) return null;
-
-    await navigator.serviceWorker.ready;
 
     const token = await getToken(messaging, {
       vapidKey,
@@ -106,7 +180,6 @@ export async function onForegroundMessage(
   return onMessage(messaging, callback);
 }
 
-/** Notify room members (callable; also backed by onRoomAuditLogCreated when functions are deployed). */
 export async function notifyRoomMembersOfExpense(
   roomId: string,
   amount: number,
@@ -161,10 +234,6 @@ export async function notifyTripMembersOfExpense(
   } catch (error) {
     console.warn('Trip expense notification failed:', error);
   }
-}
-
-export function isPushConfigured(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY);
 }
 
 export async function sendTripInviteNotification(
