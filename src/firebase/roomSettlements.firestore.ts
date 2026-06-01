@@ -58,6 +58,15 @@ export async function syncRoomSettlements(
           amount: c.amount,
         });
         writes++;
+      } else if (match.status === 'paid' && c.amount > 0.01) {
+        batch.update(doc(db(), 'roomSettlements', match.id), {
+          amount: c.amount,
+          status: 'pending',
+          paidAt: null,
+          claimedAt: null,
+          confirmedAt: null,
+        });
+        writes++;
       }
     } else {
       const ref = doc(collection(db(), 'roomSettlements'));

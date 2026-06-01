@@ -15,6 +15,7 @@ import {
 } from '@/firebase/firestore';
 import { recordRoomAuditLog } from '@/services/roomAuditLogService';
 import { isSettlementOpen } from '@/lib/mergeRoomSettlements';
+import { getMyMemberKey } from '@/lib/utils';
 import { HandCoins } from 'lucide-react';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,7 +35,7 @@ function SettlementContent({ roomId }: { roomId: string }) {
   const { uid } = useAuth();
   const actorName = useAppSelector((s) => s.auth.user?.name ?? 'Someone');
   const members = useAppSelector((s) => s.rooms.members);
-  const myMemberKey = members.find((m) => m.userId === uid)?.id;
+  const myMemberKey = getMyMemberKey(uid, members);
   const room = useAppSelector((s) => s.rooms.currentRoom);
   const cycle = useAppSelector((s) => s.rooms.activeCycle);
   const expenses = useAppSelector((s) => s.roomExpenses.expenses);

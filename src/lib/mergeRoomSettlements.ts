@@ -25,15 +25,23 @@ export function mergeRoomSettlements(
         s.fromMemberKey === c.fromMemberKey &&
         s.toMemberKey === c.toMemberKey
     );
-    const status = match?.status ?? 'pending';
+
+    let status = match?.status ?? 'pending';
+    // New expenses can create fresh debt for the same pair after a prior payment was confirmed.
+    if (status === 'paid' && c.amount > 0.01) {
+      status = 'pending';
+    }
+
+    const useComputedAmount =
+      status === 'pending' || status === 'awaiting_confirmation';
+
     return {
       ...c,
       id: match?.id ?? c.id,
-      amount:
-        status === 'pending' ? c.amount : (match?.amount ?? c.amount),
+      amount: useComputedAmount ? c.amount : (match?.amount ?? c.amount),
       status,
-      claimedAt: match?.claimedAt ?? null,
-      confirmedAt: match?.confirmedAt ?? null,
+      claimedAt: status === 'awaiting_confirmation' ? match?.claimedAt ?? null : null,
+      confirmedAt: status === 'paid' ? match?.confirmedAt ?? null : null,
       isPersisted: !!match,
     };
   });

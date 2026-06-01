@@ -2,7 +2,7 @@ import { Expense } from '@/types/expense';
 import { TripMember } from '@/types/member';
 import { Settlement } from '@/types/settlement';
 import { CarryForwardBalance } from '@/types/roomSettlement';
-import { getMemberKey } from '@/lib/utils';
+import { getMemberKey, resolveMemberKey } from '@/lib/utils';
 
 export interface SplittableExpense {
   amount: number;
@@ -14,6 +14,11 @@ export interface SplittableExpense {
 export interface MemberLike {
   id: string;
   userId?: string | null;
+  inviteStatus?: 'accepted' | 'pending';
+}
+
+function activeMembers<T extends MemberLike>(members: T[]): T[] {
+  return members.filter((m) => m.inviteStatus !== 'pending');
 }
 
 interface BalanceEntry {
@@ -26,7 +31,8 @@ export function calculateNetBalances<T extends MemberLike>(
   members: T[]
 ): Map<string, number> {
   const balances = new Map<string, number>();
-  const activeKeys = new Set(members.map(getMemberKey));
+  const participants = activeMembers(members);
+  const activeKeys = new Set(participants.map(getMemberKey));
 
   activeKeys.forEach((key) => {
     balances.set(key, 0);
@@ -36,15 +42,17 @@ export function calculateNetBalances<T extends MemberLike>(
     const type = expense.expenseType || 'actual';
     if (type !== 'actual') return;
 
-    const payerKey = expense.paidBy ?? '';
+    const payerKey =
+      resolveMemberKey(expense.paidBy ?? '', members) ?? expense.paidBy ?? '';
 
     if (activeKeys.has(payerKey)) {
       balances.set(payerKey, (balances.get(payerKey) ?? 0) + expense.amount);
     }
 
     expense.splitBetween?.forEach((split) => {
-      if (activeKeys.has(split.uid)) {
-        balances.set(split.uid, (balances.get(split.uid) ?? 0) - split.amount);
+      const splitKey = resolveMemberKey(split.uid, members) ?? split.uid;
+      if (activeKeys.has(splitKey)) {
+        balances.set(splitKey, (balances.get(splitKey) ?? 0) - split.amount);
       }
     });
   });
@@ -209,19 +217,21 @@ export function getMemberSpendTotals<T extends MemberLike>(
   members: T[]
 ): MemberSpendTotal[] {
   const totals = new Map<string, number>();
-  const activeKeys = new Set(members.map(getMemberKey));
+  const participants = activeMembers(members);
+  const activeKeys = new Set(participants.map(getMemberKey));
   activeKeys.forEach((key) => totals.set(key, 0));
 
   expenses.forEach((expense) => {
     if ((expense.expenseType || 'actual') !== 'actual') return;
     expense.splitBetween?.forEach((split) => {
-      if (activeKeys.has(split.uid)) {
-        totals.set(split.uid, (totals.get(split.uid) ?? 0) + split.amount);
+      const splitKey = resolveMemberKey(split.uid, members) ?? split.uid;
+      if (activeKeys.has(splitKey)) {
+        totals.set(splitKey, (totals.get(splitKey) ?? 0) + split.amount);
       }
     });
   });
 
-  return members
+  return participants
     .map((m) => ({
       memberKey: getMemberKey(m),
       amount: Math.round((totals.get(getMemberKey(m)) ?? 0) * 100) / 100,
@@ -235,18 +245,20 @@ export function getMemberPaidTotals<T extends MemberLike>(
   members: T[]
 ): MemberSpendTotal[] {
   const totals = new Map<string, number>();
-  const activeKeys = new Set(members.map(getMemberKey));
+  const participants = activeMembers(members);
+  const activeKeys = new Set(participants.map(getMemberKey));
   activeKeys.forEach((key) => totals.set(key, 0));
 
   expenses.forEach((expense) => {
     if ((expense.expenseType || 'actual') !== 'actual') return;
-    const payerKey = expense.paidBy ?? '';
+    const payerKey =
+      resolveMemberKey(expense.paidBy ?? '', members) ?? expense.paidBy ?? '';
     if (activeKeys.has(payerKey)) {
       totals.set(payerKey, (totals.get(payerKey) ?? 0) + expense.amount);
     }
   });
 
-  return members
+  return participants
     .map((m) => ({
       memberKey: getMemberKey(m),
       amount: Math.round((totals.get(getMemberKey(m)) ?? 0) * 100) / 100,

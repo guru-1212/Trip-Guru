@@ -12,6 +12,7 @@ import { isSettlementOpen } from '@/lib/mergeRoomSettlements';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { formatCycleLabel } from '@/firebase/firestore';
+import { getMyMemberKey } from '@/lib/utils';
 import { 
   Receipt, 
   HandCoins, 
@@ -44,7 +45,7 @@ function OverviewContent() {
   const members = useAppSelector((s) => s.rooms.members);
   const roomId = room?.roomId ?? '';
   const { displaySettlements, getMemberName } = useRoomSettlement(roomId);
-  const myMemberKey = members.find((m) => m.userId === uid)?.id;
+  const myMemberKey = getMyMemberKey(uid, members);
   const carryForward = useAppSelector((s) =>
     s.roomSettlements.carryForward.filter((c) => c.status !== 'settled')
   );
@@ -55,10 +56,10 @@ function OverviewContent() {
   const total = getTotalSpent(expenses);
   const rentExpense = expenses.find(e => e.category === 'Rent');
   const currency = room?.currency ?? 'INR';
-  const paidByMember = useMemo(() => {
-    const accepted = members.filter((m) => m.inviteStatus === 'accepted');
-    return getMemberPaidTotals(expenses, accepted);
-  }, [expenses, members]);
+  const paidByMember = useMemo(
+    () => getMemberPaidTotals(expenses, members),
+    [expenses, members]
+  );
 
   const container = {
     hidden: { opacity: 0 },

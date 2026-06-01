@@ -63,8 +63,11 @@ export function RoomExpenseForm({
   const [splitType, setSplitType] = useState<SplitType>(
     initialData?.splitType ?? 'equal'
   );
+  const acceptedMembers = members.filter((m) => m.inviteStatus === 'accepted');
+  const defaultSplitMembers = acceptedMembers.map(getMemberKey);
+
   const [selectedMembers, setSelectedMembers] = useState<string[]>(
-    initialData?.splitBetween?.map((s) => s.uid) ?? members.map(getMemberKey)
+    initialData?.splitBetween?.map((s) => s.uid) ?? defaultSplitMembers
   );
   const [unequalAmounts, setUnequalAmounts] = useState<Record<string, number>>(
     initialData?.splitType === 'unequal'
@@ -123,7 +126,7 @@ export function RoomExpenseForm({
     setSubmitting(true);
     try {
       const uidsToSplit =
-        selectedMembers.length > 0 ? selectedMembers : members.map(getMemberKey);
+        selectedMembers.length > 0 ? selectedMembers : defaultSplitMembers;
       let splitBetween;
       if (splitType === 'equal') {
         splitBetween = calculateSplit('equal', data.amount, {
@@ -198,8 +201,6 @@ export function RoomExpenseForm({
       setSubmitting(false);
     }
   };
-
-  const acceptedMembers = members.filter((m) => m.inviteStatus === 'accepted');
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
