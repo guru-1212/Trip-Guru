@@ -110,3 +110,12 @@ export {
   setRoomBringItemStatus,
   deleteRoomBringItem,
 } from '@/firebase/roomBringItems.firestore';
+
+export {
+  getTripPackItems,
+  createTripPackItem,
+  createTripPackItemsBatch,
+  updateTripPackItem,
+  setTripPackItemStatus,
+  deleteTripPackItem,
+} from '@/firebase/tripPackItems.firestore';

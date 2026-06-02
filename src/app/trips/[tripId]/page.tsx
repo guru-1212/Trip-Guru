@@ -1,6 +1,7 @@
 'use client';
 
 import { useParams } from 'next/navigation';
+import Link from 'next/link';
 import { motion } from 'framer-motion';
 import { TripPageShell } from '@/components/trips/TripPageShell';
 import { BudgetGauge } from '@/components/analytics/BudgetGauge';
@@ -21,7 +22,9 @@ import {
   Ticket, 
   AlertTriangle, 
   MoreHorizontal,
-  ArrowUpRight
+  ArrowUpRight,
+  ClipboardList,
+  ArrowRight,
 } from 'lucide-react';
 import { updateTripExpectedBudget } from '@/features/trips/tripsThunks';
 import dayjs from 'dayjs';
@@ -30,6 +33,8 @@ import { useEffect } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { computeTripPackProgress } from '@/lib/tripPackProgress';
+import { Progress } from '@/components/ui/progress';
 
 dayjs.extend(relativeTime);
 
@@ -65,6 +70,8 @@ function OverviewContent({ tripId }: { tripId: string }) {
   const dispatch = useAppDispatch();
   const trip = useAppSelector((s) => s.trips.currentTrip);
   const members = useAppSelector((s) => s.trips.members);
+  const packItems = useAppSelector((s) => s.tripPackItems.items);
+  const packStats = computeTripPackProgress(packItems);
   const { allExpenses, totalSpent, totalPlanned } = useExpenses();
 
   if (!trip) return null;
@@ -121,6 +128,42 @@ function OverviewContent({ tripId }: { tripId: string }) {
           planned={totalPlanned}
           currency={trip.currency}
         />
+
+        <Card className="border-border/40 shadow-sm rounded-[32px] overflow-hidden bg-white dark:bg-slate-900/50">
+          <CardHeader className="px-8 pt-8 pb-4">
+            <CardTitle className="text-sm font-bold text-muted-foreground flex items-center gap-2">
+              <ClipboardList className="h-4 w-4 text-violet-500" />
+              Packing checklist
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-8 pb-8 space-y-3">
+            {packStats.total === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Nothing on the list yet. Add essentials before you go.
+              </p>
+            ) : (
+              <>
+                <p className="text-2xl font-black">{packStats.overallPercent}%</p>
+                <Progress value={packStats.overallPercent} className="h-2" />
+                <p className="text-xs text-muted-foreground">
+                  {packStats.packed} / {packStats.total} packed
+                  {packStats.remaining > 0
+                    ? ` · ${packStats.remaining} left`
+                    : ' · All set!'}
+                </p>
+              </>
+            )}
+            <Button
+              variant="link"
+              asChild
+              className="p-0 h-auto text-xs font-bold text-primary"
+            >
+              <Link href={`/trips/${tripId}/packing`}>
+                Open packing list <ArrowRight className="h-3 w-3 ml-1 inline" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
 
         <Card className="border-border/40 shadow-sm rounded-[32px] overflow-hidden bg-white dark:bg-slate-900/50">
           <CardHeader className="px-8 pt-8">

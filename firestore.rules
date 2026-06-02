@@ -65,6 +65,35 @@ service cloud.firestore {
       allow create, update: if isTripEditor(tripId);
       allow delete: if isTripOwner(tripId);
     }
+    function tripMemberDocExists(memberKey) {
+      return memberKey != null
+        && exists(/databases/$(database)/documents/tripMembers/$(memberKey));
+    }
+    function tripMemberUserId(memberKey) {
+      return get(/databases/$(database)/documents/tripMembers/$(memberKey)).data.userId;
+    }
+    function isTripPackAssignee(tripId, memberKey) {
+      return isTripMember(tripId)
+        && tripMemberDocExists(memberKey)
+        && tripMemberUserId(memberKey) == request.auth.uid;
+    }
+    function isTripPackStatusOnlyUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['status', 'packedAt']);
+    }
+    match /tripPackItems/{itemId} {
+      allow read: if isTripMember(resource.data.tripId);
+      allow create: if isAuth() && isTripEditor(request.resource.data.tripId);
+      allow delete: if isAuth() && request.auth.uid == resource.data.createdBy;
+      allow update: if isAuth() && isTripMember(resource.data.tripId) && (
+        isTripEditor(resource.data.tripId)
+        || request.auth.uid == resource.data.createdBy
+        || (
+          isTripPackStatusOnlyUpdate()
+          && isTripPackAssignee(resource.data.tripId, resource.data.assignedToMemberKey)
+        )
+      );
+    }
 
     match /rooms/{roomId} {
       allow read: if isRoomMember(roomId);

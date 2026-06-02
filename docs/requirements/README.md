@@ -22,6 +22,12 @@
 | [07-room-bring-list.md](./07-room-bring-list.md) | Things to bring checklist |
 | [08-push-notifications.md](./08-push-notifications.md) | FCM push when app is closed |
 
+## Trips module
+
+| File | Topic |
+|------|--------|
+| [09-trip-packing-checklist.md](./09-trip-packing-checklist.md) | Packing checklist, templates, buy/bring, progress |
+
 ## If the user prompt conflicts with these docs
 
 1. **Prefer these requirements** over a casual user phrase (e.g. “delete any expense” → still only `createdBy`).

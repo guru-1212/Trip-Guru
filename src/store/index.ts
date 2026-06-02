@@ -9,6 +9,7 @@ import roomsReducer from '@/features/rooms/roomsSlice';
 import roomExpensesReducer from '@/features/roomExpenses/roomExpensesSlice';
 import roomSettlementsReducer from '@/features/roomSettlements/roomSettlementsSlice';
 import roomBringItemsReducer from '@/features/roomBringItems/roomBringItemsSlice';
+import tripPackItemsReducer from '@/features/tripPackItems/tripPackItemsSlice';
 import appModeReducer from '@/features/appMode/appModeSlice';
 
 export const store = configureStore({
@@ -22,6 +23,7 @@ export const store = configureStore({
     roomExpenses: roomExpensesReducer,
     roomSettlements: roomSettlementsReducer,
     roomBringItems: roomBringItemsReducer,
+    tripPackItems: tripPackItemsReducer,
     appMode: appModeReducer,
   },
   middleware: (getDefaultMiddleware) =>
