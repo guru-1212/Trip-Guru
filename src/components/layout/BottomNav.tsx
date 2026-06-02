@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, PlusCircle, User, Home } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, User, Home, Dumbbell } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppMode } from '@/hooks/useAppMode';
 
@@ -14,11 +14,13 @@ export function BottomNav() {
     ? [
         { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
         { href: '/rooms/new', label: 'Room', icon: Home },
+        { href: '/gym', label: 'Gym', icon: Dumbbell },
         { href: '/profile', label: 'Me', icon: User },
       ]
     : [
         { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
         { href: '/trips/new', label: 'Trip', icon: PlusCircle },
+        { href: '/gym', label: 'Gym', icon: Dumbbell },
         { href: '/profile', label: 'Me', icon: User },
       ];
 

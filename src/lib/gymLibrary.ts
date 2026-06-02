@@ -1,0 +1,112 @@
+import { ExerciseLibraryItem, WorkoutPlan } from '@/types/gym';
+
+export const EXERCISE_LIBRARY: ExerciseLibraryItem[] = [
+  {
+    id: 'squat',
+    name: 'Barbell Back Squat',
+    imageUrl: 'https://images.unsplash.com/photo-1434596922112-19c563067271?auto=format&fit=crop&w=800&q=80',
+    instructions: [
+      'Place bar on upper traps and brace core.',
+      'Sit hips down and back while keeping chest proud.',
+      'Drive through mid-foot to stand up.',
+    ],
+    targetMuscles: ['Quads', 'Glutes', 'Core'],
+    commonMistakes: ['Knees collapsing inward', 'Heels lifting', 'Losing lower-back neutrality'],
+    trainerTips: ['Use controlled eccentric', 'Keep elbows under bar', 'Start light and progress weekly'],
+    difficulty: 'intermediate',
+  },
+  {
+    id: 'bench_press',
+    name: 'Barbell Bench Press',
+    imageUrl: 'https://images.unsplash.com/photo-1534367990512-edbdca781b00?auto=format&fit=crop&w=800&q=80',
+    instructions: [
+      'Set shoulder blades down and back on bench.',
+      'Lower bar to mid chest with control.',
+      'Press up while maintaining full-body tension.',
+    ],
+    targetMuscles: ['Chest', 'Triceps', 'Front Delts'],
+    commonMistakes: ['Flaring elbows excessively', 'Bouncing bar', 'Loose upper back'],
+    trainerTips: ['Plant feet firmly', 'Use spotter for heavy sets', 'Pause reps to build control'],
+    difficulty: 'intermediate',
+  },
+  {
+    id: 'lat_pulldown',
+    name: 'Lat Pulldown',
+    imageUrl: 'https://images.unsplash.com/photo-1599058917212-d750089bc07e?auto=format&fit=crop&w=800&q=80',
+    instructions: ['Sit tall and grip bar slightly wider than shoulders.', 'Pull elbows toward ribs.', 'Return slowly to full stretch.'],
+    targetMuscles: ['Lats', 'Upper Back', 'Biceps'],
+    commonMistakes: ['Using too much momentum', 'Leaning back excessively', 'Partial range'],
+    trainerTips: ['Lead with elbows', 'Pause near chest briefly', 'Control the negative'],
+    difficulty: 'beginner',
+  },
+  {
+    id: 'rdl',
+    name: 'Romanian Deadlift',
+    imageUrl: 'https://images.unsplash.com/photo-1593079831268-3381b0db4a77?auto=format&fit=crop&w=800&q=80',
+    instructions: ['Keep bar close to body.', 'Hinge at hips with slight knee bend.', 'Stop when hamstrings fully stretch and stand tall.'],
+    targetMuscles: ['Hamstrings', 'Glutes', 'Lower Back'],
+    commonMistakes: ['Rounding back', 'Squatting the movement', 'Bar drifting away'],
+    trainerTips: ['Brace hard before each rep', 'Keep lats engaged', 'Progress weight conservatively'],
+    difficulty: 'advanced',
+  },
+];
+
+export const WORKOUT_PLANS: WorkoutPlan[] = [
+  {
+    id: 'beginner_full_body',
+    name: 'Beginner Full Body A',
+    level: 'beginner',
+    type: 'full_body',
+    difficultyLabel: 'Starter',
+    estimatedMinutes: 55,
+    exercises: [
+      { exerciseId: 'squat', sets: 3, reps: '8-10', restSeconds: 120, targetMuscles: ['Quads', 'Glutes'] },
+      { exerciseId: 'bench_press', sets: 3, reps: '8-10', restSeconds: 120, targetMuscles: ['Chest'] },
+      { exerciseId: 'lat_pulldown', sets: 3, reps: '10-12', restSeconds: 90, targetMuscles: ['Lats'] },
+    ],
+  },
+  {
+    id: 'intermediate_upper_lower',
+    name: 'Intermediate Upper/Lower Split',
+    level: 'intermediate',
+    type: 'upper_lower',
+    difficultyLabel: 'Progressive',
+    estimatedMinutes: 70,
+    exercises: [
+      { exerciseId: 'bench_press', sets: 4, reps: '6-8', restSeconds: 150, targetMuscles: ['Chest'] },
+      { exerciseId: 'lat_pulldown', sets: 4, reps: '8-10', restSeconds: 120, targetMuscles: ['Back'] },
+      { exerciseId: 'squat', sets: 4, reps: '6-8', restSeconds: 150, targetMuscles: ['Legs'] },
+    ],
+  },
+  {
+    id: 'advanced_ppl',
+    name: 'Advanced Push Pull Legs',
+    level: 'advanced',
+    type: 'ppl',
+    difficultyLabel: 'High Intensity',
+    estimatedMinutes: 80,
+    exercises: [
+      { exerciseId: 'bench_press', sets: 5, reps: '5-8', restSeconds: 150, targetMuscles: ['Push'] },
+      { exerciseId: 'lat_pulldown', sets: 5, reps: '8-10', restSeconds: 120, targetMuscles: ['Pull'] },
+      { exerciseId: 'rdl', sets: 4, reps: '6-8', restSeconds: 150, targetMuscles: ['Legs'] },
+    ],
+  },
+  {
+    id: 'advanced_arnold',
+    name: 'Advanced Arnold Split',
+    level: 'advanced',
+    type: 'arnold_split',
+    difficultyLabel: 'Bodybuilding',
+    estimatedMinutes: 75,
+    exercises: [{ exerciseId: 'bench_press', sets: 4, reps: '8-12', restSeconds: 90, targetMuscles: ['Chest', 'Back'] }],
+  },
+  {
+    id: 'intermediate_bro',
+    name: 'Intermediate Bro Split',
+    level: 'intermediate',
+    type: 'bro_split',
+    difficultyLabel: 'Classic Split',
+    estimatedMinutes: 65,
+    exercises: [{ exerciseId: 'squat', sets: 4, reps: '8-12', restSeconds: 120, targetMuscles: ['Legs'] }],
+  },
+];

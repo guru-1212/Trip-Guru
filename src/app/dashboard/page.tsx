@@ -35,6 +35,7 @@ import { useAppMode } from '@/hooks/useAppMode';
 import { Home, PlusCircle } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dumbbell } from 'lucide-react';
 
 export default function DashboardPage() {
   return (
@@ -177,6 +178,11 @@ function DashboardContent() {
               </Button>
             </Link>
           )}
+          <Link href="/gym" className="w-full sm:w-auto">
+            <Button size="lg" variant="outline" className="w-full sm:w-auto rounded-2xl px-8 h-12 md:h-14 font-bold">
+              <Dumbbell className="h-5 w-5 mr-3" /> Open Gym Tracker
+            </Button>
+          </Link>
         </motion.div>
       </header>
 

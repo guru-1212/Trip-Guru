@@ -11,6 +11,7 @@ import roomSettlementsReducer from '@/features/roomSettlements/roomSettlementsSl
 import roomBringItemsReducer from '@/features/roomBringItems/roomBringItemsSlice';
 import tripPackItemsReducer from '@/features/tripPackItems/tripPackItemsSlice';
 import appModeReducer from '@/features/appMode/appModeSlice';
+import gymReducer from '@/features/gym/gymSlice';
 
 export const store = configureStore({
   reducer: {
@@ -25,6 +26,7 @@ export const store = configureStore({
     roomBringItems: roomBringItemsReducer,
     tripPackItems: tripPackItemsReducer,
     appMode: appModeReducer,
+    gym: gymReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({

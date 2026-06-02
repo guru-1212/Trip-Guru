@@ -119,3 +119,19 @@ export {
   setTripPackItemStatus,
   deleteTripPackItem,
 } from '@/firebase/tripPackItems.firestore';
+
+export {
+  getGymProfile,
+  upsertGymProfile,
+  getWorkoutLogs,
+  createWorkoutLog,
+  getWeightLogs,
+  createWeightLog,
+  getMeasurementLogs,
+  createMeasurementLog,
+  getProgressPhotos,
+  createProgressPhoto,
+  getChecklist,
+  upsertChecklist,
+  toggleChecklistItem,
+} from '@/firebase/gym.firestore';
