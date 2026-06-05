@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 interface VariationSelectorProps {
   value: string;
@@ -14,61 +16,69 @@ export function VariationSelector({ value, variations, onChange, onAddVariation 
   const [newVar, setNewVar] = useState('');
   const [showAdd, setShowAdd] = useState(false);
 
+  const submitNew = () => {
+    if (!newVar.trim()) return;
+    onAddVariation(newVar.trim());
+    onChange(newVar.trim());
+    setNewVar('');
+    setShowAdd(false);
+  };
+
   return (
-    <div className="space-y-2">
-      <label className="text-xs text-[var(--wk-muted)] font-medium">Variation</label>
-      <select
-        className="wk-input text-sm"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        {variations.map((v) => (
-          <option key={v} value={v}>
-            {v}
-          </option>
-        ))}
-      </select>
-      {showAdd ? (
-        <div className="flex gap-2">
-          <input
-            className="wk-input text-sm flex-1"
-            placeholder="New variation name"
-            value={newVar}
-            onChange={(e) => setNewVar(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && newVar.trim()) {
-                onAddVariation(newVar.trim());
-                onChange(newVar.trim());
-                setNewVar('');
-                setShowAdd(false);
-              }
-            }}
-          />
-          <button
-            type="button"
-            className="wk-btn-primary text-xs px-3"
-            onClick={() => {
-              if (newVar.trim()) {
-                onAddVariation(newVar.trim());
-                onChange(newVar.trim());
-                setNewVar('');
-                setShowAdd(false);
-              }
-            }}
-          >
-            Add
-          </button>
-        </div>
-      ) : (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="ft-section-title">Variation</p>
         <button
           type="button"
-          onClick={() => setShowAdd(true)}
-          className="flex items-center gap-1 text-xs text-[var(--wk-accent)] hover:underline"
+          onClick={() => setShowAdd(!showAdd)}
+          className="text-xs font-semibold text-primary hover:underline"
         >
-          <Plus className="h-3 w-3" />
-          Add new variation
+          {showAdd ? 'Cancel' : '+ Add new'}
         </button>
-      )}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {showAdd ? (
+          <motion.div
+            key="add"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="flex gap-2"
+          >
+            <input
+              className="ft-input flex-1"
+              placeholder="e.g. Incline, Sumo..."
+              autoFocus
+              value={newVar}
+              onChange={(e) => setNewVar(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && submitNew()}
+            />
+            <button type="button" className="ft-btn ft-btn--primary ft-btn--sm shrink-0" onClick={submitNew}>
+              <Plus className="h-4 w-4" />
+              Add
+            </button>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="chips"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-wrap gap-2"
+          >
+            {variations.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => onChange(v)}
+                className={cn('ft-chip', value === v && 'ft-chip--active')}
+              >
+                {v}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

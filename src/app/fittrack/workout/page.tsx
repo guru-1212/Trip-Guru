@@ -6,11 +6,8 @@ import dayjs from 'dayjs';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   AlertTriangle,
-  ChevronDown,
-  ChevronUp,
   ChevronRight,
   Trophy,
-  Trash2,
   Plus,
   Check,
   CheckCircle2,
@@ -21,19 +18,24 @@ import {
   Camera,
   Dumbbell,
   Target,
+  Zap,
+  ArrowRight,
+  ChevronLeft,
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { RestTimer } from '@/components/workout/RestTimer';
 import { VariationSelector } from '@/components/workout/VariationSelector';
+import { SessionSetRow } from '@/components/workout/SessionSetRow';
 import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workout/AddExerciseModal';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
-import { SPLIT_DEFINITIONS } from '@/workout/constants';
+import { SPLIT_DEFINITIONS, SPLIT_NAMES } from '@/workout/constants';
 import { getExercisesForSplit, getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
 import type { CustomExercise, SplitId, WorkoutExercise, WorkoutSet, LibraryExercise } from '@/workout/types';
 import {
   getGreeting,
   getTodayDayKey,
+  getTodaysSplit,
   getLastTrainedDate,
   isYesterday,
   getLastExerciseSession,
@@ -102,12 +104,18 @@ export default function WorkoutPage() {
   };
 
   const preselected = searchParams.get('split') as SplitId | null;
+  const todaySplit = useMemo(() => getTodaysSplit(profile), [profile]);
 
   useEffect(() => {
+    if (activeWorkout) return;
     if (preselected && SPLIT_DEFINITIONS.some((s) => s.id === preselected)) {
       setSelectedSplit(preselected);
+      return;
     }
-  }, [preselected]);
+    if (hydrated && todaySplit !== 'rest') {
+      setSelectedSplit(todaySplit);
+    }
+  }, [preselected, todaySplit, hydrated, activeWorkout]);
 
   useEffect(() => {
     if (activeWorkout) {
@@ -305,10 +313,6 @@ export default function WorkoutPage() {
 
   const confirmFinish = () => {
     if (!activeWorkout) return;
-    const prsBroken = activeWorkout.exercises.filter((ex) =>
-      ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs))
-    ).length;
-
     saveWorkout({
       date: workoutDate,
       splitId: activeWorkout.splitId,
@@ -323,7 +327,7 @@ export default function WorkoutPage() {
     router.push('/fittrack/progress');
   };
 
-  if (!hydrated) return <div className="text-[var(--wk-muted)]">Loading...</div>;
+  if (!hydrated) return <div className="ft-loading"><Dumbbell className="h-8 w-8 text-primary animate-pulse" /><span>Loading workout...</span></div>;
 
   // Step 2: Active Workout
   if (activeWorkout) {
@@ -334,24 +338,29 @@ export default function WorkoutPage() {
 
     return (
       <PageTransition>
-        <div className="space-y-6">
-          <header className="flex items-center justify-between sticky top-0 z-30 glass p-5 rounded-[24px] border-primary/10 shadow-xl shadow-primary/5">
-            <div className="flex items-center gap-4">
-               <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary shadow-inner">
-                  <Dumbbell className="h-6 w-6" />
-               </div>
-               <div>
-                  <h1 className="text-xl font-black tracking-tight text-slate-900 dark:text-white leading-none mb-1">{activeWorkout.splitName}</h1>
-                  <p className="text-primary font-black tabular-nums text-sm tracking-widest">{formatDuration(elapsed)}</p>
-               </div>
+        <div className="space-y-5 pb-36">
+          <header className="ft-card ft-card-padded sticky top-0 z-40 !py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shrink-0">
+                  <Zap className="h-5 w-5" />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="ft-title truncate">{activeWorkout.splitName}</h1>
+                  <div className="flex items-center gap-1.5 text-sm text-primary font-semibold tabular-nums mt-0.5">
+                    <Timer className="h-3.5 w-3.5" />
+                    {formatDuration(elapsed)}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCancelDialog(true)}
+                className="ft-btn ft-btn--ghost ft-btn--icon shrink-0 !text-red-500 hover:!bg-red-500/10"
+              >
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setShowCancelDialog(true)}
-              className="p-3 bg-red-500/10 hover:bg-red-500/20 text-red-500 rounded-2xl transition-all duration-300"
-            >
-              <X className="h-5 w-5" />
-            </button>
           </header>
 
           <RestTimer
@@ -375,6 +384,7 @@ export default function WorkoutPage() {
             }}
           />
 
+          {/* Exercises */}
           <div className="space-y-4">
             {activeWorkout.exercises.map((ex) => {
               const lib = getExerciseById(ex.exerciseId);
@@ -382,40 +392,49 @@ export default function WorkoutPage() {
               const lastSession = getLastExerciseSession(workouts, ex.exerciseId);
               const isExpanded = expandedEx === ex.exerciseId;
               const hasPR = ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
+              const setsCompleted = ex.sets.filter(s => s.done).length;
+              const progress = (setsCompleted / ex.sets.length) * 100;
 
               return (
-                <div key={ex.exerciseId} className={cn("wk-card overflow-hidden transition-all duration-500", isExpanded ? "border-primary/30 ring-4 ring-primary/5 shadow-2xl" : "hover:border-primary/20")}>
+                <div key={ex.exerciseId} className={cn('ft-exercise-card', isExpanded && 'ft-exercise-card--open')}>
+                  <div className="ft-exercise-progress">
+                    <div className="ft-exercise-progress-fill" style={{ width: `${progress}%` }} />
+                  </div>
+
                   <button
                     type="button"
-                    className="w-full p-5 flex items-center justify-between text-left group"
+                    className="ft-exercise-trigger"
                     onClick={() => setExpandedEx(isExpanded ? null : ex.exerciseId)}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center transition-all duration-300", isExpanded ? "bg-primary text-white" : "bg-primary/5 text-primary group-hover:bg-primary/10")}>
-                         <Target className="h-5 w-5" />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className={cn(
+                        'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+                        isExpanded ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      )}>
+                        <Dumbbell className="h-5 w-5" />
                       </div>
-                      <div>
-                         <div className="flex items-center gap-2">
-                           <span className="font-black text-slate-900 dark:text-white tracking-tight">{ex.name}</span>
-                           {hasPR && <Trophy className="h-3.5 w-3.5 text-yellow-500 animate-bounce" />}
-                         </div>
-                         <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-0.5">
-                           {ex.sets.filter(s => s.done).length} / {ex.sets.length} Sets Completed
-                         </p>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-base truncate">{ex.name}</span>
+                          {hasPR && <Trophy className="h-4 w-4 text-amber-500 shrink-0" />}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {setsCompleted} of {ex.sets.length} sets done
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                       <button
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           setShowInfoModal(lib || null);
                         }}
-                        className="p-2 hover:bg-primary/5 rounded-xl transition-colors"
+                        className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm"
                       >
-                        <Info className="h-4 w-4 text-primary/40 hover:text-primary" />
+                        <Info className="h-4 w-4" />
                       </button>
-                      <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform duration-300", isExpanded && "rotate-90 text-primary")} />
+                      <ChevronRight className={cn('h-5 w-5 text-muted-foreground transition-transform', isExpanded && 'rotate-90 text-primary')} />
                     </div>
                   </button>
 
@@ -425,7 +444,7 @@ export default function WorkoutPage() {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="px-5 pb-6 space-y-6 border-t border-white/5 pt-6 bg-primary/[0.01]"
+                        className="ft-exercise-body space-y-5 pt-5"
                       >
                         <VariationSelector
                           value={ex.variation}
@@ -435,123 +454,75 @@ export default function WorkoutPage() {
                         />
 
                         {lastSession && (
-                          <div className="flex flex-wrap gap-4 items-center bg-slate-500/5 p-3 rounded-2xl border border-white/5">
-                            <div className="flex items-center gap-2">
-                               <div className="w-7 h-7 rounded-lg bg-yellow-500/10 flex items-center justify-center text-yellow-500">
-                                  <Trophy className="h-3.5 w-3.5" />
-                               </div>
-                               <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
-                                 Last Best: <span className="text-slate-900 dark:text-white">{formatWeight(lastSession.weight, profile.prefs.unit)} × {lastSession.reps}</span>
-                               </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="ft-stat-pill">
+                              <div className="ft-stat-pill-icon bg-amber-500/15 text-amber-600">
+                                <Trophy className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Last session</p>
+                                <p className="text-sm font-semibold tabular-nums">{formatWeight(lastSession.weight, profile.prefs.unit)} × {lastSession.reps}</p>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                               <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-                                  <TrendingUp className="h-3.5 w-3.5" />
-                               </div>
-                               <p className="text-xs font-black uppercase tracking-widest text-primary">
-                                 Suggested: <span className="underline underline-offset-4 decoration-2">{formatWeight(suggestWeight(lastSession.weight, lastSession.reps, profile.prefs.unit), profile.prefs.unit)}</span>
-                               </p>
+                            <div className="ft-stat-pill">
+                              <div className="ft-stat-pill-icon bg-primary/15 text-primary">
+                                <TrendingUp className="h-4 w-4" />
+                              </div>
+                              <div>
+                                <p className="text-xs text-muted-foreground">Suggested</p>
+                                <p className="text-sm font-semibold tabular-nums">{formatWeight(suggestWeight(lastSession.weight, lastSession.reps, profile.prefs.unit), profile.prefs.unit)}</p>
+                              </div>
                             </div>
                           </div>
                         )}
 
-                        <div className="overflow-x-auto -mx-1 px-1">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="text-muted-foreground text-[10px] font-black uppercase tracking-widest">
-                                <th className="text-left py-3 w-12 px-2">#</th>
-                                <th className="text-left py-3 px-2">Weight ({profile.prefs.unit})</th>
-                                <th className="text-left py-3 w-20 px-2">Reps</th>
-                                <th className="text-center py-3 w-16 px-2">Done</th>
-                                <th className="w-20 px-2" />
-                              </tr>
-                            </thead>
-                            <tbody className="space-y-2">
-                              {ex.sets.map((set, idx) => {
-                                const showPR = set.done && isPR(ex.exerciseId, set.weight, prs);
-                                return (
-                                  <tr key={idx} className={cn("group/set transition-colors rounded-xl", set.done ? "bg-primary/[0.03]" : "hover:bg-slate-500/5")}>
-                                    <td className="py-3 font-black text-muted-foreground/50 px-2">{idx + 1}</td>
-                                    <td className="py-3 px-2">
-                                      <div className="flex items-center gap-2">
-                                        <input
-                                          type="number"
-                                          className="wk-input w-24 text-sm font-black h-11 px-3 bg-white/5"
-                                          value={displayWeight(set.weight, profile.prefs.unit) || ''}
-                                          onChange={(e) =>
-                                            updateSet(ex.exerciseId, idx, 'weight', parseFloat(e.target.value) || 0)
-                                          }
-                                        />
-                                        {showPR && <Trophy className="h-4 w-4 text-yellow-500 drop-shadow-lg" />}
-                                      </div>
-                                    </td>
-                                    <td className="py-3 px-2">
-                                      <input
-                                        type="number"
-                                        className="wk-input w-20 text-sm font-black h-11 px-3 bg-white/5"
-                                        value={set.reps || ''}
-                                        onChange={(e) =>
-                                          updateSet(ex.exerciseId, idx, 'reps', parseInt(e.target.value, 10) || 0)
-                                        }
-                                      />
-                                    </td>
-                                    <td className="py-3 px-2 text-center">
-                                      <button
-                                        type="button"
-                                        onClick={() => toggleSetDone(ex.exerciseId, idx)}
-                                        className={cn(
-                                          "w-10 h-10 rounded-xl border-2 flex items-center justify-center mx-auto transition-all duration-300",
-                                          set.done
-                                            ? "bg-primary border-primary text-white shadow-lg shadow-primary/20 scale-110"
-                                            : "border-slate-500/20 text-muted-foreground/30 hover:border-primary/40 hover:text-primary"
-                                        )}
-                                      >
-                                        <Check className={cn("h-5 w-5", set.done ? "opacity-100" : "opacity-0")} />
-                                      </button>
-                                    </td>
-                                    <td className="py-3 px-2">
-                                      <div className="flex items-center justify-end gap-3 pr-2">
-                                        <button
-                                          type="button"
-                                          onClick={startTimer}
-                                          className="p-2.5 bg-primary/5 hover:bg-primary/10 text-primary rounded-xl transition-all"
-                                          title="Start Rest Timer"
-                                        >
-                                          <Timer className="h-4 w-4" />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          onClick={() => removeSet(ex.exerciseId, idx)}
-                                          className="p-2.5 bg-red-500/5 hover:bg-red-500/10 text-red-500 rounded-xl transition-all"
-                                        >
-                                          <Trash2 className="h-4 w-4" />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
+                        {/* Sets — card-based mobile-first log */}
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <p className="ft-section-title">Sets</p>
+                            <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                              {setsCompleted} / {ex.sets.length}
+                            </span>
+                          </div>
+
+                          <div className="space-y-3">
+                            {ex.sets.map((set, idx) => (
+                              <motion.div key={idx} layout>
+                                <SessionSetRow
+                                  index={idx}
+                                  set={set}
+                                  unit={profile.prefs.unit}
+                                  isPR={set.done && isPR(ex.exerciseId, set.weight, prs)}
+                                  onWeightChange={(v) => updateSet(ex.exerciseId, idx, 'weight', v)}
+                                  onRepsChange={(v) => updateSet(ex.exerciseId, idx, 'reps', v)}
+                                  onToggleDone={() => toggleSetDone(ex.exerciseId, idx)}
+                                  onRemove={() => removeSet(ex.exerciseId, idx)}
+                                />
+                              </motion.div>
+                            ))}
+                          </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => addSet(ex.exerciseId)}
-                          className="w-full py-4 border-2 border-dashed border-primary/10 hover:border-primary/30 hover:bg-primary/5 rounded-2xl text-primary font-black text-xs uppercase tracking-[0.2em] transition-all"
-                        >
-                          + Add Set
-                        </button>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button type="button" onClick={() => addSet(ex.exerciseId)} className="ft-btn ft-btn--ghost ft-btn--block">
+                            <Plus className="h-4 w-4" />
+                            Add Set
+                          </button>
+                          <button type="button" onClick={startTimer} className="ft-btn ft-btn--ghost ft-btn--block">
+                            <Timer className="h-4 w-4" />
+                            Rest
+                          </button>
+                        </div>
 
-                        <div className="space-y-3">
-                          <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">Session Notes</label>
+                        <div>
+                          <label className="ft-label">Notes <span className="font-normal text-muted-foreground">(optional)</span></label>
                           <textarea
-                            className="wk-input text-sm font-medium min-h-[80px] bg-white/5 p-4 rounded-2xl"
+                            className="ft-textarea resize-none"
                             value={ex.notes ?? ''}
                             onChange={(e) =>
                               updateExercise(ex.exerciseId, (exer) => ({ ...exer, notes: e.target.value }))
                             }
-                            placeholder="How did this exercise feel? Technique cues, fatigue levels..."
+                            placeholder="RPE, form cues, how it felt..."
                           />
                         </div>
                       </motion.div>
@@ -562,21 +533,15 @@ export default function WorkoutPage() {
             })}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6">
-            <button
-              type="button"
-              onClick={() => setShowAddExercise(true)}
-              className="bg-slate-500/5 hover:bg-slate-500/10 border border-white/5 px-6 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest text-slate-700 dark:text-slate-300 transition-all flex items-center justify-center gap-3 shadow-xl"
-            >
+          {/* Footer Controls */}
+          <div className="ft-action-bar">
+            <button type="button" onClick={() => setShowAddExercise(true)} className="ft-btn ft-btn--secondary flex-1">
               <Plus className="h-4 w-4" />
               Add Exercise
             </button>
-            <button 
-              type="button" 
-              onClick={finishWorkout} 
-              className="bg-primary text-white px-6 py-4 rounded-[20px] font-black text-xs uppercase tracking-widest transition-all shadow-xl shadow-primary/20 hover:scale-[1.02] active:scale-[0.98]"
-            >
-              Finish Protocol
+            <button type="button" onClick={finishWorkout} className="ft-btn ft-btn--primary flex-1">
+              <Zap className="h-4 w-4" />
+              Finish
             </button>
           </div>
 
@@ -591,71 +556,81 @@ export default function WorkoutPage() {
             />
           )}
 
-          {showSummary && (
-            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-              <div className="wk-card p-6 max-w-md w-full space-y-4">
-                <h2 className="wk-heading text-xl font-bold">Workout Complete! 🎉</h2>
-                <div className="space-y-2 text-sm">
+          {/* Modals & Dialogs */}
+          <AnimatePresence>
+            {showSummary && (
+              <div className="ft-overlay">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="ft-modal ft-modal-lg space-y-6"
+                >
+                  <div className="text-center">
+                    <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center text-primary mx-auto mb-4">
+                      <Trophy className="h-7 w-7" />
+                    </div>
+                    <h2 className="ft-title-lg">Workout Complete</h2>
+                    <p className="ft-subtitle mt-1">Great session — save your progress below.</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <SummaryMetric label="Duration" value={formatDuration(elapsed)} icon={Timer} />
+                    <SummaryMetric label="Sets" value={String(countCompletedSets(activeWorkout.exercises))} icon={CheckCircle2} />
+                    <SummaryMetric label="Volume" value={formatWeight(calcWorkoutVolume(activeWorkout.exercises), profile.prefs.unit)} icon={TrendingUp} />
+                    <SummaryMetric label="PRs" value={String(prsBroken.length)} icon={Trophy} />
+                  </div>
+
                   <div>
-                    <label className="text-xs text-[var(--wk-muted)] block mb-1">Workout Date</label>
+                    <label className="ft-label">Session date</label>
                     <input
                       type="date"
-                      className="wk-input text-sm"
+                      className="ft-input"
                       value={workoutDate}
                       max={dayjs().format('YYYY-MM-DD')}
                       onChange={(e) => setWorkoutDate(e.target.value)}
                     />
-                    <p className="text-xs text-[var(--wk-muted)] mt-1">
-                      Log for a past day if you forgot to track yesterday
-                    </p>
                   </div>
-                  <p>Duration: <strong>{formatDuration(elapsed)}</strong></p>
-                  <p>Total Sets: <strong>{countCompletedSets(activeWorkout.exercises)}</strong></p>
-                  <p>Total Volume: <strong>{formatWeight(calcWorkoutVolume(activeWorkout.exercises), profile.prefs.unit)}</strong></p>
-                  <p>Exercises Completed: <strong>{completedExercises}</strong></p>
-                  <p>PRs Broken: <strong>{prsBroken.length}</strong></p>
-                </div>
-                <div className="flex gap-3">
-                  <button type="button" className="wk-btn-secondary flex-1" onClick={() => setShowSummary(false)}>
-                    Continue
-                  </button>
-                  <button type="button" className="wk-btn-primary flex-1" onClick={confirmFinish}>
-                    Save & View Progress
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
-          {showCancelDialog && (
-            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-              <div className="wk-card p-6 max-w-sm w-full space-y-4">
-                <div className="flex items-center gap-3 text-[var(--wk-danger)]">
-                  <AlertTriangle className="h-6 w-6" />
-                  <h2 className="wk-heading text-lg font-bold">Discard Workout?</h2>
-                </div>
-                <p className="text-sm text-[var(--wk-muted)]">
-                  This will stop your current session and delete all progress made so far. This action cannot be undone.
-                </p>
-                <div className="flex gap-3">
-                  <button
-                    type="button"
-                    className="wk-btn-secondary flex-1"
-                    onClick={() => setShowCancelDialog(false)}
-                  >
-                    Keep Training
-                  </button>
-                  <button
-                    type="button"
-                    className="wk-btn-danger flex-1"
-                    onClick={discardWorkout}
-                  >
-                    Discard
-                  </button>
-                </div>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button type="button" className="ft-btn ft-btn--secondary flex-1" onClick={() => setShowSummary(false)}>
+                      Back
+                    </button>
+                    <button type="button" className="ft-btn ft-btn--primary flex-1" onClick={confirmFinish}>
+                      Save Workout
+                    </button>
+                  </div>
+                </motion.div>
               </div>
-            </div>
-          )}
+            )}
+
+            {showCancelDialog && (
+              <div className="ft-overlay" style={{ zIndex: 70 }}>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="ft-modal space-y-6"
+                >
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 mx-auto mb-4">
+                      <AlertTriangle className="h-6 w-6" />
+                    </div>
+                    <h2 className="ft-title">Discard workout?</h2>
+                    <p className="ft-subtitle mt-2">All logged sets will be lost. This cannot be undone.</p>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <button type="button" className="ft-btn ft-btn--secondary ft-btn--block" onClick={() => setShowCancelDialog(false)}>
+                      Keep Training
+                    </button>
+                    <button type="button" className="ft-btn ft-btn--danger ft-btn--block" onClick={discardWorkout}>
+                      Discard
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
 
           <AnimatePresence>
             {showInfoModal && (
@@ -665,13 +640,13 @@ export default function WorkoutPage() {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   onClick={() => setShowInfoModal(null)}
-                  className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+                  className="absolute inset-0 bg-black/90 backdrop-blur-sm"
                 />
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                  className="wk-card w-full max-w-lg relative z-10 overflow-hidden bg-[var(--wk-surface)] shadow-2xl"
+                  className="ft-card w-full max-w-lg relative z-10 overflow-hidden"
                 >
                   <div className="relative aspect-video w-full bg-slate-900 overflow-hidden">
                     <img
@@ -679,10 +654,10 @@ export default function WorkoutPage() {
                       alt={showInfoModal.name}
                       className="w-full h-full object-cover opacity-60"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-[var(--wk-surface)] to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-card to-transparent" />
                     
                     <div className="absolute top-4 right-4 flex gap-2">
-                      <label className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors cursor-pointer">
+                      <label className="p-3 bg-black/50 hover:bg-black/70 rounded-2xl text-white transition-colors cursor-pointer active:scale-90">
                         <Camera className="h-5 w-5" />
                         <input
                           type="file"
@@ -696,48 +671,48 @@ export default function WorkoutPage() {
                       </label>
                       <button
                         onClick={() => setShowInfoModal(null)}
-                        className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+                        className="p-3 bg-black/50 hover:bg-black/70 rounded-2xl text-white transition-colors active:scale-90"
                       >
                         <X className="h-5 w-5" />
                       </button>
                     </div>
 
-                    <div className="absolute bottom-4 left-6 text-left">
-                      <h2 className="wk-heading text-2xl font-bold text-white mb-1">{showInfoModal.name}</h2>
+                    <div className="absolute bottom-6 left-8 text-left">
+                      <h2 className="ft-title text-3xl font-black text-white mb-2">{showInfoModal.name}</h2>
                       <div className="flex gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-[var(--wk-accent)] text-white">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-xl bg-primary text-white shadow-lg">
                           {showInfoModal.difficulty}
                         </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-white/20 text-white">
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-xl bg-white/20 text-white backdrop-blur-sm">
                           {showInfoModal.equipment}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto no-scrollbar text-left">
+                  <div className="p-8 space-y-8 max-h-[60vh] overflow-y-auto no-scrollbar text-left">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="p-3 rounded-xl bg-[var(--wk-bg)] border border-[var(--wk-border)]">
-                        <p className="text-[10px] font-bold text-[var(--wk-muted)] uppercase mb-1 text-left">Target Muscle</p>
-                        <p className="font-semibold text-left">{showInfoModal.muscle}</p>
+                      <div className="p-4 rounded-2xl bg-muted/30 border border-border">
+                        <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Target Muscle</p>
+                        <p className="font-black text-lg">{showInfoModal.muscle}</p>
                       </div>
                       {showInfoModal.secondary && (
-                        <div className="p-3 rounded-xl bg-[var(--wk-bg)] border border-[var(--wk-border)]">
-                          <p className="text-[10px] font-bold text-[var(--wk-muted)] uppercase mb-1 text-left">Secondary</p>
-                          <p className="font-semibold text-left">{showInfoModal.secondary}</p>
+                        <div className="p-4 rounded-2xl bg-muted/30 border border-border">
+                          <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Secondary</p>
+                          <p className="font-black text-lg">{showInfoModal.secondary}</p>
                         </div>
                       )}
                     </div>
 
-                    <div className="space-y-3">
-                      <h3 className="wk-heading font-bold flex items-center gap-2">
-                        <Info className="h-4 w-4 text-[var(--wk-accent)]" />
-                        How to Perform
+                    <div className="space-y-4">
+                      <h3 className="ft-title font-black text-xl flex items-center gap-3">
+                        <Zap className="h-5 w-5 text-primary" />
+                        Execution Intel
                       </h3>
-                      <ul className="space-y-3">
+                      <ul className="space-y-4">
                         {showInfoModal.tips.map((tip, i) => (
-                          <li key={i} className="flex gap-3 text-sm text-[var(--wk-muted)] leading-relaxed text-left">
-                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[var(--wk-accent)]/10 text-[var(--wk-accent)] flex items-center justify-center text-[10px] font-bold">
+                          <li key={i} className="flex gap-4 text-sm font-medium text-muted-foreground leading-relaxed">
+                            <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black">
                               {i + 1}
                             </span>
                             {tip}
@@ -748,9 +723,9 @@ export default function WorkoutPage() {
 
                     <button
                       onClick={() => setShowInfoModal(null)}
-                      className="w-full wk-btn-primary py-3"
+                      className="w-full ft-btn ft-btn--primary py-4 text-sm tracking-[0.2em]"
                     >
-                      Got it, thanks!
+                      Understood
                     </button>
                   </div>
                 </motion.div>
@@ -765,77 +740,93 @@ export default function WorkoutPage() {
   // Step 1: Split Selection
   return (
     <PageTransition>
-      <div className="space-y-10">
-        <header className="space-y-2">
-          <h1 className="text-3xl md:text-4xl font-black tracking-tighter text-slate-900 dark:text-white">
-            {getGreeting()}, {profile.name.split(' ')[0]}! 👋
-          </h1>
-          <p className="text-muted-foreground font-bold uppercase text-[10px] tracking-[0.2em]">
-            Deployment Phase: Select Your Training Protocol
+      <div className="space-y-6">
+        <header>
+          <h1 className="ft-title-lg">{getGreeting()}, {profile.name.split(' ')[0]}</h1>
+          <p className="ft-subtitle mt-1">
+            {todaySplit !== 'rest'
+              ? `${getTodayDayKey()} — scheduled: ${SPLIT_NAMES[todaySplit]}`
+              : `${getTodayDayKey()} — rest day on your plan`}
           </p>
         </header>
 
-        {showOvertraining && selectedSplit && (
-          <motion.div 
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            className="flex items-center gap-4 p-5 rounded-[24px] bg-red-500/10 border border-red-500/20 shadow-lg shadow-red-500/5"
-          >
-            <div className="w-10 h-10 rounded-xl bg-red-500/20 flex items-center justify-center text-red-500">
-               <AlertTriangle className="h-5 w-5" />
+        {todaySplit !== 'rest' && (
+          <div className="ft-today-banner">
+            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shrink-0">
+              <Target className="h-5 w-5" />
             </div>
-            <p className="text-sm font-bold text-red-600 dark:text-red-400">
-              System Alert: You trained <strong>{SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit)?.name}</strong> recently. 
-              Recovery protocol is recommended to avoid fatigue.
-            </p>
-          </motion.div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">Today&apos;s workout</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                <span className="font-medium text-primary">{SPLIT_NAMES[todaySplit]}</span> is highlighted below — tap Start when you&apos;re ready.
+              </p>
+            </div>
+          </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        {todaySplit === 'rest' && (
+          <div className="ft-card ft-card-padded flex items-start gap-3 bg-muted/30">
+            <Dumbbell className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold">Rest day</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Your weekly plan has no workout today. You can still pick any split below if you want to train.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {showOvertraining && selectedSplit && (
+          <div className="ft-card ft-card-padded flex items-start gap-3 border-amber-500/30 bg-amber-500/5">
+            <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">Recovery notice</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                You trained <strong>{SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit)?.name}</strong> yesterday. Consider rest or a different split.
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="ft-split-grid">
           {SPLIT_DEFINITIONS.map((split) => {
             const last = getLastTrainedDate(workouts, split.id);
             const selected = selectedSplit === split.id;
+            const isTodayPlan = todaySplit === split.id;
             return (
               <button
                 key={split.id}
                 type="button"
                 onClick={() => setSelectedSplit(split.id)}
                 className={cn(
-                  "wk-card p-6 text-left transition-all duration-500 relative overflow-hidden group",
-                  selected 
-                    ? "border-primary ring-4 ring-primary/10 shadow-2xl shadow-primary/10 -translate-y-1" 
-                    : "hover:border-primary/30"
+                  'ft-split-card',
+                  selected && 'ft-split-card--selected',
+                  isTodayPlan && 'ft-split-card--today'
                 )}
               >
-                <div className="absolute top-0 right-0 p-8 opacity-[0.03] group-hover:opacity-[0.08] transition-all duration-700 group-hover:scale-150 group-hover:rotate-12">
-                   <Dumbbell className="h-32 w-32" />
+                <div className="flex items-start justify-between gap-2 mb-4">
+                  <span className="text-2xl">{SPLIT_ICONS[split.icon]}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isTodayPlan && (
+                      <span className="ft-badge ft-badge--primary">Today</span>
+                    )}
+                    {selected && (
+                      <span className="w-7 h-7 rounded-full bg-primary text-primary-foreground flex items-center justify-center">
+                        <Check className="h-4 w-4" />
+                      </span>
+                    )}
+                  </div>
                 </div>
-
-                <div className="flex items-center gap-4 mb-6 relative z-10">
-                   <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-inner transition-all duration-500", selected ? "bg-primary text-white" : "bg-primary/5 text-primary group-hover:bg-primary/10")}>
-                      {SPLIT_ICONS[split.icon]}
-                   </div>
-                   <div>
-                      <h3 className="text-lg font-black tracking-tight text-slate-900 dark:text-white leading-none mb-1">{split.name}</h3>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-primary opacity-80">Training Protocol</p>
-                   </div>
+                <h3 className="text-lg font-semibold mb-1">{split.name}</h3>
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {split.muscles.map((m) => (
+                    <span key={m} className="text-xs px-2 py-0.5 rounded-md bg-muted text-muted-foreground">{m}</span>
+                  ))}
                 </div>
-
-                <div className="space-y-4 relative z-10">
-                   <div className="flex flex-wrap gap-2">
-                     {split.muscles.map(m => (
-                       <span key={m} className="text-[9px] font-black uppercase tracking-tighter px-2.5 py-1 rounded-lg bg-slate-500/5 text-muted-foreground border border-white/5">
-                         {m}
-                       </span>
-                     ))}
-                   </div>
-                   <div className="pt-4 border-t border-white/5 flex items-center justify-between">
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                        Last Active: <span className={cn("text-slate-900 dark:text-white ml-1", !last && "opacity-30")}>{last ? dayjs(last).format('MMM D') : 'No Record'}</span>
-                      </p>
-                      {selected && <CheckCircle2 className="h-4 w-4 text-primary animate-in zoom-in duration-300" />}
-                   </div>
-                </div>
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Timer className="h-3.5 w-3.5" />
+                  Last: {last ? dayjs(last).format('MMM D') : 'Never'}
+                </p>
               </button>
             );
           })}
@@ -845,11 +836,26 @@ export default function WorkoutPage() {
           type="button"
           disabled={!selectedSplit}
           onClick={beginWorkout}
-          className="wk-btn-primary w-full py-5 text-base disabled:opacity-40 disabled:grayscale transition-all duration-500 shadow-2xl shadow-primary/20"
+          className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg"
         >
-          Initialize Training Protocol
+          {selectedSplit === todaySplit && todaySplit !== 'rest'
+            ? `Start ${SPLIT_NAMES[todaySplit]}`
+            : 'Start Workout'}
+          <ArrowRight className="h-4 w-4" />
         </button>
       </div>
     </PageTransition>
+  );
+}
+
+function SummaryMetric({ label, value, icon: Icon }: { label: string; value: string; icon: React.ComponentType<{ className?: string }> }) {
+  return (
+    <div className="ft-metric text-center !p-4">
+      <div className="ft-metric-icon mx-auto !mb-2">
+        <Icon className="h-4 w-4" />
+      </div>
+      <p className="ft-metric-label">{label}</p>
+      <p className="ft-metric-value text-base">{value}</p>
+    </div>
   );
 }

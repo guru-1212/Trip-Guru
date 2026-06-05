@@ -7,7 +7,7 @@ import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { DAY_KEYS, SPLIT_DEFINITIONS } from '@/workout/constants';
 import { getFavouriteSplit, getFavouriteExercise } from '@/workout/analytics';
-import { formatWeight, formatDuration } from '@/workout/utils';
+import { formatWeight, formatDuration, countScheduledWorkoutDays } from '@/workout/utils';
 import type { DayKey, FitnessGoal, SplitId, ThemePref } from '@/workout/types';
 
 export default function ProfilePage() {
@@ -16,6 +16,7 @@ export default function ProfilePage() {
     workouts,
     hydrated,
     updateProfile,
+    updateWeeklyGoals,
     exportData,
     importData,
     clearHistory,
@@ -35,6 +36,7 @@ export default function ProfilePage() {
 
   const saveProfile = () => {
     updateProfile(form);
+    updateWeeklyGoals({ workoutsPerWeek: countScheduledWorkoutDays(form) });
     setEditing(false);
   };
 
@@ -50,17 +52,17 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   };
 
-  if (!hydrated) return <div className="text-[var(--wk-muted)]">Loading...</div>;
+  if (!hydrated) return <div className="text-muted-foreground">Loading...</div>;
 
   return (
     <PageTransition>
       <div className="space-y-8">
         <div className="flex items-center justify-between">
-          <h1 className="wk-heading text-2xl font-bold">Profile</h1>
+          <h1 className="ft-title text-2xl font-bold">Profile</h1>
           <button
             type="button"
             onClick={() => { if (editing) saveProfile(); else { setForm(profile); setEditing(true); } }}
-            className="wk-btn-secondary flex items-center gap-2 text-sm"
+            className="ft-btn ft-btn--secondary flex items-center gap-2 text-sm"
           >
             <Pencil className="h-4 w-4" />
             {editing ? 'Save' : 'Edit'}
@@ -68,18 +70,18 @@ export default function ProfilePage() {
         </div>
 
         {/* Personal Info */}
-        <section className="wk-card p-6">
-          <h2 className="wk-heading font-semibold mb-4">Personal Info</h2>
+        <section className="ft-card ft-card-padded">
+          <h2 className="ft-title font-semibold mb-4">Personal Info</h2>
           <div className="flex flex-wrap items-start gap-6">
             <div className="relative">
-              <div className="w-20 h-20 rounded-full overflow-hidden bg-[var(--wk-surface)] border-2 border-[var(--wk-border)]">
+              <div className="w-20 h-20 rounded-full overflow-hidden bg-muted/30 border-2 border-border">
                 {form.avatar ? (
                   <img src={form.avatar} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-2xl">👤</div>
                 )}
               </div>
-              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-[var(--wk-accent)] flex items-center justify-center cursor-pointer">
+              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center cursor-pointer">
                 <Upload className="h-3.5 w-3.5 text-white" />
                 <input type="file" accept="image/*" className="hidden" onChange={handleAvatar} />
               </label>
@@ -91,10 +93,10 @@ export default function ProfilePage() {
               <Field label="Height (cm)" value={String(form.height)} editing={editing} type="number" onChange={(v) => setForm({ ...form, height: parseFloat(v) || 0 })} />
               <Field label="Weight (kg)" value={String(form.weight)} editing={editing} type="number" onChange={(v) => setForm({ ...form, weight: parseFloat(v) || 0 })} />
               <div>
-                <label className="text-xs text-[var(--wk-muted)]">Fitness Goal</label>
+                <label className="text-xs text-muted-foreground">Fitness Goal</label>
                 {editing ? (
                   <select
-                    className="wk-input mt-1"
+                    className="ft-input mt-1"
                     value={form.goal}
                     onChange={(e) => setForm({ ...form, goal: e.target.value as FitnessGoal })}
                   >
@@ -111,15 +113,18 @@ export default function ProfilePage() {
         </section>
 
         {/* Weekly Split */}
-        <section className="wk-card p-6">
-          <h2 className="wk-heading font-semibold mb-4">Weekly Split Schedule</h2>
+        <section className="ft-card ft-card-padded">
+          <h2 className="ft-title font-semibold mb-1">Weekly Split Schedule</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            Training days here set your dashboard weekly goal ({countScheduledWorkoutDays(editing ? form : profile)} sessions/week).
+          </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {DAY_KEYS.map((day) => (
-              <div key={day} className="flex items-center justify-between p-3 rounded-lg bg-[var(--wk-surface)] border border-[var(--wk-border)]">
+              <div key={day} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
                 <span className="font-medium">{day}</span>
                 {editing ? (
                   <select
-                    className="wk-input w-auto text-sm py-1"
+                    className="ft-input w-auto text-sm py-1"
                     value={form.weekSchedule[day]}
                     onChange={(e) =>
                       setForm({
@@ -134,7 +139,7 @@ export default function ProfilePage() {
                     <option value="rest">Rest</option>
                   </select>
                 ) : (
-                  <span className="text-sm text-[var(--wk-muted)]">
+                  <span className="text-sm text-muted-foreground">
                     {form.weekSchedule[day] === 'rest'
                       ? 'Rest'
                       : SPLIT_DEFINITIONS.find((s) => s.id === form.weekSchedule[day])?.name}
@@ -146,8 +151,8 @@ export default function ProfilePage() {
         </section>
 
         {/* Preferences */}
-        <section className="wk-card p-6">
-          <h2 className="wk-heading font-semibold mb-4">App Preferences</h2>
+        <section className="ft-card ft-card-padded">
+          <h2 className="ft-title font-semibold mb-4">App Preferences</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <PrefSelect
               label="Default Rest Timer"
@@ -189,16 +194,16 @@ export default function ProfilePage() {
         </section>
 
         {/* Data Management */}
-        <section className="wk-card p-6">
-          <h2 className="wk-heading font-semibold mb-4">Data Management</h2>
-          <p className="text-sm text-[var(--wk-muted)] mb-4">
+        <section className="ft-card ft-card-padded">
+          <h2 className="ft-title font-semibold mb-4">Data Management</h2>
+          <p className="text-sm text-muted-foreground mb-4">
             All FitTrack data syncs to Firebase in real time. Sign in on any device with the same account to access your workouts.
           </p>
           <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={exportData} className="wk-btn-secondary flex items-center gap-2 text-sm">
+            <button type="button" onClick={exportData} className="ft-btn ft-btn--secondary flex items-center gap-2 text-sm">
               <Download className="h-4 w-4" /> Export JSON
             </button>
-            <button type="button" onClick={() => fileRef.current?.click()} className="wk-btn-secondary flex items-center gap-2 text-sm">
+            <button type="button" onClick={() => fileRef.current?.click()} className="ft-btn ft-btn--secondary flex items-center gap-2 text-sm">
               <Upload className="h-4 w-4" /> Import JSON
             </button>
             <input
@@ -214,18 +219,18 @@ export default function ProfilePage() {
                 reader.readAsText(file);
               }}
             />
-            <button type="button" onClick={() => setConfirmClear('history')} className="wk-btn-secondary flex items-center gap-2 text-sm text-[var(--wk-danger)]">
+            <button type="button" onClick={() => setConfirmClear('history')} className="ft-btn ft-btn--secondary flex items-center gap-2 text-sm text-red-500">
               <Trash2 className="h-4 w-4" /> Clear History
             </button>
-            <button type="button" onClick={() => setConfirmClear('prs')} className="wk-btn-secondary flex items-center gap-2 text-sm text-[var(--wk-danger)]">
+            <button type="button" onClick={() => setConfirmClear('prs')} className="ft-btn ft-btn--secondary flex items-center gap-2 text-sm text-red-500">
               <Trash2 className="h-4 w-4" /> Clear PRs
             </button>
           </div>
         </section>
 
         {/* App Stats */}
-        <section className="wk-card p-6">
-          <h2 className="wk-heading font-semibold mb-4">App Stats</h2>
+        <section className="ft-card ft-card-padded">
+          <h2 className="ft-title font-semibold mb-4">App Stats</h2>
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
             <Stat label="Total Workouts" value={String(workouts.length)} />
             <Stat label="Total Volume" value={formatWeight(totalVolume, profile.prefs.unit)} />
@@ -238,21 +243,21 @@ export default function ProfilePage() {
 
         {confirmClear && (
           <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
-            <div className="wk-card p-6 max-w-sm w-full space-y-4">
-              <div className="flex items-center gap-3 text-[var(--wk-danger)]">
+            <div className="ft-card ft-card-padded max-w-sm w-full space-y-4">
+              <div className="flex items-center gap-3 text-red-500">
                 <AlertTriangle className="h-5 w-5" />
                 <h3 className="font-semibold">Confirm Delete</h3>
               </div>
-              <p className="text-sm text-[var(--wk-muted)]">
+              <p className="text-sm text-muted-foreground">
                 {confirmClear === 'history'
                   ? 'This will permanently delete all workout history. This cannot be undone.'
                   : 'This will permanently delete all personal records. This cannot be undone.'}
               </p>
               <div className="flex gap-3">
-                <button type="button" className="wk-btn-secondary flex-1" onClick={() => setConfirmClear(null)}>Cancel</button>
+                <button type="button" className="ft-btn ft-btn--secondary flex-1" onClick={() => setConfirmClear(null)}>Cancel</button>
                 <button
                   type="button"
-                  className="wk-btn-primary flex-1 !bg-[var(--wk-danger)]"
+                  className="ft-btn ft-btn--danger flex-1"
                   onClick={() => {
                     if (confirmClear === 'history') clearHistory();
                     else clearAllPRs();
@@ -285,9 +290,9 @@ function Field({
 }) {
   return (
     <div>
-      <label className="text-xs text-[var(--wk-muted)]">{label}</label>
+      <label className="text-xs text-muted-foreground">{label}</label>
       {editing ? (
-        <input className="wk-input mt-1" type={type} value={value} onChange={(e) => onChange(e.target.value)} />
+        <input className="ft-input mt-1" type={type} value={value} onChange={(e) => onChange(e.target.value)} />
       ) : (
         <p className="mt-1 font-medium">{value}</p>
       )}
@@ -312,9 +317,9 @@ function PrefSelect({
 }) {
   return (
     <div>
-      <label className="text-xs text-[var(--wk-muted)]">{label}</label>
+      <label className="text-xs text-muted-foreground">{label}</label>
       {editing ? (
-        <select className="wk-input mt-1" value={value} onChange={(e) => onChange(e.target.value)}>
+        <select className="ft-input mt-1" value={value} onChange={(e) => onChange(e.target.value)}>
           {options.map((o) => (
             <option key={o} value={o}>{o}{suffix && o !== 'On' && o !== 'Off' ? suffix : ''}</option>
           ))}
@@ -328,8 +333,8 @@ function PrefSelect({
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="p-3 rounded-lg bg-[var(--wk-surface)]">
-      <p className="text-xs text-[var(--wk-muted)]">{label}</p>
+    <div className="p-3 rounded-lg bg-muted/30">
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className="font-semibold mt-1 truncate">{value}</p>
     </div>
   );

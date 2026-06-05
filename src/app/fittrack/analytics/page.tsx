@@ -59,14 +59,14 @@ export default function AnalyticsPage() {
     return days;
   }, [workouts]);
 
-  if (!hydrated) return <div className="text-[var(--wk-muted)]">Loading...</div>;
+  if (!hydrated) return <div className="text-muted-foreground">Loading...</div>;
 
   return (
     <PageTransition>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <h1 className="wk-heading text-2xl font-bold">Analytics</h1>
-          <select className="wk-input w-auto text-sm" value={range} onChange={(e) => setRange(e.target.value as TimeRange)}>
+          <h1 className="ft-title text-2xl font-bold">Analytics</h1>
+          <select className="ft-input w-auto text-sm" value={range} onChange={(e) => setRange(e.target.value as TimeRange)}>
             <option value="week">Week</option>
             <option value="month">Month</option>
             <option value="3months">3 Months</option>
@@ -84,8 +84,8 @@ export default function AnalyticsPage() {
 
         {/* Volume Analysis */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="wk-card p-4">
-            <h3 className="wk-heading font-semibold mb-4">Weekly Volume by Muscle</h3>
+          <div className="ft-card ft-card-padded">
+            <h3 className="ft-title font-semibold mb-4">Weekly Volume by Muscle</h3>
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={stacked.data}>
                 <XAxis dataKey="week" tick={{ fill: '#888', fontSize: 10 }} />
@@ -97,8 +97,8 @@ export default function AnalyticsPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <div className="wk-card p-4">
-            <h3 className="wk-heading font-semibold mb-4">Volume Split</h3>
+          <div className="ft-card ft-card-padded">
+            <h3 className="ft-title font-semibold mb-4">Volume Split</h3>
             {donut.length > 0 ? (
               <ResponsiveContainer width="100%" height={240}>
                 <PieChart>
@@ -111,15 +111,15 @@ export default function AnalyticsPage() {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-[var(--wk-muted)] text-sm text-center py-16">No volume data</p>
+              <p className="text-muted-foreground text-sm text-center py-16">No volume data</p>
             )}
           </div>
         </div>
 
         {/* Intensity */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="wk-card p-4">
-            <h3 className="wk-heading font-semibold mb-4">Avg Weight per Session</h3>
+          <div className="ft-card ft-card-padded">
+            <h3 className="ft-title font-semibold mb-4">Avg Weight per Session</h3>
             {avgWeight.length > 0 ? (
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={avgWeight}>
@@ -130,11 +130,11 @@ export default function AnalyticsPage() {
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <p className="text-[var(--wk-muted)] text-sm text-center py-12">No data</p>
+              <p className="text-muted-foreground text-sm text-center py-12">No data</p>
             )}
           </div>
-          <div className="wk-card p-4">
-            <h3 className="wk-heading font-semibold mb-4">Rep Range Distribution</h3>
+          <div className="ft-card ft-card-padded">
+            <h3 className="ft-title font-semibold mb-4">Rep Range Distribution</h3>
             <div className="space-y-3 mt-4">
               {repRanges.map((r) => {
                 const max = Math.max(...repRanges.map((x) => x.count), 1);
@@ -142,10 +142,10 @@ export default function AnalyticsPage() {
                   <div key={r.range}>
                     <div className="flex justify-between text-xs mb-1">
                       <span>{r.range} reps</span>
-                      <span className="text-[var(--wk-muted)]">{r.count} sets</span>
+                      <span className="text-muted-foreground">{r.count} sets</span>
                     </div>
                     <div className="h-3 bg-[#333] rounded-full overflow-hidden">
-                      <div className="h-full bg-[var(--wk-blue)] rounded-full" style={{ width: `${(r.count / max) * 100}%` }} />
+                      <div className="h-full bg-primary rounded-full" style={{ width: `${(r.count / max) * 100}%` }} />
                     </div>
                   </div>
                 );
@@ -155,8 +155,8 @@ export default function AnalyticsPage() {
         </div>
 
         {/* Rest & Recovery */}
-        <div className="wk-card p-4">
-          <h3 className="wk-heading font-semibold mb-4">Rest & Recovery</h3>
+        <div className="ft-card ft-card-padded">
+          <h3 className="ft-title font-semibold mb-4">Rest & Recovery</h3>
           <div className="flex flex-wrap gap-1 mb-4">
             {calendarDays.map((d) => (
               <div
@@ -170,27 +170,27 @@ export default function AnalyticsPage() {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
             {muscleGaps.filter((g) => g.avgDays > 0).map((g) => (
-              <div key={g.muscle} className="text-sm p-2 rounded bg-[var(--wk-surface)]">
-                <span className="text-[var(--wk-muted)]">{g.muscle}:</span> {g.avgDays}d avg between sessions
+              <div key={g.muscle} className="text-sm p-2 rounded bg-muted/30">
+                <span className="text-muted-foreground">{g.muscle}:</span> {g.avgDays}d avg between sessions
               </div>
             ))}
           </div>
           {overtraining.map((alert) => (
-            <div key={alert} className="flex items-center gap-3 p-3 rounded-lg bg-[rgba(163,45,45,0.15)] border border-[var(--wk-danger)]">
-              <AlertTriangle className="h-4 w-4 text-[var(--wk-danger)] shrink-0" />
+            <div key={alert} className="flex items-center gap-3 p-3 rounded-lg bg-[rgba(163,45,45,0.15)] border border-red-500">
+              <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
               <p className="text-sm">{alert}</p>
             </div>
           ))}
         </div>
 
         {/* Consistency Score */}
-        <div className="wk-card p-6 flex flex-col items-center">
-          <h3 className="wk-heading font-semibold mb-6">Consistency Score</h3>
+        <div className="ft-card ft-card-padded flex flex-col items-center">
+          <h3 className="ft-title font-semibold mb-6">Consistency Score</h3>
           <ConsistencyGauge score={consistency.score} />
           <div className="grid grid-cols-2 gap-4 mt-6 w-full max-w-md">
             {consistency.breakdown.map((b) => (
               <div key={b.label} className="text-center">
-                <p className="text-xs text-[var(--wk-muted)]">{b.label}</p>
+                <p className="text-xs text-muted-foreground">{b.label}</p>
                 <p className="font-bold">{b.value}/{b.max}</p>
               </div>
             ))}
@@ -205,10 +205,10 @@ function OverviewCard({ label, value, trend, invert }: { label: string; value: s
   const positive = invert ? trend < 0 : trend > 0;
   const neutral = trend === 0;
   return (
-    <div className="wk-card p-4">
-      <p className="text-xs text-[var(--wk-muted)]">{label}</p>
-      <p className="wk-heading text-xl font-bold mt-1">{value}</p>
-      <div className={`flex items-center gap-1 text-xs mt-1 ${positive ? 'text-[var(--wk-accent)]' : neutral ? 'text-[var(--wk-muted)]' : 'text-[var(--wk-danger)]'}`}>
+    <div className="ft-card ft-card-padded">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="ft-title text-xl font-bold mt-1">{value}</p>
+      <div className={`flex items-center gap-1 text-xs mt-1 ${positive ? 'text-primary' : neutral ? 'text-muted-foreground' : 'text-red-500'}`}>
         {positive ? <TrendingUp className="h-3 w-3" /> : neutral ? <Minus className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
         {trend > 0 ? '+' : ''}{typeof trend === 'number' && !Number.isInteger(trend) ? trend.toFixed(1) : trend} vs prev
       </div>

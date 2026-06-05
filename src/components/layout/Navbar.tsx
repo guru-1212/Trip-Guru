@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Moon, Sun, User, Menu, Search } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -12,8 +13,11 @@ import { WorkspaceModeSwitch } from './WorkspaceModeSwitch';
 
 export function Navbar() {
   const { user } = useAuth();
+  const pathname = usePathname();
   const [dark, setDark] = useState(false);
   const [open, setOpen] = useState(false);
+  const inFitTrack = pathname.startsWith('/fittrack');
+  const profileHref = inFitTrack ? '/fittrack/profile' : '/profile';
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
@@ -27,16 +31,15 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container mx-auto flex h-16 items-center justify-between px-3 sm:px-4 lg:px-8">
-        <div className="flex items-center gap-1 sm:gap-2">
-          <Link href="/dashboard" className="flex items-center gap-2 font-black text-lg sm:text-xl text-primary">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 bg-primary rounded-xl flex items-center justify-center text-white text-base sm:text-lg shadow-lg shadow-primary/20 transition-transform active:scale-95">T</div>
-            <span className="hidden xs:inline tracking-tighter">TripMate</span>
-          </Link>
-        </div>
+      <div className="container mx-auto flex h-14 sm:h-16 items-center justify-between gap-2 px-2 sm:px-4 lg:px-8">
+        <Link href="/dashboard" className="flex items-center gap-2 font-black text-lg sm:text-xl text-primary shrink-0">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 bg-primary rounded-xl flex items-center justify-center text-white text-sm sm:text-lg shadow-lg shadow-primary/20 transition-transform active:scale-95">T</div>
+          <span className="hidden md:inline tracking-tighter">TripMate</span>
+        </Link>
 
-        <div className="flex items-center gap-2 md:gap-6">
-          <WorkspaceModeSwitch className="hidden sm:flex" />
+        <WorkspaceModeSwitch className="flex-1 min-w-0 mx-1 sm:mx-2 max-w-[11rem] sm:max-w-none" />
+
+        <div className="flex items-center gap-1 sm:gap-2 md:gap-6 shrink-0">
           <div className="hidden md:flex relative items-center group">
             <Search className="absolute left-3 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <input 
@@ -51,11 +54,13 @@ export function Navbar() {
               {dark ? <Sun className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-500" /> : <Moon className="h-4 w-4 sm:h-5 sm:w-5 text-slate-700" />}
             </Button>
             
-            <Link href="/profile">
+            <Link href={profileHref}>
               <div className="flex items-center gap-2 sm:gap-3 pl-1 sm:pl-2 border-l border-border/50">
                 <div className="hidden sm:flex flex-col items-end">
                   <span className="text-xs font-bold leading-none">{user?.name?.split(' ')[0] || 'User'}</span>
-                  <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-1">Explorer</span>
+                  <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-1">
+                    {inFitTrack ? 'Gym' : 'Explorer'}
+                  </span>
                 </div>
                 <Avatar className="h-8 w-8 sm:h-9 sm:h-9 border-2 border-primary/10 transition-transform active:scale-90 shadow-sm">
                   <AvatarImage src={user?.photoURL} alt={user?.name} />

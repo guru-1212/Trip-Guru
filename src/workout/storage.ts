@@ -79,7 +79,7 @@ export function saveHabits(habits: Record<string, HabitDay>): void {
 
 export function loadWeeklyGoals(): WeeklyGoals {
   return read(STORAGE_KEYS.weeklyGoals, {
-    workoutsPerWeek: 4,
+    workoutsPerWeek: 5,
     volumeTarget: 50000,
     proteinGoal: 150,
     sleepGoal: 8,

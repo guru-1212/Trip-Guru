@@ -64,7 +64,7 @@ export function defaultStateDoc(): FitTrackStateDoc {
     prs: {},
     habits: {},
     weeklyGoals: {
-      workoutsPerWeek: 4,
+      workoutsPerWeek: 5,
       volumeTarget: 50000,
       proteinGoal: 150,
       sleepGoal: 8,

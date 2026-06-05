@@ -17,8 +17,6 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAppMode } from '@/hooks/useAppMode';
-import { WorkspaceModeSwitch } from './WorkspaceModeSwitch';
-
 const tripLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/trips/new', label: 'New Trip', icon: PlusCircle },
@@ -52,8 +50,6 @@ export function Sidebar({ mobile, onLinkClick }: SidebarProps) {
 
   const content = (
     <div className="flex flex-col h-full py-4 px-4 gap-6">
-      <WorkspaceModeSwitch className="w-full justify-center sm:hidden" />
-
       <div className="space-y-1">
         <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest px-3 mb-4">
           {isRoomMode ? 'Home' : 'Main Menu'}

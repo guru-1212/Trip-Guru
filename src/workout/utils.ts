@@ -109,6 +109,11 @@ export function getTodaysSplit(profile: UserProfile): SplitId {
   return profile.weekSchedule[dayKey];
 }
 
+/** Training days in the weekly split (non-rest days). */
+export function countScheduledWorkoutDays(profile: UserProfile): number {
+  return DAY_KEYS.filter((day) => profile.weekSchedule[day] !== 'rest').length;
+}
+
 export function getLastTrainedDate(workouts: WorkoutSession[], splitId: SplitId): string | null {
   const match = workouts
     .filter((w) => w.splitId === splitId)

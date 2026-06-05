@@ -153,17 +153,17 @@ export default function DashboardPage() {
       {/* Header */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <motion.div variants={item} className="space-y-1">
-          <h1 className="text-3xl md:text-4xl font-black tracking-tight text-slate-900 dark:text-white">
-            {getGreeting()}, {profile.name.split(' ')[0]}! 👋
+          <h1 className="ft-title-lg">
+            {getGreeting()}, {profile.name.split(' ')[0]}
           </h1>
-          <p className="text-muted-foreground text-base md:text-lg font-medium">
-            Your Training Hub is ready for action. Today is {getTodayDayKey()}.
+          <p className="ft-subtitle mt-1">
+            Today is {getTodayDayKey()}. Ready to train?
           </p>
         </motion.div>
         <motion.div variants={item} className="flex gap-3">
           <Link
             href="/fittrack/workout"
-            className="wk-btn-primary flex items-center gap-2"
+            className="ft-btn ft-btn--primary flex items-center gap-2"
           >
             <Dumbbell className="h-4 w-4" />
             <span>Start Session</span>
@@ -173,7 +173,7 @@ export default function DashboardPage() {
 
       {/* Daily Status Card */}
       <motion.div variants={item}>
-        <div className="glass rounded-[32px] p-6 md:p-8 border-primary/10 relative overflow-hidden group">
+        <div className="ft-card ft-card-padded border-primary/20 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
              <Zap className="h-32 w-32" />
           </div>
@@ -217,7 +217,9 @@ export default function DashboardPage() {
         <MetricCard 
           icon={Target} 
           label="Weekly Goal" 
-          value={`${metrics.weekDaysCount}/${weeklyGoals.workoutsPerWeek}`} 
+          value={`${metrics.weekDaysCount}/${weeklyGoals.workoutsPerWeek}`}
+          hint="Tap to edit"
+          href="/fittrack/checklist?tab=weekly"
           index={3}
         />
         <MetricCard icon={Timer} label="Total Sessions" value={String(metrics.weekCount)} index={4} />
@@ -225,7 +227,7 @@ export default function DashboardPage() {
 
       {/* Charts & Heatmap */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <motion.div variants={item} className="lg:col-span-2 wk-card p-6 md:p-8 overflow-hidden">
+        <motion.div variants={item} className="lg:col-span-2 ft-card ft-card-padded md:p-8 overflow-hidden">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-lg font-black tracking-tight">Performance Volume</h3>
             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
@@ -252,7 +254,7 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </motion.div>
 
-        <motion.div variants={item} className="wk-card p-6 md:p-8">
+        <motion.div variants={item} className="ft-card ft-card-padded md:p-8">
           <h3 className="text-lg font-black tracking-tight mb-8">Target Profile</h3>
           {muscleData.length > 0 ? (
             <ResponsiveContainer width="100%" height={260}>
@@ -294,7 +296,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
          {/* Calendar heatmap */}
-        <motion.div variants={item} className="wk-card p-6 md:p-8">
+        <motion.div variants={item} className="ft-card ft-card-padded md:p-8">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-lg font-black tracking-tight">Consistency</h3>
             <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{dayjs().format('MMMM')}</span>
@@ -317,7 +319,7 @@ export default function DashboardPage() {
         </motion.div>
 
         {/* Recent Activity */}
-        <motion.div variants={item} className="lg:col-span-2 wk-card p-6 md:p-8">
+        <motion.div variants={item} className="lg:col-span-2 ft-card ft-card-padded md:p-8">
           <h3 className="text-lg font-black tracking-tight mb-8">Activity Feed</h3>
           {recent.length === 0 ? (
             <div className="text-center py-12">
@@ -326,7 +328,7 @@ export default function DashboardPage() {
           ) : (
             <div className="space-y-4">
               {recent.map((w) => (
-                <div key={w.id} className="group relative glass-dark rounded-2xl border border-white/5 overflow-hidden transition-all duration-300 hover:border-primary/20">
+                <div key={w.id} className="group relative ft-card overflow-hidden transition-all hover:border-primary/30">
                   <button
                     type="button"
                     className="w-full p-5 flex items-center justify-between text-left"
@@ -362,7 +364,7 @@ export default function DashboardPage() {
                           <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground block mb-2 px-1">Update Session Date</label>
                           <input
                             type="date"
-                            className="wk-input text-xs font-bold bg-white/5 h-11"
+                            className="ft-input text-xs font-bold bg-white/5 h-11"
                             value={editingDate[w.id] ?? w.date}
                             max={dayjs().format('YYYY-MM-DD')}
                             onChange={(e) =>
@@ -372,7 +374,7 @@ export default function DashboardPage() {
                         </div>
                         <button
                           type="button"
-                          className="wk-btn-primary h-11 py-0 px-6 flex items-center justify-center rounded-xl"
+                          className="ft-btn ft-btn--primary h-11 py-0 px-6 flex items-center justify-center rounded-xl"
                           onClick={() => {
                             const newDate = editingDate[w.id] ?? w.date;
                             if (newDate !== w.date) updateWorkoutDate(w.id, newDate);
@@ -414,33 +416,36 @@ function MetricCard({
   icon: Icon,
   label,
   value,
-  index,
+  href,
+  hint,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: string;
-  index: number;
+  href?: string;
+  hint?: string;
+  index?: number;
 }) {
+  const inner = (
+    <>
+      <div className="ft-metric-icon">
+        <Icon className="h-5 w-5" />
+      </div>
+      <p className="ft-metric-label">{label}</p>
+      <p className="ft-metric-value">{value}</p>
+      {hint && <p className="text-[10px] text-primary font-medium mt-1">{hint}</p>}
+    </>
+  );
+
   return (
     <motion.div
       variants={{
         hidden: { opacity: 0, y: 20 },
-        show: { opacity: 1, y: 0 }
+        show: { opacity: 1, y: 0 },
       }}
-      className="wk-card p-6 relative overflow-hidden group hover:border-primary/50"
+      className={cn('ft-metric', href && 'ft-card-interactive cursor-pointer hover:border-primary/40')}
     >
-      <div className="absolute top-[-20%] right-[-10%] p-6 opacity-[0.03] group-hover:opacity-[0.08] transition-all duration-500 group-hover:scale-125 group-hover:rotate-12">
-        <Icon className="h-32 w-32" />
-      </div>
-      <div className="flex flex-col gap-4 relative z-10">
-        <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary transition-transform group-hover:scale-110">
-           <Icon className="h-5 w-5" />
-        </div>
-        <div>
-           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground mb-1">{label}</p>
-           <p className="text-2xl font-black tracking-tight text-slate-900 dark:text-white tabular-nums">{value}</p>
-        </div>
-      </div>
+      {href ? <Link href={href} className="block">{inner}</Link> : inner}
     </motion.div>
   );
 }
