@@ -27,7 +27,7 @@ export function WorkoutSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden lg:flex w-80 flex-col border-r border-border/40 min-h-screen bg-background fixed left-0 top-0 z-40">
+    <aside className="hidden lg:flex w-80 flex-col border-r border-border/40 min-h-[calc(100vh-4rem)] bg-background">
       <div className="flex flex-col h-full py-6 px-4 gap-6">
         <div className="px-3 mb-2">
           <h1 className="wk-heading text-2xl font-black text-primary tracking-tighter">FitTrack</h1>
