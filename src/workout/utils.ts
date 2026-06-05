@@ -390,6 +390,23 @@ export function defaultExerciseImageUrl(exerciseId: string): string {
   return `https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=800&exercise=${exerciseId}`;
 }
 
+export function resolveExerciseImageUrl(
+  exerciseId: string,
+  variations: string[],
+  getImage: (exerciseId: string, variation: string) => string | undefined,
+  preferredVariation?: string
+): string {
+  if (preferredVariation) {
+    const preferred = getImage(exerciseId, preferredVariation);
+    if (preferred) return preferred;
+  }
+  for (const variation of variations) {
+    const image = getImage(exerciseId, variation);
+    if (image) return image;
+  }
+  return defaultExerciseImageUrl(exerciseId);
+}
+
 export function isRemoteImageUrl(src: string): boolean {
   return src.startsWith('http://') || src.startsWith('https://');
 }

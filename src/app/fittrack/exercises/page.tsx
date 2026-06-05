@@ -9,7 +9,12 @@ import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { EXERCISE_LIBRARY } from '@/workout/exerciseLibrary';
 import { getExerciseSessionChart, getExerciseHistory } from '@/workout/analytics';
 import type { CustomExercise, ExerciseCategory, LibraryExercise, MuscleGroup } from '@/workout/types';
-import { getLastExerciseSession, formatWeight } from '@/workout/utils';
+import {
+  getLastExerciseSession,
+  formatWeight,
+  defaultExerciseImageUrl,
+  resolveExerciseImageUrl,
+} from '@/workout/utils';
 
 type FilterType = ExerciseCategory | 'All';
 
@@ -36,6 +41,8 @@ export default function ExercisesPage() {
     addCustomExercise,
     updateCustomExercise,
     deleteCustomExercise,
+    getVariationImage,
+    getVariationsForExercise,
   } = useWorkoutStore();
 
   const [search, setSearch] = useState('');
@@ -121,13 +128,26 @@ export default function ExercisesPage() {
           {filtered.map((ex) => {
             const last = getLastExerciseSession(workouts, ex.id);
             const pr = prs[ex.id];
+            const variations = getVariationsForExercise(ex.id, ex.variations);
+            const imageUrl = resolveExerciseImageUrl(ex.id, variations, getVariationImage);
             return (
               <button
                 key={ex.id}
                 type="button"
                 onClick={() => setSelected(ex)}
-                className="ft-card ft-card-padded text-left hover:border-primary transition-colors"
+                className="ft-card text-left hover:border-primary transition-colors overflow-hidden p-0"
               >
+                <div className="aspect-[16/10] w-full overflow-hidden bg-muted/20">
+                  <img
+                    src={imageUrl}
+                    alt={ex.name}
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = defaultExerciseImageUrl(ex.id);
+                    }}
+                  />
+                </div>
+                <div className="ft-card-padded pt-3">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="font-semibold">{ex.name}</h3>
                   {isCustom(ex.id) && (
@@ -170,6 +190,7 @@ export default function ExercisesPage() {
                     PR: {formatWeight(pr.weight, profile.prefs.unit)} × {pr.reps}
                   </p>
                 )}
+                </div>
               </button>
             );
           })}
@@ -181,6 +202,8 @@ export default function ExercisesPage() {
             workouts={workouts}
             prs={prs}
             unit={profile.prefs.unit}
+            getVariationImage={getVariationImage}
+            getVariationsForExercise={getVariationsForExercise}
             onClose={() => setSelected(null)}
           />
         )}
@@ -207,36 +230,91 @@ function ExerciseDetailModal({
   workouts,
   prs,
   unit,
+  getVariationImage,
+  getVariationsForExercise,
   onClose,
 }: {
   exercise: LibraryExercise | CustomExercise;
   workouts: ReturnType<typeof useWorkoutStore>['workouts'];
   prs: ReturnType<typeof useWorkoutStore>['prs'];
   unit: 'kg' | 'lbs';
+  getVariationImage: ReturnType<typeof useWorkoutStore>['getVariationImage'];
+  getVariationsForExercise: ReturnType<typeof useWorkoutStore>['getVariationsForExercise'];
   onClose: () => void;
 }) {
+  const variations = getVariationsForExercise(exercise.id, exercise.variations);
+  const [previewVariation, setPreviewVariation] = useState(
+    variations.find((v) => getVariationImage(exercise.id, v)) ?? variations[0] ?? 'Standard'
+  );
+  const heroImage = resolveExerciseImageUrl(
+    exercise.id,
+    variations,
+    getVariationImage,
+    previewVariation
+  );
   const chartData = getExerciseSessionChart(workouts, exercise.id, 6);
   const pr = prs[exercise.id];
   const tips = 'tips' in exercise ? exercise.tips : (exercise.notes ? [exercise.notes] : []);
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="ft-card ft-card-padded max-w-lg w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h2 className="ft-title text-xl font-bold">{exercise.name}</h2>
-            <span className="ft-badge ft-badge--primary mt-1">{exercise.muscle}</span>
+      <div className="ft-card max-w-lg w-full max-h-[90vh] overflow-y-auto p-0" onClick={(e) => e.stopPropagation()}>
+        <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted/20">
+          <img
+            src={heroImage}
+            alt={`${exercise.name} — ${previewVariation}`}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = defaultExerciseImageUrl(exercise.id);
+            }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent pointer-events-none" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="absolute top-3 right-3 p-2 rounded-xl bg-black/50 hover:bg-black/70 text-white transition-colors"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
+            <h2 className="ft-title text-xl font-bold text-white">{exercise.name}</h2>
+            <p className="text-xs text-white/80 mt-0.5">{previewVariation}</p>
+            <span className="ft-badge ft-badge--primary mt-2">{exercise.muscle}</span>
           </div>
-          <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
 
-        <div className="space-y-4">
+        <div className="ft-card-padded space-y-4">
           <div>
             <h4 className="text-xs text-muted-foreground font-medium mb-2">Variations</h4>
-            <div className="flex flex-wrap gap-1">
-              {exercise.variations.map((v) => (
-                <span key={v} className="text-xs px-2 py-1 rounded bg-muted/30 border border-border">{v}</span>
-              ))}
+            <div className="flex flex-wrap gap-1.5">
+              {variations.map((v) => {
+                const thumb = getVariationImage(exercise.id, v);
+                const isActive = previewVariation === v;
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setPreviewVariation(v)}
+                    className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg border transition-colors ${
+                      isActive
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border bg-muted/30 text-foreground'
+                    }`}
+                  >
+                    {thumb && (
+                      <img
+                        src={thumb}
+                        alt={v}
+                        className="w-6 h-6 rounded object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    )}
+                    {v}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
