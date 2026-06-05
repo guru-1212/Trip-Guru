@@ -1,6 +1,6 @@
 import { PrimaryUseCase } from '@/types/user';
 
-export type AppMode = 'trip' | 'room';
+export type AppMode = 'trip' | 'room' | 'gym';
 
 const STORAGE_PREFIX = 'tripmate_app_mode_';
 
@@ -11,7 +11,7 @@ export function storageKey(uid: string): string {
 export function readStoredMode(uid: string): AppMode | null {
   if (typeof window === 'undefined') return null;
   const value = localStorage.getItem(storageKey(uid));
-  if (value === 'trip' || value === 'room') return value;
+  if (value === 'trip' || value === 'room' || value === 'gym') return value;
   return null;
 }
 
@@ -28,17 +28,13 @@ export function defaultModeForUseCase(
   return 'trip';
 }
 
-/** Show Trip ↔ Room switcher in the shell. */
+/** Show Trip ↔ Room ↔ GYM switcher in the shell. */
 export function canSwitchWorkspace(
   primaryUseCase?: PrimaryUseCase,
   options?: { hasTrips?: boolean; hasRooms?: boolean }
 ): boolean {
-  if (primaryUseCase === 'both') return true;
-  if (primaryUseCase === 'trips' || primaryUseCase === 'roommate') {
-    return false;
-  }
-  // Legacy accounts (no primaryUseCase): enable switch if they use both features
-  return Boolean(options?.hasTrips && options?.hasRooms);
+  // Always allow switching to GYM mode since it's a personal tool
+  return true;
 }
 
 export function resolveAppMode(
@@ -46,15 +42,15 @@ export function resolveAppMode(
   primaryUseCase?: PrimaryUseCase,
   firestoreMode?: AppMode
 ): AppMode {
-  if (primaryUseCase === 'trips') return 'trip';
-  if (primaryUseCase === 'roommate') return 'room';
-
-  if (firestoreMode === 'trip' || firestoreMode === 'room') {
+  if (firestoreMode === 'trip' || firestoreMode === 'room' || firestoreMode === 'gym') {
     return firestoreMode;
   }
 
   const stored = readStoredMode(uid);
   if (stored) return stored;
+
+  if (primaryUseCase === 'trips') return 'trip';
+  if (primaryUseCase === 'roommate') return 'room';
 
   return defaultModeForUseCase(primaryUseCase);
 }

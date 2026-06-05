@@ -22,14 +22,14 @@ import { WorkspaceModeSwitch } from './WorkspaceModeSwitch';
 const tripLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/trips/new', label: 'New Trip', icon: PlusCircle },
-  { href: '/gym', label: 'Gym Tracker', icon: Dumbbell },
+  { href: '/fittrack/dashboard', label: 'Gym Tracker', icon: Dumbbell },
   { href: '/profile', label: 'Profile', icon: User },
 ];
 
 const roomLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/rooms/new', label: 'New Room', icon: Home },
-  { href: '/gym', label: 'Gym Tracker', icon: Dumbbell },
+  { href: '/fittrack/dashboard', label: 'Gym Tracker', icon: Dumbbell },
   { href: '/profile', label: 'Profile', icon: User },
 ];
 

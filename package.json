@@ -37,6 +37,7 @@
     "react": "^18",
     "react-dom": "^18",
     "react-hook-form": "^7",
+    "react-hot-toast": "^2.6.0",
     "react-redux": "^9",
     "recharts": "^2",
     "tailwind-merge": "^2",

@@ -2,7 +2,7 @@ import { Timestamp } from 'firebase/firestore';
 
 export type PrimaryUseCase = 'trips' | 'roommate' | 'both';
 
-export type AppMode = 'trip' | 'room';
+export type AppMode = 'trip' | 'room' | 'gym';
 
 export interface User {
   uid: string;

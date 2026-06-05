@@ -14,13 +14,13 @@ export function BottomNav() {
     ? [
         { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
         { href: '/rooms/new', label: 'Room', icon: Home },
-        { href: '/gym', label: 'Gym', icon: Dumbbell },
+        { href: '/fittrack/dashboard', label: 'Gym', icon: Dumbbell },
         { href: '/profile', label: 'Me', icon: User },
       ]
     : [
         { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
         { href: '/trips/new', label: 'Trip', icon: PlusCircle },
-        { href: '/gym', label: 'Gym', icon: Dumbbell },
+        { href: '/fittrack/dashboard', label: 'Gym', icon: Dumbbell },
         { href: '/profile', label: 'Me', icon: User },
       ];
 
