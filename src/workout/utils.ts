@@ -438,6 +438,15 @@ export function compressImageFile(file: File, maxWidth = 960, quality = 0.72): P
   });
 }
 
+export function dataUrlToBlob(dataUrl: string): Blob {
+  const [header, data] = dataUrl.split(',');
+  const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mime });
+}
+
 export function getDayIndex(date: string): number {
   return DAY_KEYS.indexOf(dayjs(date).format('ddd') as DayKey);
 }

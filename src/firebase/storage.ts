@@ -54,3 +54,18 @@ export async function uploadTripPlanImage(
   const safeKey = assetKey.replace(/[^a-zA-Z0-9/_-]/g, '_');
   return uploadFile(`trips/${tripId}/plan/${safeKey}.${ext}`, file);
 }
+
+function sanitizeStorageSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) || 'item';
+}
+
+export async function uploadFitTrackVariationImage(
+  uid: string,
+  exerciseId: string,
+  variation: string,
+  file: File | Blob
+): Promise<string> {
+  const safeExerciseId = sanitizeStorageSegment(exerciseId);
+  const safeVariation = sanitizeStorageSegment(variation);
+  return uploadFile(`users/${uid}/fittrack/variations/${safeExerciseId}/${safeVariation}.jpg`, file);
+}

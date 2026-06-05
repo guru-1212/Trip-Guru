@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFitTrackSync } from '@/hooks/useFitTrackSync';
 import * as fittrackDb from '@/firebase/fittrack.firestore';
+import { uploadFitTrackVariationImage } from '@/firebase/storage';
 import type {
   ActiveWorkoutState,
   BodyStat,
@@ -28,6 +29,8 @@ import {
   variationImageKey,
   cloudSafeVariationImages,
   isRemoteImageUrl,
+  compressImageFile,
+  dataUrlToBlob,
 } from './utils';
 import * as localStorage from './storage';
 import type { SplitId } from './types';
@@ -64,7 +67,8 @@ interface WorkoutContextValue {
   deleteChecklistItem: (id: string) => void;
   addVariation: (exerciseId: string, variation: string) => void;
   getVariationsForExercise: (exerciseId: string, baseVariations: string[]) => string[];
-  setVariationImage: (exerciseId: string, variation: string, dataUrl: string) => void;
+  setVariationImage: (exerciseId: string, variation: string, imageSrc: string) => void;
+  uploadVariationImageFromFile: (exerciseId: string, variation: string, file: File) => Promise<void>;
   removeVariationImage: (exerciseId: string, variation: string) => void;
   getVariationImage: (exerciseId: string, variation: string) => string | undefined;
   exportData: () => void;
@@ -353,7 +357,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setVariationImage = useCallback(
-    (exerciseId: string, variation: string, imageSrc: string) => {
+    (exerciseId: string, variation: string, imageSrc: string, successMessage?: string) => {
       const key = variationImageKey(exerciseId, variation);
       setVariationImages((prev) => {
         const next = { ...prev, [key]: imageSrc };
@@ -366,14 +370,53 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         }
         void syncVariationImagesToCloud(next);
         toast.success(
-          isRemoteImageUrl(imageSrc)
-            ? 'Image URL saved'
-            : 'Image saved on this device'
+          successMessage ??
+            (isRemoteImageUrl(imageSrc) ? 'Image saved and synced' : 'Image saved on this device')
         );
         return next;
       });
     },
     [syncVariationImagesToCloud]
+  );
+
+  const uploadVariationImageFromFile = useCallback(
+    async (exerciseId: string, variation: string, file: File) => {
+      const compressed = await compressImageFile(file);
+      const currentUid = uidRef.current;
+
+      if (!currentUid) {
+        setVariationImage(
+          exerciseId,
+          variation,
+          compressed,
+          'Image saved on this device — sign in to sync across devices'
+        );
+        return;
+      }
+
+      const toastId = toast.loading('Uploading image…');
+      try {
+        const blob = dataUrlToBlob(compressed);
+        const downloadUrl = await uploadFitTrackVariationImage(
+          currentUid,
+          exerciseId,
+          variation,
+          blob
+        );
+        toast.dismiss(toastId);
+        setVariationImage(exerciseId, variation, downloadUrl, 'Image uploaded and synced');
+      } catch (err) {
+        console.error('[FitTrack] variation image upload failed:', err);
+        toast.dismiss(toastId);
+        setVariationImage(
+          exerciseId,
+          variation,
+          compressed,
+          'Cloud upload failed — saved on this device only'
+        );
+      }
+    },
+    [setVariationImage]
   );
 
   const removeVariationImage = useCallback(
@@ -552,6 +595,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       addVariation,
       getVariationsForExercise,
       setVariationImage,
+      uploadVariationImageFromFile,
       removeVariationImage,
       getVariationImage,
       exportData,
@@ -595,6 +639,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       addVariation,
       getVariationsForExercise,
       setVariationImage,
+      uploadVariationImageFromFile,
       removeVariationImage,
       getVariationImage,
       exportData,

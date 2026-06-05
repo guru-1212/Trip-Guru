@@ -55,7 +55,6 @@ import {
   groupExercisesByMuscle,
   defaultExerciseImageUrl,
   variationImageKey,
-  compressImageFile,
 } from '@/workout/utils';
 import { cn } from '@/lib/utils';
 
@@ -128,6 +127,7 @@ export default function WorkoutPage() {
     updateProfile,
     removeExerciseFromActiveWorkout,
     setVariationImage,
+    uploadVariationImageFromFile,
     removeVariationImage,
     getVariationImage,
   } = useWorkoutStore();
@@ -158,8 +158,7 @@ export default function WorkoutPage() {
 
   const handleVariationImageUpload = async (exerciseId: string, variation: string, file: File) => {
     try {
-      const result = await compressImageFile(file);
-      setVariationImage(exerciseId, variation, result);
+      await uploadVariationImageFromFile(exerciseId, variation, file);
       setVariationUrlInputs((prev) => ({ ...prev, [variationImageKey(exerciseId, variation)]: '' }));
     } catch {
       toast.error('Could not process image. Try a smaller file or use an image URL.');
