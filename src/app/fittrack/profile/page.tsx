@@ -191,6 +191,9 @@ export default function ProfilePage() {
         {/* Data Management */}
         <section className="wk-card p-6">
           <h2 className="wk-heading font-semibold mb-4">Data Management</h2>
+          <p className="text-sm text-[var(--wk-muted)] mb-4">
+            All FitTrack data syncs to Firebase in real time. Sign in on any device with the same account to access your workouts.
+          </p>
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={exportData} className="wk-btn-secondary flex items-center gap-2 text-sm">
               <Download className="h-4 w-4" /> Export JSON

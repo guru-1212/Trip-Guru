@@ -34,6 +34,10 @@ service cloud.firestore {
       allow create, update: if isOwner(uid);
       allow delete: if isOwner(uid);
     }
+    match /users/{uid}/{document=**} {
+      allow read: if isAuth();
+      allow write: if isOwner(uid);
+    }
     match /trips/{tripId} {
       allow read: if isTripMember(tripId);
       allow create: if isAuth();
