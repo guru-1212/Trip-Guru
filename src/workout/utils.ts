@@ -4,6 +4,7 @@ import type {
   DayKey,
   HabitDay,
   LibraryExercise,
+  MuscleGroup,
   PersonalRecord,
   SplitId,
   UserProfile,
@@ -339,6 +340,53 @@ export function getMuscleFromSplit(splitId: SplitId): string[] {
     rest: [],
   };
   return map[splitId];
+}
+
+export function getMuscleOrderForSplit(splitId: SplitId): MuscleGroup[] {
+  const map: Record<SplitId, MuscleGroup[]> = {
+    ct: ['Chest', 'Triceps'],
+    bb: ['Back', 'Biceps'],
+    sh: ['Shoulders'],
+    ctbb: ['Chest', 'Triceps', 'Back', 'Biceps'],
+    legs: ['Legs'],
+    rest: [],
+  };
+  return map[splitId] ?? [];
+}
+
+export function groupExercisesByMuscle(
+  exercises: WorkoutExercise[],
+  splitId: SplitId
+): { muscle: string; exercises: WorkoutExercise[] }[] {
+  const order = getMuscleOrderForSplit(splitId);
+  const groups = new Map<string, WorkoutExercise[]>();
+
+  for (const ex of exercises) {
+    const list = groups.get(ex.muscle) ?? [];
+    list.push(ex);
+    groups.set(ex.muscle, list);
+  }
+
+  const result: { muscle: string; exercises: WorkoutExercise[] }[] = [];
+  for (const muscle of order) {
+    const list = groups.get(muscle);
+    if (list?.length) {
+      result.push({ muscle, exercises: list });
+      groups.delete(muscle);
+    }
+  }
+  Array.from(groups.entries()).forEach(([muscle, list]) => {
+    if (list.length) result.push({ muscle, exercises: list });
+  });
+  return result;
+}
+
+export function variationImageKey(exerciseId: string, variation: string): string {
+  return `${exerciseId}::${variation}`;
+}
+
+export function defaultExerciseImageUrl(exerciseId: string): string {
+  return `https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=800&exercise=${exerciseId}`;
 }
 
 export function getDayIndex(date: string): number {

@@ -388,14 +388,24 @@ export default function DashboardPage() {
                         {w.exercises.map((ex) => {
                           const doneSets = ex.sets.filter((s) => s.done);
                           if (doneSets.length === 0) return null;
-                          const vol = doneSets.reduce((s, st) => s + st.weight * st.reps, 0);
                           return (
-                            <div key={ex.exerciseId} className="p-4 rounded-xl bg-white/5 flex items-center justify-between border border-white/5 transition-colors hover:border-primary/10 group/item">
-                              <div>
-                                <p className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-200 group-hover/item:text-primary transition-colors">{ex.name}</p>
-                                <p className="text-[9px] font-bold text-muted-foreground uppercase mt-1 tracking-tighter">{doneSets.length} Sets · {formatWeight(vol, profile.prefs.unit)}</p>
+                            <div key={ex.exerciseId} className="p-4 rounded-xl bg-white/5 border border-white/5 transition-colors hover:border-primary/10 group/item">
+                              <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-xs font-black tracking-tight text-slate-800 dark:text-slate-200 group-hover/item:text-primary transition-colors">{ex.name}</p>
+                                  <div className="mt-2 space-y-1">
+                                    {doneSets.map((st, i) => (
+                                      <p
+                                        key={i}
+                                        className="text-[9px] font-bold text-muted-foreground uppercase tracking-tighter tabular-nums"
+                                      >
+                                        Set {i + 1} · {formatWeight(st.weight, profile.prefs.unit)} × {st.reps}
+                                      </p>
+                                    ))}
+                                  </div>
+                                </div>
+                                <CheckCircle2 className="h-4 w-4 shrink-0 text-primary/40 group-hover/item:text-primary transition-colors" />
                               </div>
-                              <CheckCircle2 className="h-4 w-4 text-primary/40 group-hover/item:text-primary transition-colors" />
                             </div>
                           );
                         })}

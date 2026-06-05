@@ -163,4 +163,9 @@ export interface ActiveWorkoutState {
   exercises: WorkoutExercise[];
   restTimerSeconds: number;
   restTimerEnd: number | null;
+  /** Exercise IDs added mid-session via Add Exercise (removable before finish). */
+  addedExerciseIds?: string[];
 }
+
+/** Map key: `${exerciseId}::${variationName}` → base64 data URL */
+export type VariationImageMap = Record<string, string>;

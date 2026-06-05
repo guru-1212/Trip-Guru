@@ -21,17 +21,19 @@ import {
   Zap,
   ArrowRight,
   ChevronLeft,
+  Trash2,
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { RestTimer } from '@/components/workout/RestTimer';
 import { VariationSelector } from '@/components/workout/VariationSelector';
 import { SessionSetRow } from '@/components/workout/SessionSetRow';
+import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm';
 import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workout/AddExerciseModal';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
-import { SPLIT_DEFINITIONS, SPLIT_NAMES } from '@/workout/constants';
+import { SPLIT_DEFINITIONS, SPLIT_NAMES, MUSCLE_COLORS } from '@/workout/constants';
 import { getExercisesForSplit, getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
-import type { CustomExercise, SplitId, WorkoutExercise, WorkoutSet, LibraryExercise } from '@/workout/types';
+import type { CustomExercise, SplitId, WorkoutExercise, WorkoutSet, LibraryExercise, WeightUnit } from '@/workout/types';
 import {
   getGreeting,
   getTodayDayKey,
@@ -49,6 +51,8 @@ import {
   createWorkoutExercises,
   getMuscleFromSplit,
   suggestWeight,
+  groupExercisesByMuscle,
+  defaultExerciseImageUrl,
 } from '@/workout/utils';
 import { cn } from '@/lib/utils';
 
@@ -59,6 +63,45 @@ const SPLIT_ICONS: Record<string, string> = {
   upper: '⚡',
   legs: '🦵',
 };
+
+function resolveExerciseInfo(
+  exerciseId: string,
+  customExercises: CustomExercise[],
+  workoutExercise?: WorkoutExercise,
+  allVariations?: string[]
+): LibraryExercise | null {
+  const lib = getExerciseById(exerciseId);
+  if (lib) return lib;
+  const custom = customExercises.find((c) => c.id === exerciseId);
+  if (custom) {
+    return {
+      id: custom.id,
+      name: custom.name,
+      muscle: custom.muscle,
+      secondary: custom.secondary,
+      equipment: custom.equipment,
+      difficulty: custom.difficulty,
+      variations: custom.variations,
+      tips: custom.notes ? [custom.notes] : [],
+      splitIds: [],
+      category: [custom.muscle],
+    };
+  }
+  if (workoutExercise && workoutExercise.exerciseId === exerciseId) {
+    return {
+      id: workoutExercise.exerciseId,
+      name: workoutExercise.name,
+      muscle: workoutExercise.muscle,
+      equipment: 'Custom',
+      difficulty: 'Beginner',
+      variations: allVariations?.length ? allVariations : [workoutExercise.variation || 'Standard'],
+      tips: workoutExercise.notes ? [workoutExercise.notes] : [],
+      splitIds: [],
+      category: [workoutExercise.muscle],
+    };
+  }
+  return null;
+}
 
 export default function WorkoutPage() {
   const router = useRouter();
@@ -79,28 +122,55 @@ export default function WorkoutPage() {
     splitExtras,
     rememberSplitExercise,
     addCustomExercise,
+    updateProfile,
+    removeExerciseFromActiveWorkout,
+    setVariationImage,
+    removeVariationImage,
+    getVariationImage,
   } = useWorkoutStore();
 
   const [selectedSplit, setSelectedSplit] = useState<SplitId | null>(null);
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+  const [finishPin, setFinishPin] = useState('');
+  const [pinError, setPinError] = useState(false);
   const [workoutDate, setWorkoutDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showAddExercise, setShowAddExercise] = useState(false);
+  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
   const [restEnd, setRestEnd] = useState<number | null>(null);
   const [restDuration, setRestDuration] = useState(profile.prefs.restTimer);
-  const [showInfoModal, setShowInfoModal] = useState<LibraryExercise | null>(null);
-  const [customExerciseImages, setCustomExerciseImages] = useState<Record<string, string>>({});
+  const [infoModal, setInfoModal] = useState<{
+    exercise: LibraryExercise;
+    previewVariation: string;
+  } | null>(null);
+  const [fullImagePreview, setFullImagePreview] = useState<{ src: string; alt: string } | null>(null);
 
-  const handleImageUpload = (exerciseId: string, file: File) => {
+  const handleWeightUnitChange = useCallback(
+    (unit: WeightUnit) => updateProfile({ prefs: { unit } }),
+    [updateProfile]
+  );
+
+  const handleVariationImageUpload = (exerciseId: string, variation: string, file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
-      setCustomExerciseImages((prev) => ({ ...prev, [exerciseId]: result }));
-      toast.success('Custom image updated!');
+      setVariationImage(exerciseId, variation, result);
     };
     reader.readAsDataURL(file);
+  };
+
+  const openExerciseInfo = (ex: WorkoutExercise) => {
+    const lib = getExerciseById(ex.exerciseId);
+    const baseVariations = lib?.variations ?? [ex.variation];
+    const allVariations = getVariationsForExercise(ex.exerciseId, baseVariations);
+    const info = resolveExerciseInfo(ex.exerciseId, customExercises, ex, allVariations);
+    if (!info) {
+      toast.error('Could not load exercise info');
+      return;
+    }
+    setInfoModal({ exercise: info, previewVariation: ex.variation });
   };
 
   const preselected = searchParams.get('split') as SplitId | null;
@@ -202,6 +272,7 @@ export default function WorkoutPage() {
       exercises,
       restTimerSeconds: profile.prefs.restTimer,
       restTimerEnd: null,
+      addedExerciseIds: [],
     };
     startActiveWorkout(state);
     setExpandedEx(exercises[0]?.exerciseId ?? null);
@@ -219,6 +290,7 @@ export default function WorkoutPage() {
       updateActiveWorkout({
         ...activeWorkout,
         exercises: [...activeWorkout.exercises, item],
+        addedExerciseIds: [...(activeWorkout.addedExerciseIds ?? []), exerciseId],
       });
       if (remember) rememberSplitExercise(activeWorkout.splitId, exerciseId);
       setExpandedEx(exerciseId);
@@ -303,7 +375,11 @@ export default function WorkoutPage() {
     }));
   };
 
-  const finishWorkout = () => setShowSummary(true);
+  const finishWorkout = () => {
+    setFinishPin('');
+    setPinError(false);
+    setShowSummary(true);
+  };
 
   const discardWorkout = () => {
     clearActiveWorkout();
@@ -324,7 +400,24 @@ export default function WorkoutPage() {
     });
     clearActiveWorkout();
     setShowSummary(false);
+    setFinishPin('');
+    setPinError(false);
     router.push('/fittrack/progress');
+  };
+
+  const handleSaveWorkout = () => {
+    if (finishPin !== FINISH_WORKOUT_PIN) {
+      setPinError(true);
+      return;
+    }
+    confirmFinish();
+  };
+
+  const handleRemoveExercise = (exerciseId: string) => {
+    removeExerciseFromActiveWorkout(exerciseId);
+    if (expandedEx === exerciseId) setExpandedEx(null);
+    setRemoveConfirmId(null);
+    toast.success('Exercise removed from session');
   };
 
   if (!hydrated) return <div className="ft-loading"><Dumbbell className="h-8 w-8 text-primary animate-pulse" /><span>Loading workout...</span></div>;
@@ -335,6 +428,11 @@ export default function WorkoutPage() {
     const prsBroken = activeWorkout.exercises.filter((ex) =>
       ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs))
     );
+    const groupedExercises = groupExercisesByMuscle(activeWorkout.exercises, activeWorkout.splitId);
+    const addedExerciseIds = activeWorkout.addedExerciseIds ?? [];
+    const removeTarget = removeConfirmId
+      ? activeWorkout.exercises.find((e) => e.exerciseId === removeConfirmId)
+      : null;
 
     return (
       <PageTransition>
@@ -385,8 +483,17 @@ export default function WorkoutPage() {
           />
 
           {/* Exercises */}
-          <div className="space-y-4">
-            {activeWorkout.exercises.map((ex) => {
+          <div className="space-y-6">
+            {groupedExercises.map(({ muscle, exercises }) => (
+              <div key={muscle} className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-1 h-5 rounded-full shrink-0"
+                    style={{ backgroundColor: MUSCLE_COLORS[muscle] ?? 'hsl(var(--primary))' }}
+                  />
+                  <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground">{muscle}</h2>
+                </div>
+                {exercises.map((ex) => {
               const lib = getExerciseById(ex.exerciseId);
               const variations = getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
               const lastSession = getLastExerciseSession(workouts, ex.exerciseId);
@@ -394,6 +501,7 @@ export default function WorkoutPage() {
               const hasPR = ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
               const setsCompleted = ex.sets.filter(s => s.done).length;
               const progress = (setsCompleted / ex.sets.length) * 100;
+              const isRemovable = addedExerciseIds.includes(ex.exerciseId);
 
               return (
                 <div key={ex.exerciseId} className={cn('ft-exercise-card', isExpanded && 'ft-exercise-card--open')}>
@@ -401,19 +509,19 @@ export default function WorkoutPage() {
                     <div className="ft-exercise-progress-fill" style={{ width: `${progress}%` }} />
                   </div>
 
-                  <button
-                    type="button"
-                    className="ft-exercise-trigger"
-                    onClick={() => setExpandedEx(isExpanded ? null : ex.exerciseId)}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
+                  <div className="ft-exercise-trigger">
+                    <button
+                      type="button"
+                      className="flex flex-1 items-center gap-3 min-w-0 text-left bg-transparent border-0 cursor-pointer p-0"
+                      onClick={() => setExpandedEx(isExpanded ? null : ex.exerciseId)}
+                    >
                       <div className={cn(
                         'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
                         isExpanded ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
                       )}>
                         <Dumbbell className="h-5 w-5" />
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-base truncate">{ex.name}</span>
                           {hasPR && <Trophy className="h-4 w-4 text-amber-500 shrink-0" />}
@@ -422,21 +530,29 @@ export default function WorkoutPage() {
                           {setsCompleted} of {ex.sets.length} sets done
                         </p>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                      <ChevronRight className={cn('h-5 w-5 text-muted-foreground transition-transform shrink-0', isExpanded && 'rotate-90 text-primary')} />
+                    </button>
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      {isRemovable && (
+                        <button
+                          type="button"
+                          onClick={() => setRemoveConfirmId(ex.exerciseId)}
+                          className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm !text-red-500 hover:!bg-red-500/10"
+                          aria-label={`Remove ${ex.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowInfoModal(lib || null);
-                        }}
+                        onClick={() => openExerciseInfo(ex)}
                         className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm"
+                        aria-label={`Info for ${ex.name}`}
                       >
                         <Info className="h-4 w-4" />
                       </button>
-                      <ChevronRight className={cn('h-5 w-5 text-muted-foreground transition-transform', isExpanded && 'rotate-90 text-primary')} />
                     </div>
-                  </button>
+                  </div>
 
                   <AnimatePresence>
                     {isExpanded && (
@@ -497,6 +613,7 @@ export default function WorkoutPage() {
                                   onRepsChange={(v) => updateSet(ex.exerciseId, idx, 'reps', v)}
                                   onToggleDone={() => toggleSetDone(ex.exerciseId, idx)}
                                   onRemove={() => removeSet(ex.exerciseId, idx)}
+                                  onUnitChange={handleWeightUnitChange}
                                 />
                               </motion.div>
                             ))}
@@ -530,7 +647,9 @@ export default function WorkoutPage() {
                   </AnimatePresence>
                 </div>
               );
-            })}
+                })}
+              </div>
+            ))}
           </div>
 
           {/* Footer Controls */}
@@ -592,11 +711,28 @@ export default function WorkoutPage() {
                     />
                   </div>
 
+                  <PinConfirm
+                    value={finishPin}
+                    onChange={(v) => {
+                      setFinishPin(v);
+                      setPinError(false);
+                    }}
+                    error={pinError}
+                  />
+
                   <div className="flex flex-col sm:flex-row gap-3">
-                    <button type="button" className="ft-btn ft-btn--secondary flex-1" onClick={() => setShowSummary(false)}>
+                    <button
+                      type="button"
+                      className="ft-btn ft-btn--secondary flex-1"
+                      onClick={() => {
+                        setShowSummary(false);
+                        setFinishPin('');
+                        setPinError(false);
+                      }}
+                    >
                       Back
                     </button>
-                    <button type="button" className="ft-btn ft-btn--primary flex-1" onClick={confirmFinish}>
+                    <button type="button" className="ft-btn ft-btn--primary flex-1" onClick={handleSaveWorkout}>
                       Save Workout
                     </button>
                   </div>
@@ -630,61 +766,102 @@ export default function WorkoutPage() {
                 </motion.div>
               </div>
             )}
+
+            {removeConfirmId && removeTarget && (
+              <div className="ft-overlay" style={{ zIndex: 75 }}>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="ft-modal space-y-6"
+                >
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 mx-auto mb-4">
+                      <Trash2 className="h-6 w-6" />
+                    </div>
+                    <h2 className="ft-title">Remove exercise?</h2>
+                    <p className="ft-subtitle mt-2">
+                      Remove <strong>{removeTarget.name}</strong> from this session? Logged sets for it will be lost.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <button type="button" className="ft-btn ft-btn--secondary ft-btn--block" onClick={() => setRemoveConfirmId(null)}>
+                      Keep Exercise
+                    </button>
+                    <button
+                      type="button"
+                      className="ft-btn ft-btn--danger ft-btn--block"
+                      onClick={() => handleRemoveExercise(removeConfirmId)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
           </AnimatePresence>
 
           <AnimatePresence>
-            {showInfoModal && (
+            {infoModal && (
               <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  onClick={() => setShowInfoModal(null)}
+                  onClick={() => setInfoModal(null)}
                   className="absolute inset-0 bg-black/90 backdrop-blur-sm"
                 />
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                  onClick={(e) => e.stopPropagation()}
                   className="ft-card w-full max-w-lg relative z-10 overflow-hidden"
                 >
-                  <div className="relative aspect-video w-full bg-slate-900 overflow-hidden">
-                    <img
-                      src={customExerciseImages[showInfoModal.id] || `https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=800&exercise=${showInfoModal.id}`}
-                      alt={showInfoModal.name}
-                      className="w-full h-full object-cover opacity-60"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-card to-transparent" />
-                    
-                    <div className="absolute top-4 right-4 flex gap-2">
-                      <label className="p-3 bg-black/50 hover:bg-black/70 rounded-2xl text-white transition-colors cursor-pointer active:scale-90">
-                        <Camera className="h-5 w-5" />
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/jpeg,image/png,image/gif,image/svg+xml"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleImageUpload(showInfoModal.id, file);
-                          }}
-                        />
-                      </label>
-                      <button
-                        onClick={() => setShowInfoModal(null)}
-                        className="p-3 bg-black/50 hover:bg-black/70 rounded-2xl text-white transition-colors active:scale-90"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    </div>
-
-                    <div className="absolute bottom-6 left-8 text-left">
-                      <h2 className="ft-title text-3xl font-black text-white mb-2">{showInfoModal.name}</h2>
+                  <div className="relative aspect-video w-full bg-slate-900 overflow-hidden group/hero">
+                    {(() => {
+                      const heroSrc =
+                        getVariationImage(infoModal.exercise.id, infoModal.previewVariation) ??
+                        defaultExerciseImageUrl(infoModal.exercise.id);
+                      return (
+                        <button
+                          type="button"
+                          className="absolute inset-0 w-full h-full cursor-zoom-in"
+                          onClick={() =>
+                            setFullImagePreview({
+                              src: heroSrc,
+                              alt: `${infoModal.exercise.name} — ${infoModal.previewVariation}`,
+                            })
+                          }
+                          aria-label="View full image"
+                        >
+                          <img
+                            src={heroSrc}
+                            alt={infoModal.exercise.name}
+                            className="w-full h-full object-cover opacity-60 group-hover/hero:opacity-80 transition-opacity"
+                          />
+                        </button>
+                      );
+                    })()}
+                    <div className="absolute inset-0 bg-gradient-to-t from-card to-transparent pointer-events-none" />
+                    <button
+                      type="button"
+                      onClick={() => setInfoModal(null)}
+                      className="absolute top-4 right-4 p-3 bg-black/50 hover:bg-black/70 rounded-2xl text-white transition-colors active:scale-90 z-10"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                    <div className="absolute bottom-6 left-8 text-left pointer-events-none">
+                      <h2 className="ft-title text-3xl font-black text-white mb-2">{infoModal.exercise.name}</h2>
+                      <p className="text-xs font-bold uppercase tracking-widest text-white/80 mb-2">
+                        {infoModal.previewVariation}
+                      </p>
                       <div className="flex gap-2">
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-xl bg-primary text-white shadow-lg">
-                          {showInfoModal.difficulty}
+                          {infoModal.exercise.difficulty}
                         </span>
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-xl bg-white/20 text-white backdrop-blur-sm">
-                          {showInfoModal.equipment}
+                          {infoModal.exercise.equipment}
                         </span>
                       </div>
                     </div>
@@ -694,40 +871,156 @@ export default function WorkoutPage() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="p-4 rounded-2xl bg-muted/30 border border-border">
                         <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Target Muscle</p>
-                        <p className="font-black text-lg">{showInfoModal.muscle}</p>
+                        <p className="font-black text-lg">{infoModal.exercise.muscle}</p>
                       </div>
-                      {showInfoModal.secondary && (
+                      {infoModal.exercise.secondary && (
                         <div className="p-4 rounded-2xl bg-muted/30 border border-border">
                           <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1.5">Secondary</p>
-                          <p className="font-black text-lg">{showInfoModal.secondary}</p>
+                          <p className="font-black text-lg">{infoModal.exercise.secondary}</p>
                         </div>
                       )}
                     </div>
 
-                    <div className="space-y-4">
-                      <h3 className="ft-title font-black text-xl flex items-center gap-3">
-                        <Zap className="h-5 w-5 text-primary" />
-                        Execution Intel
+                    <div className="space-y-3">
+                      <h3 className="ft-title font-black text-lg flex items-center gap-2">
+                        <Camera className="h-4 w-4 text-primary" />
+                        Variation Images
                       </h3>
-                      <ul className="space-y-4">
-                        {showInfoModal.tips.map((tip, i) => (
-                          <li key={i} className="flex gap-4 text-sm font-medium text-muted-foreground leading-relaxed">
-                            <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black">
-                              {i + 1}
-                            </span>
-                            {tip}
-                          </li>
-                        ))}
-                      </ul>
+                      <div className="space-y-2">
+                        {getVariationsForExercise(infoModal.exercise.id, infoModal.exercise.variations).map((variation) => {
+                          const thumb =
+                            getVariationImage(infoModal.exercise.id, variation) ??
+                            defaultExerciseImageUrl(infoModal.exercise.id);
+                          const isActive = infoModal.previewVariation === variation;
+                          return (
+                            <div
+                              key={variation}
+                              className={cn(
+                                'flex items-center gap-3 p-3 rounded-xl border transition-colors',
+                                isActive ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20'
+                              )}
+                            >
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setFullImagePreview({
+                                      src: thumb,
+                                      alt: `${infoModal.exercise.name} — ${variation}`,
+                                    })
+                                  }
+                                  className="shrink-0 rounded-lg overflow-hidden border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/40 transition-shadow"
+                                  aria-label={`View full image for ${variation}`}
+                                >
+                                  <img
+                                    src={thumb}
+                                    alt={variation}
+                                    className="w-14 h-14 object-cover"
+                                  />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setInfoModal((prev) =>
+                                      prev ? { ...prev, previewVariation: variation } : prev
+                                    )
+                                  }
+                                  className="text-sm font-semibold truncate text-left hover:text-primary transition-colors"
+                                >
+                                  {variation}
+                                </button>
+                              </div>
+                              <label className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm cursor-pointer shrink-0">
+                                <Camera className="h-4 w-4" />
+                                <input
+                                  type="file"
+                                  className="hidden"
+                                  accept="image/jpeg,image/png,image/gif,image/svg+xml"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleVariationImageUpload(infoModal.exercise.id, variation, file);
+                                  }}
+                                />
+                              </label>
+                              {getVariationImage(infoModal.exercise.id, variation) && (
+                                <button
+                                  type="button"
+                                  className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm !text-red-500 shrink-0"
+                                  onClick={() => removeVariationImage(infoModal.exercise.id, variation)}
+                                  aria-label={`Remove image for ${variation}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
 
+                    {infoModal.exercise.tips.length > 0 && (
+                      <div className="space-y-4">
+                        <h3 className="ft-title font-black text-xl flex items-center gap-3">
+                          <Zap className="h-5 w-5 text-primary" />
+                          Execution Intel
+                        </h3>
+                        <ul className="space-y-4">
+                          {infoModal.exercise.tips.map((tip, i) => (
+                            <li key={i} className="flex gap-4 text-sm font-medium text-muted-foreground leading-relaxed">
+                              <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black">
+                                {i + 1}
+                              </span>
+                              {tip}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
                     <button
-                      onClick={() => setShowInfoModal(null)}
+                      type="button"
+                      onClick={() => setInfoModal(null)}
                       className="w-full ft-btn ft-btn--primary py-4 text-sm tracking-[0.2em]"
                     >
                       Understood
                     </button>
                   </div>
+                </motion.div>
+              </div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {fullImagePreview && (
+              <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setFullImagePreview(null)}
+                  className="absolute inset-0 bg-black/95 backdrop-blur-md"
+                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.92 }}
+                  className="relative z-10 w-full max-w-4xl max-h-[90vh] flex flex-col items-center gap-4"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setFullImagePreview(null)}
+                    className="self-end p-3 bg-white/10 hover:bg-white/20 rounded-2xl text-white transition-colors"
+                    aria-label="Close full image"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                  <img
+                    src={fullImagePreview.src}
+                    alt={fullImagePreview.alt}
+                    className="max-w-full max-h-[calc(90vh-5rem)] object-contain rounded-xl shadow-2xl"
+                  />
+                  <p className="text-sm font-medium text-white/80 text-center px-4">{fullImagePreview.alt}</p>
                 </motion.div>
               </div>
             )}

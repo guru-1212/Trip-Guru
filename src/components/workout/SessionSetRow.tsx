@@ -16,6 +16,7 @@ interface SessionSetRowProps {
   onRepsChange: (reps: number) => void;
   onToggleDone: () => void;
   onRemove: () => void;
+  onUnitChange?: (unit: WeightUnit) => void;
 }
 
 function Stepper({
@@ -68,6 +69,7 @@ export function SessionSetRow({
   onRepsChange,
   onToggleDone,
   onRemove,
+  onUnitChange,
 }: SessionSetRowProps) {
   const displayVal = displayWeight(set.weight, unit);
   const weightStep = WEIGHT_STEP[unit];
@@ -108,15 +110,49 @@ export function SessionSetRow({
       </div>
 
       <div className="ft-set-fields">
-        <Stepper
-          label={`Weight (${unit})`}
-          value={displayVal}
-          step={weightStep}
-          inputMode="decimal"
-          onDecrement={() => adjustWeight(-1)}
-          onIncrement={() => adjustWeight(1)}
-          onInput={(raw) => onWeightChange(parseFloat(raw) || 0)}
-        />
+        <div className="ft-set-field">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span className="ft-set-field-label mb-0">Weight</span>
+            {onUnitChange && (
+              <select
+                className="ft-set-unit-select"
+                value={unit}
+                onChange={(e) => onUnitChange(e.target.value as WeightUnit)}
+                aria-label="Weight unit"
+              >
+                <option value="kg">kg</option>
+                <option value="lbs">lbs</option>
+              </select>
+            )}
+          </div>
+          <div className="ft-stepper">
+            <button
+              type="button"
+              className="ft-stepper-btn"
+              onClick={() => adjustWeight(-1)}
+              aria-label="Decrease weight"
+            >
+              <Minus className="h-4 w-4" />
+            </button>
+            <input
+              type="number"
+              inputMode="decimal"
+              step={weightStep}
+              className="ft-stepper-value"
+              value={displayVal === 0 ? '' : displayVal}
+              placeholder="0"
+              onChange={(e) => onWeightChange(parseFloat(e.target.value) || 0)}
+            />
+            <button
+              type="button"
+              className="ft-stepper-btn"
+              onClick={() => adjustWeight(1)}
+              aria-label="Increase weight"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
         <Stepper
           label="Reps"
           value={set.reps}

@@ -13,8 +13,10 @@ import type {
   HabitDay,
   PersonalRecord,
   UserProfile,
+  VariationImageMap,
   WeeklyGoals,
   WorkoutSession,
+  UserPrefs,
 } from './types';
 import {
   generateId,
@@ -23,6 +25,7 @@ import {
   syncWorkoutHabits,
   updatePRDatesForWorkout,
   getDefaultProfile,
+  variationImageKey,
 } from './utils';
 import type { SplitId } from './types';
 
@@ -37,14 +40,16 @@ interface WorkoutContextValue {
   checklist: ChecklistData;
   activeWorkout: ActiveWorkoutState | null;
   customVariations: Record<string, string[]>;
+  variationImages: VariationImageMap;
   splitExtras: Partial<Record<SplitId, string[]>>;
   hydrated: boolean;
   syncing: boolean;
-  updateProfile: (p: Partial<UserProfile>) => void;
+  updateProfile: (p: Partial<Omit<UserProfile, 'prefs'>> & { prefs?: Partial<UserPrefs> }) => void;
   saveWorkout: (session: Omit<WorkoutSession, 'id'>) => WorkoutSession;
   startActiveWorkout: (state: ActiveWorkoutState) => void;
   updateActiveWorkout: (state: ActiveWorkoutState) => void;
   clearActiveWorkout: () => void;
+  removeExerciseFromActiveWorkout: (exerciseId: string) => void;
   addCustomExercise: (ex: Omit<CustomExercise, 'id'>) => CustomExercise;
   updateCustomExercise: (id: string, ex: Partial<CustomExercise>) => void;
   deleteCustomExercise: (id: string) => void;
@@ -56,6 +61,9 @@ interface WorkoutContextValue {
   deleteChecklistItem: (id: string) => void;
   addVariation: (exerciseId: string, variation: string) => void;
   getVariationsForExercise: (exerciseId: string, baseVariations: string[]) => string[];
+  setVariationImage: (exerciseId: string, variation: string, dataUrl: string) => void;
+  removeVariationImage: (exerciseId: string, variation: string) => void;
+  getVariationImage: (exerciseId: string, variation: string) => string | undefined;
   exportData: () => void;
   importData: (json: string) => boolean;
   clearHistory: () => void;
@@ -82,6 +90,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [checklist, setChecklist] = useState<ChecklistData>(fittrackDb.defaultStateDoc().checklist);
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkoutState | null>(null);
   const [customVariations, setCustomVariations] = useState<Record<string, string[]>>({});
+  const [variationImages, setVariationImages] = useState<VariationImageMap>({});
   const [splitExtras, setSplitExtras] = useState<Partial<Record<SplitId, string[]>>>({});
   const [hydrated, setHydrated] = useState(false);
   const [syncing, setSyncing] = useState(true);
@@ -97,6 +106,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setChecklist,
     setActiveWorkout,
     setCustomVariations,
+    setVariationImages,
     setSplitExtras,
     setHydrated,
     setSyncing,
@@ -143,7 +153,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     }
   }, [hydrated, profile.prefs.theme]);
 
-  const updateProfile = useCallback((p: Partial<UserProfile>) => {
+  const updateProfile = useCallback((p: Partial<Omit<UserProfile, 'prefs'>> & { prefs?: Partial<UserPrefs> }) => {
     setProfile((prev) => {
       const next = { ...prev, ...p, prefs: { ...prev.prefs, ...(p.prefs ?? {}) } };
       const currentUid = uidRef.current;
@@ -199,6 +209,20 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const clearActiveWorkout = useCallback(() => {
     setActiveWorkout(null);
     persistState({ activeWorkout: null });
+  }, [persistState]);
+
+  const removeExerciseFromActiveWorkout = useCallback((exerciseId: string) => {
+    setActiveWorkout((prev) => {
+      if (!prev) return prev;
+      if (!(prev.addedExerciseIds ?? []).includes(exerciseId)) return prev;
+      const next: ActiveWorkoutState = {
+        ...prev,
+        exercises: prev.exercises.filter((e) => e.exerciseId !== exerciseId),
+        addedExerciseIds: (prev.addedExerciseIds ?? []).filter((id) => id !== exerciseId),
+      };
+      persistState({ activeWorkout: next });
+      return next;
+    });
   }, [persistState]);
 
   const addCustomExercise = useCallback((ex: Omit<CustomExercise, 'id'>) => {
@@ -313,6 +337,41 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     [customVariations]
   );
 
+  const setVariationImage = useCallback(
+    (exerciseId: string, variation: string, dataUrl: string) => {
+      const key = variationImageKey(exerciseId, variation);
+      setVariationImages((prev) => {
+        const next = { ...prev, [key]: dataUrl };
+        persistState({ variationImages: next });
+        return next;
+      });
+      toast.success('Image saved');
+    },
+    [persistState]
+  );
+
+  const removeVariationImage = useCallback(
+    (exerciseId: string, variation: string) => {
+      const key = variationImageKey(exerciseId, variation);
+      setVariationImages((prev) => {
+        if (!prev[key]) return prev;
+        const next = { ...prev };
+        delete next[key];
+        persistState({ variationImages: next });
+        return next;
+      });
+      toast.success('Image removed');
+    },
+    [persistState]
+  );
+
+  const getVariationImage = useCallback(
+    (exerciseId: string, variation: string) => {
+      return variationImages[variationImageKey(exerciseId, variation)];
+    },
+    [variationImages]
+  );
+
   const exportData = useCallback(() => {
     const data = {
       profile,
@@ -324,6 +383,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       weeklyGoals,
       checklist,
       customVariations,
+      variationImages,
       splitExtras,
       exportedAt: new Date().toISOString(),
     };
@@ -335,7 +395,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Data exported');
-  }, [profile, workouts, prs, customExercises, bodyStats, habits, weeklyGoals, checklist, customVariations, splitExtras]);
+  }, [profile, workouts, prs, customExercises, bodyStats, habits, weeklyGoals, checklist, customVariations, variationImages, splitExtras]);
 
   const importData = useCallback((json: string) => {
     const currentUid = uidRef.current;
@@ -443,6 +503,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       checklist,
       activeWorkout,
       customVariations,
+      variationImages,
       splitExtras,
       hydrated,
       syncing,
@@ -451,6 +512,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       startActiveWorkout,
       updateActiveWorkout,
       clearActiveWorkout,
+      removeExerciseFromActiveWorkout,
       addCustomExercise,
       updateCustomExercise,
       deleteCustomExercise,
@@ -462,6 +524,9 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       deleteChecklistItem,
       addVariation,
       getVariationsForExercise,
+      setVariationImage,
+      removeVariationImage,
+      getVariationImage,
       exportData,
       importData,
       clearHistory,
@@ -481,6 +546,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       checklist,
       activeWorkout,
       customVariations,
+      variationImages,
       splitExtras,
       hydrated,
       syncing,
@@ -489,6 +555,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       startActiveWorkout,
       updateActiveWorkout,
       clearActiveWorkout,
+      removeExerciseFromActiveWorkout,
       addCustomExercise,
       updateCustomExercise,
       deleteCustomExercise,
@@ -500,6 +567,9 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       deleteChecklistItem,
       addVariation,
       getVariationsForExercise,
+      setVariationImage,
+      removeVariationImage,
+      getVariationImage,
       exportData,
       importData,
       clearHistory,

@@ -34,6 +34,7 @@ export interface FitTrackSyncCallbacks {
   setChecklist: (c: ChecklistData) => void;
   setActiveWorkout: (a: ActiveWorkoutState | null) => void;
   setCustomVariations: (v: Record<string, string[]>) => void;
+  setVariationImages: (v: Record<string, string>) => void;
   setSplitExtras: (e: Partial<Record<SplitId, string[]>>) => void;
   setHydrated: (h: boolean) => void;
   setSyncing: (s: boolean) => void;
@@ -92,6 +93,7 @@ export function useFitTrackSync(uid: string | null | undefined, callbacks: FitTr
           cb().setChecklist(normalizeChecklist(data.checklist));
           cb().setActiveWorkout(data.activeWorkout ?? null);
           cb().setCustomVariations(data.customVariations ?? {});
+          cb().setVariationImages(data.variationImages ?? {});
           cb().setSplitExtras(data.splitExtras ?? {});
         },
         (err) => console.error('[FitTrack] state listener:', err)

@@ -125,6 +125,14 @@ export function saveCustomVariations(vars: Record<string, string[]>): void {
   write(STORAGE_KEYS.customVariations, vars);
 }
 
+export function loadVariationImages(): Record<string, string> {
+  return read(STORAGE_KEYS.variationImages, {});
+}
+
+export function saveVariationImages(images: Record<string, string>): void {
+  write(STORAGE_KEYS.variationImages, images);
+}
+
 export function loadSplitExtras(): Partial<Record<SplitId, string[]>> {
   return read(STORAGE_KEYS.splitExtras, {});
 }
@@ -144,6 +152,7 @@ export function exportAllData(): string {
     weeklyGoals: loadWeeklyGoals(),
     checklist: loadChecklist(),
     customVariations: loadCustomVariations(),
+    variationImages: loadVariationImages(),
     splitExtras: loadSplitExtras(),
     exportedAt: new Date().toISOString(),
   };
@@ -162,6 +171,7 @@ export function importAllData(json: string): boolean {
     if (data.weeklyGoals) saveWeeklyGoals(data.weeklyGoals);
     if (data.checklist) saveChecklist(data.checklist);
     if (data.customVariations) saveCustomVariations(data.customVariations);
+    if (data.variationImages) saveVariationImages(data.variationImages);
     if (data.splitExtras) saveSplitExtras(data.splitExtras);
     return true;
   } catch {

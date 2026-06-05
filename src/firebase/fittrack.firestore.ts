@@ -32,6 +32,7 @@ export interface FitTrackStateDoc {
   weeklyGoals: WeeklyGoals;
   checklist: ChecklistData;
   customVariations: Record<string, string[]>;
+  variationImages: Record<string, string>;
   splitExtras: Partial<Record<SplitId, string[]>>;
   activeWorkout: ActiveWorkoutState | null;
   migratedFromLocal?: boolean;
@@ -76,6 +77,7 @@ export function defaultStateDoc(): FitTrackStateDoc {
       custom: [],
     },
     customVariations: {},
+    variationImages: {},
     splitExtras: {},
     activeWorkout: null,
   };
@@ -202,6 +204,7 @@ export async function migrateLocalStorageToFirebase(uid: string): Promise<boolea
     weeklyGoals: localStorage.loadWeeklyGoals(),
     checklist: localStorage.loadChecklist(),
     customVariations: localStorage.loadCustomVariations(),
+    variationImages: localStorage.loadVariationImages(),
     splitExtras: localStorage.loadSplitExtras(),
     activeWorkout: localStorage.loadActiveWorkout(),
     migratedFromLocal: true,
@@ -222,6 +225,7 @@ export async function importFitTrackData(
     weeklyGoals?: WeeklyGoals;
     checklist?: ChecklistData;
     customVariations?: Record<string, string[]>;
+    variationImages?: Record<string, string>;
     splitExtras?: Partial<Record<SplitId, string[]>>;
   }
 ): Promise<void> {
@@ -253,6 +257,7 @@ export async function importFitTrackData(
     weeklyGoals: data.weeklyGoals,
     checklist: data.checklist,
     customVariations: data.customVariations,
+    variationImages: data.variationImages,
     splitExtras: data.splitExtras,
   });
 }

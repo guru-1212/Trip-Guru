@@ -18,7 +18,7 @@ import { SessionSetRow } from '@/components/workout/SessionSetRow';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { SPLIT_DEFINITIONS } from '@/workout/constants';
 import { getExercisesForSplit, getExerciseById } from '@/workout/exerciseLibrary';
-import type { SplitId, WorkoutExercise, WorkoutSet } from '@/workout/types';
+import type { SplitId, WorkoutExercise, WorkoutSet, WeightUnit } from '@/workout/types';
 import {
   getGreeting,
   getTodayDayKey,
@@ -58,7 +58,13 @@ export default function WorkoutPage() {
     saveWorkout,
     addVariation,
     getVariationsForExercise,
+    updateProfile,
   } = useWorkoutStore();
+
+  const handleWeightUnitChange = useCallback(
+    (unit: WeightUnit) => updateProfile({ prefs: { unit } }),
+    [updateProfile]
+  );
 
   const [selectedSplit, setSelectedSplit] = useState<SplitId | null>(null);
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
@@ -306,6 +312,7 @@ export default function WorkoutPage() {
                               onRepsChange={(v) => updateSet(ex.exerciseId, idx, 'reps', v)}
                               onToggleDone={() => toggleSetDone(ex.exerciseId, idx)}
                               onRemove={() => removeSet(ex.exerciseId, idx)}
+                              onUnitChange={handleWeightUnitChange}
                             />
                           ))}
                         </div>

@@ -11,6 +11,7 @@ export const STORAGE_KEYS = {
   checklist: 'wk_checklist',
   activeWorkout: 'wk_active_workout',
   customVariations: 'wk_custom_variations',
+  variationImages: 'wk_variation_images',
   splitExtras: 'wk_split_extras',
 } as const;
 
