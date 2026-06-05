@@ -23,7 +23,7 @@ import type {
   WeeklyGoals,
   WorkoutSession,
 } from '@/workout/types';
-import { getDefaultChecklistItems, getDefaultProfile, getWeekStart } from '@/workout/utils';
+import { getDefaultChecklistItems, getDefaultProfile, getWeekStart, cloudSafeVariationImages } from '@/workout/utils';
 import * as localStorage from '@/workout/storage';
 
 export interface FitTrackStateDoc {
@@ -204,7 +204,7 @@ export async function migrateLocalStorageToFirebase(uid: string): Promise<boolea
     weeklyGoals: localStorage.loadWeeklyGoals(),
     checklist: localStorage.loadChecklist(),
     customVariations: localStorage.loadCustomVariations(),
-    variationImages: localStorage.loadVariationImages(),
+    variationImages: cloudSafeVariationImages(localStorage.loadVariationImages()),
     splitExtras: localStorage.loadSplitExtras(),
     activeWorkout: localStorage.loadActiveWorkout(),
     migratedFromLocal: true,
@@ -257,7 +257,7 @@ export async function importFitTrackData(
     weeklyGoals: data.weeklyGoals,
     checklist: data.checklist,
     customVariations: data.customVariations,
-    variationImages: data.variationImages,
+    variationImages: data.variationImages ? cloudSafeVariationImages(data.variationImages) : undefined,
     splitExtras: data.splitExtras,
   });
 }

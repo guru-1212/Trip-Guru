@@ -16,6 +16,7 @@ import {
   Timer,
   Info,
   Camera,
+  Link2,
   Dumbbell,
   Target,
   Zap,
@@ -53,6 +54,8 @@ import {
   suggestWeight,
   groupExercisesByMuscle,
   defaultExerciseImageUrl,
+  variationImageKey,
+  compressImageFile,
 } from '@/workout/utils';
 import { cn } from '@/lib/utils';
 
@@ -146,19 +149,41 @@ export default function WorkoutPage() {
     previewVariation: string;
   } | null>(null);
   const [fullImagePreview, setFullImagePreview] = useState<{ src: string; alt: string } | null>(null);
+  const [variationUrlInputs, setVariationUrlInputs] = useState<Record<string, string>>({});
 
   const handleWeightUnitChange = useCallback(
     (unit: WeightUnit) => updateProfile({ prefs: { unit } }),
     [updateProfile]
   );
 
-  const handleVariationImageUpload = (exerciseId: string, variation: string, file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
+  const handleVariationImageUpload = async (exerciseId: string, variation: string, file: File) => {
+    try {
+      const result = await compressImageFile(file);
       setVariationImage(exerciseId, variation, result);
-    };
-    reader.readAsDataURL(file);
+      setVariationUrlInputs((prev) => ({ ...prev, [variationImageKey(exerciseId, variation)]: '' }));
+    } catch {
+      toast.error('Could not process image. Try a smaller file or use an image URL.');
+    }
+  };
+
+  const handleVariationImageUrl = (exerciseId: string, variation: string) => {
+    const key = variationImageKey(exerciseId, variation);
+    const trimmed = (variationUrlInputs[key] ?? '').trim();
+    if (!trimmed) {
+      toast.error('Enter an image URL');
+      return;
+    }
+    try {
+      const parsed = new URL(trimmed);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        toast.error('URL must start with http:// or https://');
+        return;
+      }
+    } catch {
+      toast.error('Enter a valid URL');
+      return;
+    }
+    setVariationImage(exerciseId, variation, trimmed);
   };
 
   const openExerciseInfo = (ex: WorkoutExercise) => {
@@ -171,6 +196,7 @@ export default function WorkoutPage() {
       return;
     }
     setInfoModal({ exercise: info, previewVariation: ex.variation });
+    setVariationUrlInputs({});
   };
 
   const preselected = searchParams.get('split') as SplitId | null;
@@ -888,70 +914,127 @@ export default function WorkoutPage() {
                       </h3>
                       <div className="space-y-2">
                         {getVariationsForExercise(infoModal.exercise.id, infoModal.exercise.variations).map((variation) => {
-                          const thumb =
-                            getVariationImage(infoModal.exercise.id, variation) ??
-                            defaultExerciseImageUrl(infoModal.exercise.id);
+                          const storedImage = getVariationImage(infoModal.exercise.id, variation);
+                          const thumb = storedImage ?? defaultExerciseImageUrl(infoModal.exercise.id);
                           const isActive = infoModal.previewVariation === variation;
+                          const urlKey = variationImageKey(infoModal.exercise.id, variation);
+                          const urlValue =
+                            variationUrlInputs[urlKey] ??
+                            (storedImage?.startsWith('http') ? storedImage : '');
+                          const hasCustomImage = !!storedImage;
                           return (
                             <div
                               key={variation}
                               className={cn(
-                                'flex items-center gap-3 p-3 rounded-xl border transition-colors',
+                                'rounded-xl border transition-colors overflow-hidden',
                                 isActive ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20'
                               )}
                             >
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setFullImagePreview({
-                                      src: thumb,
-                                      alt: `${infoModal.exercise.name} — ${variation}`,
-                                    })
-                                  }
-                                  className="shrink-0 rounded-lg overflow-hidden border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/40 transition-shadow"
-                                  aria-label={`View full image for ${variation}`}
-                                >
-                                  <img
-                                    src={thumb}
-                                    alt={variation}
-                                    className="w-14 h-14 object-cover"
-                                  />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setInfoModal((prev) =>
-                                      prev ? { ...prev, previewVariation: variation } : prev
-                                    )
-                                  }
-                                  className="text-sm font-semibold truncate text-left hover:text-primary transition-colors"
-                                >
-                                  {variation}
-                                </button>
+                              <div className="flex items-center gap-3 p-3">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setFullImagePreview({
+                                        src: thumb,
+                                        alt: `${infoModal.exercise.name} — ${variation}`,
+                                      })
+                                    }
+                                    className="shrink-0 rounded-lg overflow-hidden border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/40 transition-shadow"
+                                    aria-label={`View full image for ${variation}`}
+                                  >
+                                    <img
+                                      src={thumb}
+                                      alt={variation}
+                                      className="w-14 h-14 object-cover"
+                                      onError={(e) => {
+                                        (e.target as HTMLImageElement).src = defaultExerciseImageUrl(
+                                          infoModal.exercise.id
+                                        );
+                                      }}
+                                    />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setInfoModal((prev) =>
+                                        prev ? { ...prev, previewVariation: variation } : prev
+                                      )
+                                    }
+                                    className="text-sm font-semibold truncate text-left hover:text-primary transition-colors"
+                                  >
+                                    {variation}
+                                  </button>
+                                </div>
+                                {hasCustomImage && (
+                                  <button
+                                    type="button"
+                                    className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm !text-red-500 shrink-0"
+                                    onClick={() => {
+                                      removeVariationImage(infoModal.exercise.id, variation);
+                                      setVariationUrlInputs((prev) => {
+                                        const next = { ...prev };
+                                        delete next[urlKey];
+                                        return next;
+                                      });
+                                    }}
+                                    aria-label={`Remove image for ${variation}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                )}
                               </div>
-                              <label className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm cursor-pointer shrink-0">
-                                <Camera className="h-4 w-4" />
-                                <input
-                                  type="file"
-                                  className="hidden"
-                                  accept="image/jpeg,image/png,image/gif,image/svg+xml"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) handleVariationImageUpload(infoModal.exercise.id, variation, file);
-                                  }}
-                                />
-                              </label>
-                              {getVariationImage(infoModal.exercise.id, variation) && (
-                                <button
-                                  type="button"
-                                  className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm !text-red-500 shrink-0"
-                                  onClick={() => removeVariationImage(infoModal.exercise.id, variation)}
-                                  aria-label={`Remove image for ${variation}`}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              )}
+
+                              <div className="px-3 pb-3 space-y-2 border-t border-border/60 pt-3">
+                                <div className="flex gap-2">
+                                  <div className="relative flex-1 min-w-0">
+                                    <Link2 className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                    <input
+                                      type="url"
+                                      className="ft-input !h-9 !pl-8 text-xs"
+                                      placeholder="Paste image URL (https://...)"
+                                      value={urlValue}
+                                      onChange={(e) =>
+                                        setVariationUrlInputs((prev) => ({
+                                          ...prev,
+                                          [urlKey]: e.target.value,
+                                        }))
+                                      }
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          handleVariationImageUrl(infoModal.exercise.id, variation);
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="ft-btn ft-btn--secondary ft-btn--sm shrink-0 !min-h-[36px]"
+                                    onClick={() =>
+                                      handleVariationImageUrl(infoModal.exercise.id, variation)
+                                    }
+                                  >
+                                    Apply
+                                  </button>
+                                </div>
+                                <label className="ft-btn ft-btn--ghost ft-btn--sm ft-btn--block cursor-pointer !min-h-[36px]">
+                                  <Camera className="h-4 w-4" />
+                                  Upload from device
+                                  <input
+                                    type="file"
+                                    className="hidden"
+                                    accept="image/jpeg,image/png,image/gif,image/webp,image/svg+xml"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file) {
+                                        handleVariationImageUpload(infoModal.exercise.id, variation, file);
+                                        e.target.value = '';
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              </div>
                             </div>
                           );
                         })}

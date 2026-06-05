@@ -21,7 +21,8 @@ import type {
   WeeklyGoals,
   WorkoutSession,
 } from '@/workout/types';
-import { getDefaultProfile } from '@/workout/utils';
+import { getDefaultProfile, mergeVariationImages } from '@/workout/utils';
+import { loadVariationImages } from '@/workout/storage';
 
 export interface FitTrackSyncCallbacks {
   setProfile: (p: UserProfile) => void;
@@ -93,7 +94,9 @@ export function useFitTrackSync(uid: string | null | undefined, callbacks: FitTr
           cb().setChecklist(normalizeChecklist(data.checklist));
           cb().setActiveWorkout(data.activeWorkout ?? null);
           cb().setCustomVariations(data.customVariations ?? {});
-          cb().setVariationImages(data.variationImages ?? {});
+          cb().setVariationImages(
+            mergeVariationImages(loadVariationImages(), data.variationImages ?? {})
+          );
           cb().setSplitExtras(data.splitExtras ?? {});
         },
         (err) => console.error('[FitTrack] state listener:', err)

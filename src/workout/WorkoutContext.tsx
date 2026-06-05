@@ -26,7 +26,10 @@ import {
   updatePRDatesForWorkout,
   getDefaultProfile,
   variationImageKey,
+  cloudSafeVariationImages,
+  isRemoteImageUrl,
 } from './utils';
+import * as localStorage from './storage';
 import type { SplitId } from './types';
 
 interface WorkoutContextValue {
@@ -120,11 +123,23 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         await fittrackDb.saveFitTrackState(currentUid, patch);
       } catch (err) {
         console.error('[FitTrack] save state failed:', err);
-        toast.error('Failed to sync. Check your connection.');
+        toast.error('Could not sync to cloud. Your data is saved on this device.');
       }
     },
     []
   );
+
+  const syncVariationImagesToCloud = useCallback(async (images: VariationImageMap) => {
+    const currentUid = uidRef.current;
+    if (!currentUid) return;
+    try {
+      await fittrackDb.saveFitTrackState(currentUid, {
+        variationImages: cloudSafeVariationImages(images),
+      });
+    } catch (err) {
+      console.error('[FitTrack] variation image cloud sync failed:', err);
+    }
+  }, []);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -338,16 +353,27 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   );
 
   const setVariationImage = useCallback(
-    (exerciseId: string, variation: string, dataUrl: string) => {
+    (exerciseId: string, variation: string, imageSrc: string) => {
       const key = variationImageKey(exerciseId, variation);
       setVariationImages((prev) => {
-        const next = { ...prev, [key]: dataUrl };
-        persistState({ variationImages: next });
+        const next = { ...prev, [key]: imageSrc };
+        try {
+          localStorage.saveVariationImages(next);
+        } catch (err) {
+          console.error('[FitTrack] local variation image save failed:', err);
+          toast.error('Image is too large. Try a smaller file or paste an image URL instead.');
+          return prev;
+        }
+        void syncVariationImagesToCloud(next);
+        toast.success(
+          isRemoteImageUrl(imageSrc)
+            ? 'Image URL saved'
+            : 'Image saved on this device'
+        );
         return next;
       });
-      toast.success('Image saved');
     },
-    [persistState]
+    [syncVariationImagesToCloud]
   );
 
   const removeVariationImage = useCallback(
@@ -357,12 +383,13 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         if (!prev[key]) return prev;
         const next = { ...prev };
         delete next[key];
-        persistState({ variationImages: next });
+        localStorage.saveVariationImages(next);
+        void syncVariationImagesToCloud(next);
+        toast.success('Image removed');
         return next;
       });
-      toast.success('Image removed');
     },
-    [persistState]
+    [syncVariationImagesToCloud]
   );
 
   const getVariationImage = useCallback(

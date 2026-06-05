@@ -11,6 +11,7 @@ import type {
   WorkoutExercise,
   WorkoutSession,
   WorkoutSet,
+  VariationImageMap,
 } from './types';
 import { DAY_KEYS } from './constants';
 
@@ -387,6 +388,54 @@ export function variationImageKey(exerciseId: string, variation: string): string
 
 export function defaultExerciseImageUrl(exerciseId: string): string {
   return `https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=800&exercise=${exerciseId}`;
+}
+
+export function isRemoteImageUrl(src: string): boolean {
+  return src.startsWith('http://') || src.startsWith('https://');
+}
+
+/** Firestore documents max ~1 MiB — only sync small http(s) URLs, not base64 blobs. */
+export function cloudSafeVariationImages(images: VariationImageMap): VariationImageMap {
+  const out: VariationImageMap = {};
+  for (const [key, value] of Object.entries(images)) {
+    if (isRemoteImageUrl(value)) out[key] = value;
+  }
+  return out;
+}
+
+export function mergeVariationImages(
+  local: VariationImageMap,
+  remote: VariationImageMap
+): VariationImageMap {
+  return { ...remote, ...local };
+}
+
+export function compressImageFile(file: File, maxWidth = 960, quality = 0.72): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, maxWidth / Math.max(img.width, 1));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Could not process image'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => reject(new Error('Could not load image'));
+      img.src = reader.result as string;
+    };
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
 }
 
 export function getDayIndex(date: string): number {
