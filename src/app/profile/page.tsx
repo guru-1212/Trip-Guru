@@ -34,7 +34,9 @@ import {
   isPushConfigured,
   requestFCMToken,
   requestNotificationPermissionOnGesture,
+  watchNotificationPermission,
   warmPushInfrastructure,
+  type NotificationPermissionResult,
   type PushSetupStatus,
 } from '@/services/fcmService';
 import {
@@ -72,7 +74,9 @@ function ProfileContent() {
   const [displayPhotoUrl, setDisplayPhotoUrl] = useState<string | undefined>();
   const [pushStatus, setPushStatus] = useState<PushSetupStatus | null>(null);
   const [pushConfigured, setPushConfigured] = useState<boolean | null>(null);
+  const [notifyBlockedDialogOpen, setNotifyBlockedDialogOpen] = useState(false);
   const notifyTogglingRef = useRef(false);
+  const permissionRequestRef = useRef<Promise<NotificationPermissionResult> | null>(null);
 
   useEffect(() => {
     warmPushInfrastructure();
@@ -123,6 +127,24 @@ function ProfileContent() {
   useEffect(() => {
     loadInvites();
   }, [user]);
+
+  useEffect(() => {
+    return watchNotificationPermission((permission) => {
+      if (uid) {
+        getPushSetupStatus(uid, user?.fcmToken).then(setPushStatus);
+      }
+      if (
+        permission === 'granted' &&
+        notifyBlockedDialogOpen &&
+        !notifyEnabled &&
+        uid &&
+        !notifyTogglingRef.current
+      ) {
+        setNotifyBlockedDialogOpen(false);
+        void completeNotificationEnable();
+      }
+    });
+  }, [uid, user?.fcmToken, notifyBlockedDialogOpen, notifyEnabled]);
 
   const handleAcceptInvite = async (memberId: string) => {
     if (!uid) return;
@@ -192,6 +214,54 @@ function ProfileContent() {
     }
   };
 
+  const completeNotificationEnable = async () => {
+    if (!uid || notifySaving) return;
+
+    const previousEnabled = user?.notifyEnabled ?? false;
+
+    notifyTogglingRef.current = true;
+    setNotifySaving(true);
+    setNotifyEnabled(true);
+
+    try {
+      const result = await requestFCMToken(uid);
+
+      if (!result.token) {
+        setNotifyEnabled(previousEnabled);
+        if (result.error === 'permission_denied' && Notification.permission === 'denied') {
+          setNotifyBlockedDialogOpen(true);
+        } else {
+          toast.error(result.message);
+        }
+        return;
+      }
+
+      dispatch(
+        updateProfileLocal({
+          notifyEnabled: true,
+          fcmToken: result.token,
+        })
+      );
+      const status = await getPushSetupStatus(uid, result.token);
+      setPushStatus(status);
+      toast.success('Notifications enabled');
+    } catch (error) {
+      setNotifyEnabled(previousEnabled);
+      console.error('Failed to enable notifications:', error);
+      toast.error('Could not enable notifications. Try again.');
+    } finally {
+      notifyTogglingRef.current = false;
+      setNotifySaving(false);
+    }
+  };
+
+  const handleNotificationPointerDown = () => {
+    if (notifyEnabled || notifySaving || !uid) return;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'default') return;
+    permissionRequestRef.current = requestNotificationPermissionOnGesture();
+  };
+
   const handleNotificationTap = async () => {
     if (!uid || notifySaving) return;
 
@@ -219,43 +289,43 @@ function ProfileContent() {
       return;
     }
 
-    // Enable: first await MUST be the browser permission prompt (mobile Chrome user-gesture rule).
-    const permissionResult = await requestNotificationPermissionOnGesture();
-    if (!permissionResult.granted) {
-      toast.error(permissionResult.message);
+    if (typeof Notification !== 'undefined' && Notification.permission === 'denied') {
+      setNotifyBlockedDialogOpen(true);
       return;
     }
 
-    notifyTogglingRef.current = true;
-    setNotifySaving(true);
-    setNotifyEnabled(true);
+    const permissionResult = permissionRequestRef.current
+      ? await permissionRequestRef.current
+      : await requestNotificationPermissionOnGesture();
+    permissionRequestRef.current = null;
 
-    try {
-      const result = await requestFCMToken(uid);
-
-      if (!result.token) {
-        setNotifyEnabled(previousEnabled);
-        toast.error(result.message);
-        return;
+    if (!permissionResult.granted) {
+      if (permissionResult.blocked) {
+        setNotifyBlockedDialogOpen(true);
+      } else {
+        toast.error(permissionResult.message);
       }
-
-      dispatch(
-        updateProfileLocal({
-          notifyEnabled: true,
-          fcmToken: result.token,
-        })
-      );
-      const status = await getPushSetupStatus(uid, result.token);
-      setPushStatus(status);
-      toast.success('Notifications enabled');
-    } catch (error) {
-      setNotifyEnabled(previousEnabled);
-      console.error('Failed to enable notifications:', error);
-      toast.error('Could not enable notifications. Try again.');
-    } finally {
-      notifyTogglingRef.current = false;
-      setNotifySaving(false);
+      return;
     }
+
+    await completeNotificationEnable();
+  };
+
+  const handleRetryNotificationUnblock = async () => {
+    if (!uid || notifySaving) return;
+
+    const permissionResult = await requestNotificationPermissionOnGesture();
+    if (!permissionResult.granted) {
+      toast.error(
+        permissionResult.blocked
+          ? 'Still blocked — allow notifications for this site in your browser, then tap Try again.'
+          : permissionResult.message
+      );
+      return;
+    }
+
+    setNotifyBlockedDialogOpen(false);
+    await completeNotificationEnable();
   };
 
   const handleSignOut = async () => {
@@ -389,7 +459,9 @@ function ProfileContent() {
               <p className="text-[10px] font-medium text-muted-foreground leading-snug">
                 {notifyEnabled
                   ? 'You will get alerts for expenses, invites, and room activity.'
-                  : 'One tap to allow — Chrome will ask you to confirm.'}
+                  : pushStatus?.permission === 'denied'
+                    ? 'Blocked in browser — tap the switch for steps to allow.'
+                    : 'One tap to allow — your browser will ask you to confirm.'}
               </p>
             </div>
             <button
@@ -398,6 +470,7 @@ function ProfileContent() {
               aria-checked={notifyEnabled}
               aria-label={notifyEnabled ? 'Disable notifications' : 'Enable notifications'}
               disabled={notifySaving || pushConfigured === false}
+              onPointerDown={handleNotificationPointerDown}
               onClick={handleNotificationTap}
               className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 ${
                 notifyEnabled ? 'bg-primary' : 'bg-muted-foreground/30'
@@ -426,6 +499,37 @@ function ProfileContent() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={notifyBlockedDialogOpen} onOpenChange={setNotifyBlockedDialogOpen}>
+        <DialogContent className="rounded-[24px] max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-black">Allow notifications</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 text-sm text-muted-foreground">
+            <p>
+              Notifications were blocked earlier. Browsers cannot show the Allow popup again until
+              you turn them on for this site.
+            </p>
+            <ol className="list-decimal list-inside space-y-2 font-medium text-foreground">
+              <li>Tap the lock or site icon in the address bar</li>
+              <li>Open <span className="font-bold">Site settings</span> or <span className="font-bold">Permissions</span></li>
+              <li>Set <span className="font-bold">Notifications</span> to Allow</li>
+              <li>Return here and tap Try again</li>
+            </ol>
+            <p className="text-xs">
+              On Chrome mobile: menu (⋮) → Settings → Site settings → Notifications → find this
+              site and allow.
+            </p>
+          </div>
+          <Button
+            onClick={handleRetryNotificationUnblock}
+            disabled={notifySaving}
+            className="w-full rounded-xl h-11 font-bold"
+          >
+            {notifySaving ? 'Setting up…' : 'Try again'}
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       <div className="pt-4 flex flex-col gap-4">
         <Button variant="ghost" className="w-full rounded-2xl font-black text-xs uppercase tracking-widest h-12 hover:bg-destructive/5 hover:text-destructive transition-all" onClick={handleSignOut}>

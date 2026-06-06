@@ -192,41 +192,86 @@ function formatFcmError(error: unknown): string {
   return String(error);
 }
 
-function permissionDeniedMessage(): string {
-  return 'Tap Allow when your browser asks to enable notifications.';
-}
-
-/**
- * Must be the FIRST await inside a click/tap handler.
- * Mobile Chrome rejects Notification.requestPermission() after other async work (user gesture expires).
- */
-export async function requestNotificationPermissionOnGesture(): Promise<{
+export type NotificationPermissionResult = {
   granted: boolean;
   permission: NotificationPermission | 'unsupported';
   message: string;
-}> {
+  /** True when the browser will not show the Allow/Block prompt (already denied). */
+  blocked: boolean;
+};
+
+function permissionDismissedMessage(): string {
+  return 'Tap Allow when your browser asks to enable notifications.';
+}
+
+function permissionBlockedMessage(): string {
+  return 'Notifications are blocked for this site. Allow them in browser settings, then tap Try again.';
+}
+
+export function getNotificationPermission(): NotificationPermission | 'unsupported' {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  return Notification.permission;
+}
+
+/**
+ * Must be the FIRST await inside a click/tap handler (or started from onPointerDown on mobile).
+ * Mobile Chrome rejects Notification.requestPermission() after other async work (user gesture expires).
+ */
+export async function requestNotificationPermissionOnGesture(): Promise<NotificationPermissionResult> {
   if (typeof Notification === 'undefined') {
     return {
       granted: false,
       permission: 'unsupported',
       message: 'Notifications are not available in this browser.',
+      blocked: false,
     };
   }
 
   const current = Notification.permission;
   if (current === 'granted') {
-    return { granted: true, permission: 'granted', message: '' };
+    return { granted: true, permission: 'granted', message: '', blocked: false };
   }
 
-  const permission = await Notification.requestPermission();
+  const wasBlocked = current === 'denied';
+  const permission = wasBlocked ? 'denied' : await Notification.requestPermission();
   if (permission === 'granted') {
-    return { granted: true, permission: 'granted', message: '' };
+    return { granted: true, permission: 'granted', message: '', blocked: false };
   }
 
+  const blocked = wasBlocked || permission === 'denied';
   return {
     granted: false,
     permission,
-    message: permissionDeniedMessage(),
+    message: blocked ? permissionBlockedMessage() : permissionDismissedMessage(),
+    blocked,
+  };
+}
+
+/** Fires when the user changes notification permission in browser settings. */
+export function watchNotificationPermission(
+  onChange: (permission: NotificationPermission) => void
+): () => void {
+  if (typeof navigator === 'undefined' || !navigator.permissions?.query) {
+    return () => {};
+  }
+
+  let status: PermissionStatus | null = null;
+  const handler = () => {
+    if (!status) return;
+    const state = status.state;
+    onChange(state === 'prompt' ? 'default' : (state as NotificationPermission));
+  };
+
+  navigator.permissions
+    .query({ name: 'notifications' })
+    .then((result) => {
+      status = result;
+      result.addEventListener('change', handler);
+    })
+    .catch(() => {});
+
+  return () => {
+    status?.removeEventListener('change', handler);
   };
 }
 
@@ -240,10 +285,11 @@ export async function requestFCMToken(uid: string): Promise<FCMTokenResult> {
   }
 
   if (Notification.permission !== 'granted') {
+    const blocked = Notification.permission === 'denied';
     return {
       token: null,
       error: 'permission_denied',
-      message: permissionDeniedMessage(),
+      message: blocked ? permissionBlockedMessage() : permissionDismissedMessage(),
     };
   }
 
