@@ -261,7 +261,7 @@ export default function WorkoutPage() {
             {activeWorkout.exercises.map((ex) => {
               const lib = getExerciseById(ex.exerciseId);
               const variations = getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
-              const lastSession = getLastExerciseSession(workouts, ex.exerciseId);
+              const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
               const isExpanded = expandedEx === ex.exerciseId;
               const hasPR = ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
 
@@ -296,7 +296,7 @@ export default function WorkoutPage() {
 
                         {lastSession && (
                           <p className="text-xs text-[var(--wk-muted)]">
-                            Last: {formatWeight(lastSession.weight, profile.prefs.unit)} × {lastSession.reps}
+                            Last ({lastSession.variation}): {formatWeight(lastSession.bestSet.weight, profile.prefs.unit)} × {lastSession.bestSet.reps}
                           </p>
                         )}
 

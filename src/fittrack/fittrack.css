@@ -638,6 +638,113 @@
   box-shadow: var(--ft-shadow-md);
 }
 
+.ft-exercise-card--complete {
+  border-color: #16a34a !important;
+  background-color: #bbf7d0 !important;
+  box-shadow: var(--ft-shadow), inset 4px 0 0 #16a34a;
+}
+
+.ft-exercise-card--complete.ft-exercise-card--open {
+  border-color: #16a34a !important;
+  background-color: #bbf7d0 !important;
+  box-shadow: var(--ft-shadow-md), inset 4px 0 0 #16a34a;
+}
+
+.ft-exercise-card--complete .ft-exercise-trigger,
+.ft-exercise-card--complete .ft-exercise-body {
+  background-color: #bbf7d0;
+}
+
+.ft-exercise-card--complete .ft-exercise-body {
+  border-top-color: #16a34a55;
+}
+
+.dark .ft-exercise-card--complete,
+.dark .ft-exercise-card--complete.ft-exercise-card--open {
+  border-color: #22c55e !important;
+  background-color: rgba(22, 163, 74, 0.28) !important;
+  box-shadow: var(--ft-shadow), inset 4px 0 0 #22c55e;
+}
+
+.dark .ft-exercise-card--complete .ft-exercise-trigger,
+.dark .ft-exercise-card--complete .ft-exercise-body {
+  background-color: rgba(22, 163, 74, 0.28);
+}
+
+.ft-exercise-progress-fill--complete {
+  background: #16a34a;
+}
+
+.ft-exercise-done-badge {
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: hsl(142 55% 28%);
+  background: hsl(142 64% 38% / 0.18);
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.ft-last-session-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--ft-radius-md);
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--muted) / 0.35);
+  font-size: 0.75rem;
+  color: hsl(var(--muted-foreground));
+}
+
+.ft-last-session-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ft-last-session-legend-dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.ft-last-session-legend-dot--complete {
+  background: hsl(142 76% 36%);
+}
+
+.ft-last-session-legend-dot--history {
+  background: hsl(142 76% 36% / 0.45);
+}
+
+.ft-last-session-preview {
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: hsl(142 45% 32% / 0.9);
+}
+
+.ft-last-session-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.ft-last-session-list li {
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--ft-radius-md);
+  background: hsl(var(--muted) / 0.5);
+  color: hsl(var(--foreground));
+}
+
 .ft-exercise-progress {
   height: 3px;
   background: hsl(var(--muted));

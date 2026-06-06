@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
 import {
   BarChart,
   Bar,
@@ -20,6 +21,7 @@ import {
   Flame, 
   TrendingUp, 
   Dumbbell, 
+  ChevronLeft,
   ChevronRight, 
   CheckCircle2, 
   Target,
@@ -50,12 +52,16 @@ import {
   getTodaysSplit,
   getTodayDayKey,
   getGreeting,
+  getWorkoutsInRange,
 } from '@/workout/utils';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { cn } from '@/lib/utils';
 
+dayjs.extend(isoWeek);
+
 export default function DashboardPage() {
   const { profile, workouts, weeklyGoals, hydrated, prs, updateWorkoutDate } = useWorkoutStore();
+  const [feedWeekOffset, setFeedWeekOffset] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<Record<string, string>>({});
   const [sharingId, setSharingId] = useState<string | null>(null);
@@ -152,7 +158,32 @@ export default function DashboardPage() {
     return days;
   }, [workouts]);
 
-  const recent = workouts.slice(0, 5);
+  const feedWeek = useMemo(() => {
+    const start = dayjs().subtract(feedWeekOffset, 'week').startOf('isoWeek');
+    const end = start.endOf('isoWeek');
+    const sameYear = start.year() === end.year();
+    const label = sameYear
+      ? `${start.format('MMM D')} – ${end.format('MMM D, YYYY')}`
+      : `${start.format('MMM D, YYYY')} – ${end.format('MMM D, YYYY')}`;
+    return { start, end, label };
+  }, [feedWeekOffset]);
+
+  const maxFeedWeekOffset = useMemo(() => {
+    if (workouts.length === 0) return 0;
+    const oldest = workouts.reduce(
+      (min, w) => (w.date < min ? w.date : min),
+      workouts[0].date
+    );
+    return dayjs().startOf('isoWeek').diff(dayjs(oldest).startOf('isoWeek'), 'week');
+  }, [workouts]);
+
+  const feedWorkouts = useMemo(() => {
+    return getWorkoutsInRange(
+      workouts,
+      feedWeek.start.format('YYYY-MM-DD'),
+      feedWeek.end.format('YYYY-MM-DD')
+    ).sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf());
+  }, [workouts, feedWeek]);
 
   if (!hydrated) {
     return (
@@ -292,32 +323,40 @@ export default function DashboardPage() {
         <motion.div variants={item} className="ft-card ft-card-padded md:p-8">
           <h3 className="text-lg font-black tracking-tight mb-8">Target Profile</h3>
           {muscleData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={260}>
-              <PieChart>
-                <Pie
-                  data={muscleData}
-                  dataKey="count"
-                  nameKey="muscle"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={70}
-                  outerRadius={100}
-                  paddingAngle={5}
-                >
-                  {muscleData.map((entry) => (
-                    <Cell key={entry.muscle} fill={MUSCLE_COLORS[entry.muscle] ?? 'hsl(var(--primary))'} stroke="none" />
+            <div className="space-y-6">
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie
+                    data={muscleData}
+                    dataKey="count"
+                    nameKey="muscle"
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={5}
+                  >
+                    {muscleData.map((entry) => (
+                      <Cell key={entry.muscle} fill={MUSCLE_COLORS[entry.muscle] ?? 'hsl(var(--primary))'} stroke="none" />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                {[...muscleData]
+                  .sort((a, b) => b.count - a.count)
+                  .map((entry) => (
+                    <div key={entry.muscle} className="flex items-center gap-2 min-w-0">
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: MUSCLE_COLORS[entry.muscle] ?? 'hsl(var(--primary))' }}
+                      />
+                      <span className="text-xs font-black tracking-tight truncate">{entry.muscle}</span>
+                      <span className="text-xs font-black text-primary tabular-nums ml-auto">{entry.count}</span>
+                    </div>
                   ))}
-                </Pie>
-                <Tooltip
-                  contentStyle={{ 
-                    background: 'hsl(var(--card))', 
-                    border: '1px solid hsl(var(--border))', 
-                    borderRadius: 16,
-                    boxShadow: '0 10px 30px -10px rgba(0,0,0,0.2)'
-                  }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+              </div>
+            </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-12 text-center">
                <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
@@ -355,14 +394,69 @@ export default function DashboardPage() {
 
         {/* Recent Activity */}
         <motion.div variants={item} className="lg:col-span-2 ft-card ft-card-padded md:p-8">
-          <h3 className="text-lg font-black tracking-tight mb-8">Activity Feed</h3>
-          {recent.length === 0 ? (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+            <div className="space-y-1">
+              <h3 className="text-lg font-black tracking-tight">Activity Feed</h3>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                {feedWorkouts.length} session{feedWorkouts.length === 1 ? '' : 's'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                type="button"
+                aria-label="Previous week"
+                disabled={feedWeekOffset >= maxFeedWeekOffset}
+                onClick={() => {
+                  setFeedWeekOffset((o) => o + 1);
+                  setExpandedId(null);
+                }}
+                className={cn(
+                  'p-2 rounded-xl border border-white/10 transition-colors',
+                  feedWeekOffset >= maxFeedWeekOffset
+                    ? 'opacity-30 cursor-not-allowed'
+                    : 'hover:border-primary/30 hover:bg-primary/5'
+                )}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div className="min-w-[180px] text-center px-3">
+                <p className="text-xs font-black tracking-tight">{feedWeek.label}</p>
+                {feedWeekOffset === 0 ? (
+                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mt-0.5">This week</p>
+                ) : (
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-0.5">
+                    Week {feedWeek.start.isoWeek()}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                aria-label="Next week"
+                disabled={feedWeekOffset === 0}
+                onClick={() => {
+                  setFeedWeekOffset((o) => Math.max(0, o - 1));
+                  setExpandedId(null);
+                }}
+                className={cn(
+                  'p-2 rounded-xl border border-white/10 transition-colors',
+                  feedWeekOffset === 0
+                    ? 'opacity-30 cursor-not-allowed'
+                    : 'hover:border-primary/30 hover:bg-primary/5'
+                )}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+          {feedWorkouts.length === 0 ? (
             <div className="text-center py-12">
-               <p className="text-muted-foreground text-sm font-bold uppercase tracking-widest">Waiting for first session...</p>
+               <p className="text-muted-foreground text-sm font-bold uppercase tracking-widest">
+                 {workouts.length === 0 ? 'Waiting for first session...' : 'No sessions this week'}
+               </p>
             </div>
           ) : (
             <div className="space-y-4">
-              {recent.map((w) => (
+              {feedWorkouts.map((w) => (
                 <div key={w.id} className="group relative ft-card overflow-hidden transition-all hover:border-primary/30">
                   <button
                     type="button"

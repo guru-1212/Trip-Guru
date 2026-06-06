@@ -123,21 +123,74 @@ export function getLastTrainedDate(workouts: WorkoutSession[], splitId: SplitId)
   return match?.date ?? null;
 }
 
+export interface LastExerciseSession {
+  date: string;
+  variation: string;
+  sets: { weight: number; reps: number }[];
+  bestSet: { weight: number; reps: number };
+}
+
+function normalizeVariation(variation: string): string {
+  return variation.trim();
+}
+
+function variationMatches(a: string, b: string): boolean {
+  return normalizeVariation(a) === normalizeVariation(b);
+}
+
 export function getLastExerciseSession(
   workouts: WorkoutSession[],
-  exerciseId: string
-): { weight: number; reps: number; variation: string; date: string } | null {
+  exerciseId: string,
+  variation?: string
+): LastExerciseSession | null {
   for (const w of [...workouts].sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf())) {
-    const ex = w.exercises.find((e) => e.exerciseId === exerciseId);
+    const ex = w.exercises.find((e) => {
+      if (e.exerciseId !== exerciseId) return false;
+      if (variation !== undefined && !variationMatches(e.variation, variation)) return false;
+      return true;
+    });
     if (!ex) continue;
-    const best = ex.sets
-      .filter((s) => s.done && s.weight > 0)
-      .sort((a, b) => b.weight - a.weight || b.reps - a.reps)[0];
-    if (best) {
-      return { weight: best.weight, reps: best.reps, variation: ex.variation, date: w.date };
-    }
+    const doneSets = ex.sets.filter((s) => s.done && s.weight > 0);
+    if (doneSets.length === 0) continue;
+    const best = [...doneSets].sort((a, b) => b.weight - a.weight || b.reps - a.reps)[0];
+    return {
+      date: w.date,
+      variation: ex.variation,
+      sets: doneSets.map((s) => ({ weight: s.weight, reps: s.reps })),
+      bestSet: { weight: best.weight, reps: best.reps },
+    };
   }
   return null;
+}
+
+export function isExerciseFullyDone(ex: WorkoutExercise): boolean {
+  return ex.sets.length > 0 && ex.sets.every((s) => s.done);
+}
+
+function exerciseCompletionTier(ex: WorkoutExercise): number {
+  if (isExerciseFullyDone(ex)) return 0;
+  if (ex.sets.some((s) => s.done)) return 1;
+  return 2;
+}
+
+export function sortExercisesByCompletion(exercises: WorkoutExercise[]): WorkoutExercise[] {
+  return [...exercises].sort((a, b) => {
+    const tierDiff = exerciseCompletionTier(a) - exerciseCompletionTier(b);
+    if (tierDiff !== 0) return tierDiff;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+export function formatLastSessionPreview(
+  last: LastExerciseSession,
+  unit: 'kg' | 'lbs',
+  maxSets = 2
+): string {
+  const setStrs = last.sets.slice(0, maxSets).map(
+    (s) => `${formatWeight(s.weight, unit)}×${s.reps}`
+  );
+  const extra = last.sets.length > maxSets ? `, +${last.sets.length - maxSets} more` : '';
+  return setStrs.join(', ') + extra;
 }
 
 export function isPR(
@@ -395,6 +448,14 @@ export function getMuscleOrderForSplit(splitId: SplitId): MuscleGroup[] {
   return map[splitId] ?? [];
 }
 
+function muscleGroupCompletionScore(exercises: WorkoutExercise[]): number {
+  const fullyDone = exercises.filter(isExerciseFullyDone).length;
+  const partial = exercises.filter(
+    (e) => !isExerciseFullyDone(e) && e.sets.some((s) => s.done)
+  ).length;
+  return fullyDone * 1000 + partial * 10;
+}
+
 export function groupExercisesByMuscle(
   exercises: WorkoutExercise[],
   splitId: SplitId
@@ -412,14 +473,21 @@ export function groupExercisesByMuscle(
   for (const muscle of order) {
     const list = groups.get(muscle);
     if (list?.length) {
-      result.push({ muscle, exercises: list });
+      result.push({ muscle, exercises: sortExercisesByCompletion(list) });
       groups.delete(muscle);
     }
   }
   Array.from(groups.entries()).forEach(([muscle, list]) => {
-    if (list.length) result.push({ muscle, exercises: list });
+    if (list.length) result.push({ muscle, exercises: sortExercisesByCompletion(list) });
   });
-  return result;
+
+  return result.sort((a, b) => {
+    const scoreDiff = muscleGroupCompletionScore(b.exercises) - muscleGroupCompletionScore(a.exercises);
+    if (scoreDiff !== 0) return scoreDiff;
+    const aIdx = order.indexOf(a.muscle as (typeof order)[number]);
+    const bIdx = order.indexOf(b.muscle as (typeof order)[number]);
+    return (aIdx === -1 ? 999 : aIdx) - (bIdx === -1 ? 999 : bIdx);
+  });
 }
 
 export function variationImageKey(exerciseId: string, variation: string): string {

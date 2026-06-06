@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Search, Plus, Pencil, Trash2, X } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
+import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { EXERCISE_LIBRARY } from '@/workout/exerciseLibrary';
 import { getExerciseSessionChart, getExerciseHistory } from '@/workout/analytics';
@@ -50,6 +51,9 @@ export default function ExercisesPage() {
   const [selected, setSelected] = useState<LibraryExercise | CustomExercise | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<CustomExercise | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<CustomExercise | null>(null);
+  const [deletePin, setDeletePin] = useState('');
+  const [deletePinError, setDeletePinError] = useState(false);
 
   const allExercises = useMemo(() => {
     const custom: LibraryExercise[] = customExercises.map((c) => ({
@@ -164,8 +168,16 @@ export default function ExercisesPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => deleteCustomExercise(ex.id)}
-                        className="text-red-500"
+                        onClick={() => {
+                          const c = customExercises.find((x) => x.id === ex.id);
+                          if (c) {
+                            setDeleteConfirm(c);
+                            setDeletePin('');
+                            setDeletePinError(false);
+                          }
+                        }}
+                        className="text-red-500 hover:text-red-400"
+                        aria-label={`Delete ${ex.name}`}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -182,7 +194,7 @@ export default function ExercisesPage() {
                 </div>
                 {last && (
                   <p className="text-xs text-muted-foreground mt-2">
-                    Last: {dayjs(last.date).format('MMM D')} — {formatWeight(last.weight, profile.prefs.unit)} × {last.reps}
+                    Last: {dayjs(last.date).format('MMM D')} — {formatWeight(last.bestSet.weight, profile.prefs.unit)} × {last.bestSet.reps}
                   </p>
                 )}
                 {pr && !last && (
@@ -206,6 +218,61 @@ export default function ExercisesPage() {
             getVariationsForExercise={getVariationsForExercise}
             onClose={() => setSelected(null)}
           />
+        )}
+
+        {deleteConfirm && (
+          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setDeleteConfirm(null)}>
+            <div className="ft-card ft-card-padded max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+              <div className="text-center">
+                <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 mx-auto mb-4">
+                  <Trash2 className="h-6 w-6" />
+                </div>
+                <h2 className="ft-title text-lg font-bold">Delete exercise?</h2>
+                <p className="text-sm text-muted-foreground mt-2">
+                  <strong>{deleteConfirm.name}</strong> will be permanently removed from your library.
+                </p>
+              </div>
+              <PinConfirm
+                value={deletePin}
+                onChange={(v) => {
+                  setDeletePin(v);
+                  setDeletePinError(false);
+                }}
+                error={deletePinError}
+                label="Enter password to delete"
+              />
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  className="ft-btn ft-btn--secondary flex-1"
+                  onClick={() => {
+                    setDeleteConfirm(null);
+                    setDeletePin('');
+                    setDeletePinError(false);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="ft-btn ft-btn--danger flex-1"
+                  onClick={() => {
+                    if (deletePin !== FINISH_WORKOUT_PIN) {
+                      setDeletePinError(true);
+                      return;
+                    }
+                    deleteCustomExercise(deleteConfirm.id);
+                    if (selected?.id === deleteConfirm.id) setSelected(null);
+                    setDeleteConfirm(null);
+                    setDeletePin('');
+                    setDeletePinError(false);
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {showForm && (

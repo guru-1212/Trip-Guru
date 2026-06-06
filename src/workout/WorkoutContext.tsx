@@ -31,6 +31,8 @@ import {
   isRemoteImageUrl,
   compressImageFile,
   dataUrlToBlob,
+  countCompletedSets,
+  isExerciseFullyDone,
 } from './utils';
 import * as localStorage from './storage';
 import type { SplitId } from './types';
@@ -54,6 +56,7 @@ interface WorkoutContextValue {
   saveWorkout: (session: Omit<WorkoutSession, 'id'>) => WorkoutSession;
   startActiveWorkout: (state: ActiveWorkoutState) => void;
   updateActiveWorkout: (state: ActiveWorkoutState) => void;
+  patchActiveWorkout: (patcher: (prev: ActiveWorkoutState) => ActiveWorkoutState) => void;
   clearActiveWorkout: () => void;
   removeExerciseFromActiveWorkout: (exerciseId: string) => void;
   addCustomExercise: (ex: Omit<CustomExercise, 'id'>) => CustomExercise;
@@ -102,6 +105,24 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [syncing, setSyncing] = useState(true);
 
+  const mergeActiveWorkoutFromRemote = useCallback((remote: ActiveWorkoutState | null) => {
+    setActiveWorkout((local) => {
+      if (remote === null) return null;
+      if (local === null) return remote;
+      if (local.startedAt !== remote.startedAt) return remote;
+
+      const localDone = countCompletedSets(local.exercises);
+      const remoteDone = countCompletedSets(remote.exercises);
+      if (localDone > remoteDone) return local;
+
+      const localFullyDone = local.exercises.filter(isExerciseFullyDone).length;
+      const remoteFullyDone = remote.exercises.filter(isExerciseFullyDone).length;
+      if (localFullyDone > remoteFullyDone) return local;
+
+      return remote;
+    });
+  }, []);
+
   useFitTrackSync(uid, {
     setProfile,
     setWorkouts,
@@ -111,7 +132,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setHabits,
     setWeeklyGoals,
     setChecklist,
-    setActiveWorkout,
+    setActiveWorkout: mergeActiveWorkoutFromRemote,
     setCustomVariations,
     setVariationImages,
     setSplitExtras,
@@ -224,6 +245,18 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setActiveWorkout(state);
     persistState({ activeWorkout: state });
   }, [persistState]);
+
+  const patchActiveWorkout = useCallback(
+    (patcher: (prev: ActiveWorkoutState) => ActiveWorkoutState) => {
+      setActiveWorkout((prev) => {
+        if (!prev) return prev;
+        const next = patcher(prev);
+        persistState({ activeWorkout: next });
+        return next;
+      });
+    },
+    [persistState]
+  );
 
   const clearActiveWorkout = useCallback(() => {
     setActiveWorkout(null);
@@ -581,6 +614,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       saveWorkout,
       startActiveWorkout,
       updateActiveWorkout,
+      patchActiveWorkout,
       clearActiveWorkout,
       removeExerciseFromActiveWorkout,
       addCustomExercise,
@@ -625,6 +659,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       saveWorkout,
       startActiveWorkout,
       updateActiveWorkout,
+      patchActiveWorkout,
       clearActiveWorkout,
       removeExerciseFromActiveWorkout,
       addCustomExercise,
