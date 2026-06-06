@@ -104,6 +104,11 @@ export {
 } from '@/firebase/roomAuditLog.firestore';
 
 export {
+  createTripAuditLog,
+  getTripAuditLogs,
+} from '@/firebase/tripAuditLog.firestore';
+
+export {
   getRoomBringItems,
   createRoomBringItem,
   updateRoomBringItem,

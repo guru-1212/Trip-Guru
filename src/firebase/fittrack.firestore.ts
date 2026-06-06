@@ -22,6 +22,7 @@ import type {
   HabitDay,
   PersonalRecord,
   SplitId,
+  TodayExercisePick,
   UserProfile,
   WeeklyGoals,
   WorkoutSession,
@@ -43,6 +44,7 @@ export interface FitTrackStateDoc {
   customVariations: Record<string, string[]>;
   variationImages: Record<string, string>;
   splitExtras: Partial<Record<SplitId, string[]>>;
+  splitTodayPicks: Partial<Record<SplitId, TodayExercisePick[]>>;
   activeWorkout: ActiveWorkoutState | null;
   migratedFromLocal?: boolean;
   updatedAt?: unknown;
@@ -96,6 +98,7 @@ export function defaultStateDoc(): FitTrackStateDoc {
     customVariations: {},
     variationImages: {},
     splitExtras: {},
+    splitTodayPicks: {},
     activeWorkout: null,
   };
 }
@@ -223,6 +226,7 @@ export async function migrateLocalStorageToFirebase(uid: string): Promise<boolea
     customVariations: localStorage.loadCustomVariations(),
     variationImages: cloudSafeVariationImages(localStorage.loadVariationImages()),
     splitExtras: localStorage.loadSplitExtras(),
+    splitTodayPicks: localStorage.loadSplitTodayPicks(),
     activeWorkout: localStorage.loadActiveWorkout(),
     migratedFromLocal: true,
   });
@@ -244,6 +248,7 @@ export async function importFitTrackData(
     customVariations?: Record<string, string[]>;
     variationImages?: Record<string, string>;
     splitExtras?: Partial<Record<SplitId, string[]>>;
+    splitTodayPicks?: Partial<Record<SplitId, TodayExercisePick[]>>;
   }
 ): Promise<void> {
   if (data.profile) await saveFitTrackProfile(uid, data.profile);
@@ -276,6 +281,7 @@ export async function importFitTrackData(
     customVariations: data.customVariations,
     variationImages: data.variationImages ? cloudSafeVariationImages(data.variationImages) : undefined,
     splitExtras: data.splitExtras,
+    splitTodayPicks: data.splitTodayPicks,
   });
 }
 

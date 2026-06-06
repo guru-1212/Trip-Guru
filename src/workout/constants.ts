@@ -13,6 +13,7 @@ export const STORAGE_KEYS = {
   customVariations: 'wk_custom_variations',
   variationImages: 'wk_variation_images',
   splitExtras: 'wk_split_extras',
+  splitTodayPicks: 'wk_split_today_picks',
 } as const;
 
 export const SPLIT_DEFINITIONS: SplitDefinition[] = [

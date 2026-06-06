@@ -3,7 +3,6 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import {
   onDocumentCreated,
   onDocumentUpdated,
-  onDocumentDeleted,
   onDocumentWritten,
 } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
@@ -17,6 +16,7 @@ import {
   sendMulticastPush,
   sendPushToUser,
   tripNotificationLink,
+  tripNotificationTitle,
 } from './notifications';
 import {
   dispatchDueFitTrackReminders,
@@ -124,93 +124,27 @@ export const onRoomAuditLogCreated = onDocumentCreated(
   }
 );
 
-function formatTripExpenseBody(
-  actorName: string,
-  verb: 'added' | 'updated' | 'removed',
-  expense: FirebaseFirestore.DocumentData
-): string {
-  const title = expense.title || expense.category || 'expense';
-  const amount = expense.amount != null ? ` — ${expense.amount}` : '';
-  return `${actorName} ${verb} ${title}${amount}`;
-}
-
-export const onTripExpenseCreated = onDocumentCreated(
-  'expenses/{expenseId}',
+/** Trip activity — packing, plan, expenses, members, etc. */
+export const onTripAuditLogCreated = onDocumentCreated(
+  'tripAuditLogs/{logId}',
   async (event) => {
-    const expense = event.data?.data();
-    if (!expense?.tripId || expense.expenseType === 'planned') return;
+    const log = event.data?.data();
+    if (!log?.tripId || !log?.actorUid || !log?.summary) return;
 
-    const createdBy = expense.createdBy as string | undefined;
-    if (!createdBy) return;
-
-    const actorName = await getUserDisplayName(createdBy);
-    const tokens = await collectTripMemberTokens(
-      expense.tripId as string,
-      createdBy
-    );
-    const tripId = expense.tripId as string;
-    const link = `/trips/${tripId}/expenses`;
+    const action = String(log.action ?? 'trip.update');
+    const tripId = log.tripId as string;
+    const actorUid = log.actorUid as string;
+    const tokens = await collectTripMemberTokens(tripId, actorUid);
+    const link = tripNotificationLink(action, tripId);
 
     await sendMulticastPush(tokens, {
-      title: 'New trip expense',
-      body: formatTripExpenseBody(actorName, 'added', expense),
+      title: tripNotificationTitle(action),
+      body: String(log.summary),
       link,
-      data: { type: 'expense.created', tripId },
-    });
-  }
-);
-
-export const onTripExpenseUpdated = onDocumentUpdated(
-  'expenses/{expenseId}',
-  async (event) => {
-    const before = event.data?.before.data();
-    const after = event.data?.after.data();
-    if (!after?.tripId || after.expenseType === 'planned') return;
-
-    const createdBy = after.createdBy as string | undefined;
-    if (!createdBy) return;
-
-    const changed =
-      before?.amount !== after.amount ||
-      before?.title !== after.title ||
-      before?.category !== after.category ||
-      before?.paidBy !== after.paidBy;
-    if (!changed) return;
-
-    const actorName = await getUserDisplayName(createdBy);
-    const tokens = await collectTripMemberTokens(after.tripId as string, createdBy);
-    const tripId = after.tripId as string;
-
-    await sendMulticastPush(tokens, {
-      title: 'Expense updated',
-      body: formatTripExpenseBody(actorName, 'updated', after),
-      link: `/trips/${tripId}/expenses`,
-      data: { type: 'expense.updated', tripId },
-    });
-  }
-);
-
-export const onTripExpenseDeleted = onDocumentDeleted(
-  'expenses/{expenseId}',
-  async (event) => {
-    const expense = event.data?.data();
-    if (!expense?.tripId || expense.expenseType === 'planned') return;
-
-    const createdBy = expense.createdBy as string | undefined;
-    if (!createdBy) return;
-
-    const actorName = await getUserDisplayName(createdBy);
-    const tokens = await collectTripMemberTokens(
-      expense.tripId as string,
-      createdBy
-    );
-    const tripId = expense.tripId as string;
-
-    await sendMulticastPush(tokens, {
-      title: 'Expense removed',
-      body: formatTripExpenseBody(actorName, 'removed', expense),
-      link: `/trips/${tripId}/expenses`,
-      data: { type: 'expense.deleted', tripId },
+      data: {
+        type: action,
+        tripId,
+      },
     });
   }
 );

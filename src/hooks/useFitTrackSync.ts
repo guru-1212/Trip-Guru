@@ -17,6 +17,7 @@ import type {
   HabitDay,
   PersonalRecord,
   SplitId,
+  TodayExercisePick,
   UserProfile,
   WeeklyGoals,
   WorkoutSession,
@@ -37,6 +38,7 @@ export interface FitTrackSyncCallbacks {
   setCustomVariations: (v: Record<string, string[]>) => void;
   setVariationImages: (v: Record<string, string>) => void;
   setSplitExtras: (e: Partial<Record<SplitId, string[]>>) => void;
+  setSplitTodayPicks: (p: Partial<Record<SplitId, TodayExercisePick[]>>) => void;
   setHydrated: (h: boolean) => void;
   setSyncing: (s: boolean) => void;
 }
@@ -100,6 +102,7 @@ export function useFitTrackSync(uid: string | null | undefined, callbacks: FitTr
             mergeVariationImages(loadVariationImages(), data.variationImages ?? {})
           );
           cb().setSplitExtras(data.splitExtras ?? {});
+          cb().setSplitTodayPicks(data.splitTodayPicks ?? {});
         },
         (err) => console.error('[FitTrack] state listener:', err)
       )

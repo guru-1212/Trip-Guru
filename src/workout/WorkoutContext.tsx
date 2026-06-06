@@ -18,6 +18,7 @@ import type {
   WeeklyGoals,
   WorkoutSession,
   UserPrefs,
+  TodayExercisePick,
 } from './types';
 import {
   generateId,
@@ -50,6 +51,7 @@ interface WorkoutContextValue {
   customVariations: Record<string, string[]>;
   variationImages: VariationImageMap;
   splitExtras: Partial<Record<SplitId, string[]>>;
+  splitTodayPicks: Partial<Record<SplitId, TodayExercisePick[]>>;
   hydrated: boolean;
   syncing: boolean;
   updateProfile: (p: Partial<Omit<UserProfile, 'prefs'>> & { prefs?: Partial<UserPrefs> }) => void;
@@ -81,6 +83,7 @@ interface WorkoutContextValue {
   updateWorkoutDate: (id: string, newDate: string) => void;
   deleteWorkout: (id: string) => void;
   rememberSplitExercise: (splitId: SplitId, exerciseId: string) => void;
+  rememberTodayPicks: (splitId: SplitId, picks: TodayExercisePick[]) => void;
 }
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
@@ -102,6 +105,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [customVariations, setCustomVariations] = useState<Record<string, string[]>>({});
   const [variationImages, setVariationImages] = useState<VariationImageMap>({});
   const [splitExtras, setSplitExtras] = useState<Partial<Record<SplitId, string[]>>>({});
+  const [splitTodayPicks, setSplitTodayPicks] = useState<Partial<Record<SplitId, TodayExercisePick[]>>>({});
   const [hydrated, setHydrated] = useState(false);
   const [syncing, setSyncing] = useState(true);
 
@@ -136,6 +140,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setCustomVariations,
     setVariationImages,
     setSplitExtras,
+    setSplitTodayPicks,
     setHydrated,
     setSyncing,
   });
@@ -488,6 +493,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       customVariations,
       variationImages,
       splitExtras,
+      splitTodayPicks,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -498,7 +504,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Data exported');
-  }, [profile, workouts, prs, customExercises, bodyStats, habits, weeklyGoals, checklist, customVariations, variationImages, splitExtras]);
+  }, [profile, workouts, prs, customExercises, bodyStats, habits, weeklyGoals, checklist, customVariations, variationImages, splitExtras, splitTodayPicks]);
 
   const importData = useCallback((json: string) => {
     const currentUid = uidRef.current;
@@ -577,6 +583,15 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     });
   }, [persistState]);
 
+  const rememberTodayPicks = useCallback((splitId: SplitId, picks: TodayExercisePick[]) => {
+    setSplitTodayPicks((prev) => {
+      const next = { ...prev, [splitId]: picks };
+      persistState({ splitTodayPicks: next });
+      localStorage.saveSplitTodayPicks(next);
+      return next;
+    });
+  }, [persistState]);
+
   const deleteWorkout = useCallback((id: string) => {
     setWorkouts((prev) => {
       const next = prev.filter((w) => w.id !== id);
@@ -608,6 +623,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       customVariations,
       variationImages,
       splitExtras,
+      splitTodayPicks,
       hydrated,
       syncing,
       updateProfile,
@@ -639,6 +655,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       updateWorkoutDate,
       deleteWorkout,
       rememberSplitExercise,
+      rememberTodayPicks,
     }),
     [
       profile,
@@ -653,6 +670,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       customVariations,
       variationImages,
       splitExtras,
+      splitTodayPicks,
       hydrated,
       syncing,
       updateProfile,
@@ -684,6 +702,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       updateWorkoutDate,
       deleteWorkout,
       rememberSplitExercise,
+      rememberTodayPicks,
     ]
   );
 

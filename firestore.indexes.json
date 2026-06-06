@@ -97,6 +97,14 @@
       ]
     },
     {
+      "collectionGroup": "tripAuditLogs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "tripId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "fittrackReminders",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

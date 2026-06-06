@@ -107,13 +107,24 @@ export function roomNotificationTitle(action: string): string {
 }
 
 export function tripNotificationLink(
-  type: string,
+  action: string,
   tripId: string
 ): string {
-  if (type.startsWith('settlement')) return `/trips/${tripId}/settlement`;
-  if (type.startsWith('expense')) return `/trips/${tripId}/expenses`;
-  if (type.startsWith('member')) return `/trips/${tripId}/members`;
+  if (action.startsWith('settlement')) return `/trips/${tripId}/settlement`;
+  if (action.startsWith('expense.')) return `/trips/${tripId}/expenses`;
+  if (action.startsWith('pack_item.')) return `/trips/${tripId}/packing`;
+  if (action.startsWith('plan.')) return `/trips/${tripId}/plan`;
+  if (action.startsWith('member.')) return `/trips/${tripId}/members`;
   return `/trips/${tripId}`;
+}
+
+export function tripNotificationTitle(action: string): string {
+  if (action.startsWith('expense.')) return 'Trip expense';
+  if (action.startsWith('pack_item.')) return 'Packing list';
+  if (action.startsWith('plan.')) return 'Trip plan';
+  if (action.startsWith('member.')) return 'Trip member';
+  if (action.startsWith('settlement')) return 'Settlement';
+  return 'Trip update';
 }
 
 export async function sendMulticastPush(

@@ -18,7 +18,15 @@ import {
   getTripPackTemplatePack,
   type TripPackTemplateItem,
 } from '@/lib/tripPackTemplates';
+import { recordTripAuditLog } from '@/services/tripAuditLogService';
 import type { RootState } from '@/store';
+
+function getAuditActor(state: RootState) {
+  return {
+    uid: state.auth.firebaseUid ?? '',
+    name: state.auth.user?.name ?? 'Someone',
+  };
+}
 
 function canEditPackItem(item: TripPackItem, uid: string): boolean {
   return item.createdBy === uid;
@@ -80,6 +88,19 @@ export const addTripPackItemThunk = createAsyncThunk(
         createdAt: { toDate: () => new Date() } as TripPackItem['createdAt'],
       })
     );
+
+    const actor = getAuditActor(state);
+    await recordTripAuditLog({
+      tripId: item.tripId,
+      action: 'pack_item.created',
+      entityType: 'pack_item',
+      entityId: id,
+      actorUid: actor.uid,
+      actorName: actor.name,
+      summary: `${actor.name} added "${item.title}" to the packing list`,
+      metadata: { title: item.title },
+    });
+
     return id;
   }
 );
@@ -134,6 +155,35 @@ export const updateTripPackItemThunk = createAsyncThunk(
 
     await updateTripPackItem(itemId, data);
     dispatch(updateTripPackItemAction({ id: itemId, ...data }));
+
+    const actor = getAuditActor(state);
+    const title = (data.title ?? item.title) as string;
+
+    if (statusOnly && data.status === 'packed') {
+      await recordTripAuditLog({
+        tripId: item.tripId,
+        action: 'pack_item.packed',
+        entityType: 'pack_item',
+        entityId: itemId,
+        actorUid: actor.uid,
+        actorName: actor.name,
+        summary: `${actor.name} marked "${title}" as packed`,
+        metadata: { title },
+      });
+    } else {
+      await recordTripAuditLog({
+        tripId: item.tripId,
+        action: 'pack_item.updated',
+        entityType: 'pack_item',
+        entityId: itemId,
+        actorUid: actor.uid,
+        actorName: actor.name,
+        summary: statusOnly
+          ? `${actor.name} updated status for "${title}"`
+          : `${actor.name} updated "${title}" on the packing list`,
+        metadata: { title },
+      });
+    }
   }
 );
 
@@ -189,6 +239,18 @@ export const deleteTripPackItemThunk = createAsyncThunk(
     }
     await deleteTripPackItem(itemId);
     dispatch(removeTripPackItem(itemId));
+
+    const actor = getAuditActor(state);
+    await recordTripAuditLog({
+      tripId: item.tripId,
+      action: 'pack_item.deleted',
+      entityType: 'pack_item',
+      entityId: itemId,
+      actorUid: actor.uid,
+      actorName: actor.name,
+      summary: `${actor.name} removed "${item.title}" from the packing list`,
+      metadata: { title: item.title },
+    });
   }
 );
 
@@ -252,6 +314,18 @@ export const applyTripPackTemplateThunk = createAsyncThunk(
         })
       );
     });
+
+    const actor = getAuditActor(state);
+    await recordTripAuditLog({
+      tripId,
+      action: 'pack_item.batch_created',
+      entityType: 'pack_item',
+      actorUid: actor.uid,
+      actorName: actor.name,
+      summary: `${actor.name} added ${toCreate.length} suggested item${toCreate.length === 1 ? '' : 's'} to the packing list`,
+      metadata: { count: toCreate.length, packKey },
+    });
+
     return { added: toCreate.length };
   }
 );
@@ -293,6 +367,19 @@ export const addTripPackTemplateItemThunk = createAsyncThunk(
         createdAt: { toDate: () => new Date() } as TripPackItem['createdAt'],
       })
     );
+
+    const actor = getAuditActor(state);
+    await recordTripAuditLog({
+      tripId,
+      action: 'pack_item.created',
+      entityType: 'pack_item',
+      entityId: id,
+      actorUid: actor.uid,
+      actorName: actor.name,
+      summary: `${actor.name} added "${template.title}" to the packing list`,
+      metadata: { title: template.title },
+    });
+
     return { skipped: false, id };
   }
 );

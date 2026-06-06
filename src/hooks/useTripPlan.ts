@@ -9,8 +9,12 @@ import {
 } from '@/firebase/firestore';
 import { getExpenses } from '@/firebase/firestore';
 import { getTotalSpent } from '@/lib/settlementAlgorithm';
+import { recordTripAuditLog } from '@/services/tripAuditLogService';
+import { useAppSelector } from '@/store';
 
 export function useTripPlan(tripId: string) {
+  const actorUid = useAppSelector((s) => s.auth.firebaseUid ?? '');
+  const actorName = useAppSelector((s) => s.auth.user?.name ?? 'Someone');
   const [plan, setPlan] = useState<TripPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -36,6 +40,17 @@ export function useTripPlan(tripId: string) {
     try {
       await saveTripPlan(next);
       setPlan(next);
+      if (actorUid) {
+        await recordTripAuditLog({
+          tripId,
+          action: 'plan.updated',
+          entityType: 'plan',
+          entityId: tripId,
+          actorUid,
+          actorName,
+          summary: `${actorName} updated the trip plan`,
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -47,6 +62,17 @@ export function useTripPlan(tripId: string) {
       const data = await resetTripPlanToDefault(tripId);
       const expenses = await getExpenses(tripId);
       setPlan({ ...data, budgetUsed: getTotalSpent(expenses) });
+      if (actorUid) {
+        await recordTripAuditLog({
+          tripId,
+          action: 'plan.reset',
+          entityType: 'plan',
+          entityId: tripId,
+          actorUid,
+          actorName,
+          summary: `${actorName} reset the trip plan`,
+        });
+      }
     } finally {
       setSaving(false);
     }

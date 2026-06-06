@@ -20,6 +20,7 @@ import { useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { removeTripMember, addMemberToTrip } from '@/firebase/firestore';
 import { sendTripInviteNotification } from '@/services/fcmService';
+import { recordTripAuditLog } from '@/services/tripAuditLogService';
 import { EmptyState } from '@/components/common/EmptyState';
 import { useState } from 'react';
 
@@ -36,6 +37,7 @@ export default function TripMembersPage() {
 
 function MembersContent({ tripId }: { tripId: string }) {
   const { uid } = useAuth();
+  const actorName = useAppSelector((s) => s.auth.user?.name ?? 'Someone');
   const trip = useAppSelector((s) => s.trips.currentTrip);
   const members = useAppSelector((s) => s.trips.members);
 
@@ -52,9 +54,22 @@ function MembersContent({ tripId }: { tripId: string }) {
 
   const handleRemove = async (memberId: string) => {
     if (!confirm('Remove this member? Any "Equal Split" expenses will be redistributed among remaining members.')) return;
+    const removed = members.find((m) => m.id === memberId);
     setSubmitting(true);
     try {
       await removeTripMember(memberId);
+      if (uid && removed) {
+        await recordTripAuditLog({
+          tripId,
+          action: 'member.removed',
+          entityType: 'member',
+          entityId: memberId,
+          actorUid: uid,
+          actorName,
+          summary: `${actorName} removed ${removed.name} from the trip`,
+          metadata: { memberName: removed.name },
+        });
+      }
     } catch (err) {
       console.error(err);
       alert('Failed to remove member');
@@ -73,6 +88,21 @@ function MembersContent({ tripId }: { tripId: string }) {
         { name, email, phone },
         recalculate
       );
+
+      if (uid) {
+        await recordTripAuditLog({
+          tripId,
+          action: 'member.invited',
+          entityType: 'member',
+          actorUid: uid,
+          actorName,
+          summary: `${actorName} added ${name.trim()} to the trip`,
+          metadata: {
+            memberName: name.trim(),
+            email: email.trim().toLowerCase(),
+          },
+        });
+      }
 
       if (matchedUserId && trip) {
         await sendTripInviteNotification(matchedUserId, tripId, trip.tripName);

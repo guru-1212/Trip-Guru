@@ -16,7 +16,14 @@ Recipients: accepted `roomMembers` except `actorUid`. Respects `users.notifyEnab
 
 ## Trip notifications
 
-- `expenses` create / update / delete (actual expenses only)
+Trigger: `onTripAuditLogCreated` on `tripAuditLogs` writes.
+
+Covers any action that writes a trip audit log: packing items (add / update / pack / remove / batch), trip plan (save / reset), expenses (create / update / delete — actual only), members (add / remove).
+
+Recipients: accepted `tripMembers` except `actorUid`. Respects `users.notifyEnabled`.
+
+Also:
+
 - `settlements` create (save to history) — notifies trip members except saver
 - `settlements` update to `paid` — notifies trip members except who marked paid
 - `sendTripInvite` callable — direct push when a matched user is added

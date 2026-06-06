@@ -12,7 +12,6 @@ import {
   Plus,
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
-import { RestTimer } from '@/components/workout/RestTimer';
 import { VariationSelector } from '@/components/workout/VariationSelector';
 import { SessionSetRow } from '@/components/workout/SessionSetRow';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
@@ -70,8 +69,7 @@ export default function WorkoutPage() {
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
-  const [restEnd, setRestEnd] = useState<number | null>(null);
-  const [restDuration, setRestDuration] = useState(profile.prefs.restTimer);
+  const restDuration = activeWorkout?.restTimerSeconds ?? profile.prefs.restTimer;
 
   const preselected = searchParams.get('split') as SplitId | null;
 
@@ -84,8 +82,6 @@ export default function WorkoutPage() {
   useEffect(() => {
     if (activeWorkout) {
       setSelectedSplit(activeWorkout.splitId);
-      setRestDuration(activeWorkout.restTimerSeconds);
-      setRestEnd(activeWorkout.restTimerEnd);
     }
   }, [activeWorkout]);
 
@@ -156,7 +152,6 @@ export default function WorkoutPage() {
       const wasDone = sets[setIdx].done;
       sets[setIdx] = { ...sets[setIdx], done: !wasDone };
       if (!wasDone && sets[setIdx].done) {
-        setRestEnd(Date.now() + restDuration * 1000);
         updateActiveWorkout({
           ...activeWorkout,
           exercises: activeWorkout.exercises.map((e) =>
@@ -238,24 +233,6 @@ export default function WorkoutPage() {
               <p className="text-[var(--wk-accent)] font-mono text-lg">{formatDuration(elapsed)}</p>
             </div>
           </div>
-
-          <RestTimer
-            endTime={restEnd}
-            defaultSeconds={restDuration}
-            soundEnabled={profile.prefs.sound}
-            onComplete={() => {
-              setRestEnd(null);
-              if (activeWorkout) updateActiveWorkout({ ...activeWorkout, restTimerEnd: null });
-            }}
-            onDurationChange={(s) => {
-              setRestDuration(s);
-              if (activeWorkout) updateActiveWorkout({ ...activeWorkout, restTimerSeconds: s });
-            }}
-            onClose={() => {
-              setRestEnd(null);
-              if (activeWorkout) updateActiveWorkout({ ...activeWorkout, restTimerEnd: null });
-            }}
-          />
 
           <div className="space-y-3">
             {activeWorkout.exercises.map((ex) => {

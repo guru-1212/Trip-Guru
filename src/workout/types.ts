@@ -39,6 +39,8 @@ export interface WorkoutExercise {
   muscle: MuscleGroup;
   sets: WorkoutSet[];
   notes?: string;
+  /** True when selected for today's workout plan. */
+  pickedToday?: boolean;
 }
 
 export interface WorkoutSession {
@@ -171,6 +173,12 @@ export interface SplitDefinition {
   name: string;
   muscles: string[];
   icon: string;
+}
+
+/** Exercise + variation selected for a split's daily workout plan. */
+export interface TodayExercisePick {
+  exerciseId: string;
+  variation: string;
 }
 
 export interface ActiveWorkoutState {

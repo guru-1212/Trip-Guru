@@ -171,5 +171,12 @@ service cloud.firestore {
         && request.auth.uid == request.resource.data.actorUid;
       allow update, delete: if false;
     }
+    match /tripAuditLogs/{logId} {
+      allow read: if isTripMember(resource.data.tripId);
+      allow create: if isAuth()
+        && isTripMember(request.resource.data.tripId)
+        && request.auth.uid == request.resource.data.actorUid;
+      allow update, delete: if false;
+    }
   }
 }

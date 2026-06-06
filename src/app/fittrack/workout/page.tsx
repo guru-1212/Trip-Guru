@@ -27,14 +27,14 @@ import {
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { WorkoutShareCard } from '@/components/workout/WorkoutShareCard';
-import { RestTimer } from '@/components/workout/RestTimer';
 import { VariationSelector } from '@/components/workout/VariationSelector';
 import { SessionSetRow } from '@/components/workout/SessionSetRow';
 import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm';
 import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workout/AddExerciseModal';
+import { TodayExercisePicker } from '@/components/workout/TodayExercisePicker';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { SPLIT_DEFINITIONS, SPLIT_NAMES, MUSCLE_COLORS } from '@/workout/constants';
-import { getExercisesForSplit, getExerciseById } from '@/workout/exerciseLibrary';
+import { getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
 import type { CustomExercise, SplitId, WorkoutExercise, WorkoutSet, LibraryExercise, WeightUnit } from '@/workout/types';
 import {
@@ -48,17 +48,25 @@ import {
   formatLastSessionPreview,
   isPR,
   formatDuration,
+  formatCountdownHMS,
   formatWeight,
   displayWeight,
   inputToKg,
   calcWorkoutVolume,
   countCompletedSets,
   createWorkoutExercises,
-  getMuscleFromSplit,
   suggestWeight,
   groupExercisesByMuscle,
   defaultExerciseImageUrl,
   variationImageKey,
+  buildSplitExerciseLibrary,
+  partitionExercisesByPick,
+  countPickedExercisesDone,
+  getDefaultTodayPicks,
+  filterExercisesForSave,
+  isPickedToday,
+  todayPicksToMap,
+  mapToTodayPicks,
 } from '@/workout/utils';
 import {
   buildShareCardData,
@@ -132,7 +140,9 @@ export default function WorkoutPage() {
     addVariation,
     getVariationsForExercise,
     splitExtras,
+    splitTodayPicks,
     rememberSplitExercise,
+    rememberTodayPicks,
     addCustomExercise,
     updateProfile,
     removeExerciseFromActiveWorkout,
@@ -143,6 +153,9 @@ export default function WorkoutPage() {
   } = useWorkoutStore();
 
   const [selectedSplit, setSelectedSplit] = useState<SplitId | null>(null);
+  const [todayPicks, setTodayPicks] = useState<Map<string, string>>(new Map());
+  const [pickerExercises, setPickerExercises] = useState<LibraryExercise[]>([]);
+  const pickInitSplitRef = useRef<SplitId | null>(null);
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
@@ -156,8 +169,7 @@ export default function WorkoutPage() {
   const [removePinError, setRemovePinError] = useState(false);
   const [sharingStory, setSharingStory] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
-  const [restEnd, setRestEnd] = useState<number | null>(null);
-  const [restDuration, setRestDuration] = useState(profile.prefs.restTimer);
+  const restDuration = activeWorkout?.restTimerSeconds ?? profile.prefs.restTimer;
   const [infoModal, setInfoModal] = useState<{
     exercise: LibraryExercise;
     previewVariation: string;
@@ -229,8 +241,6 @@ export default function WorkoutPage() {
   useEffect(() => {
     if (activeWorkout) {
       setSelectedSplit(activeWorkout.splitId);
-      setRestDuration(activeWorkout.restTimerSeconds);
-      setRestEnd(activeWorkout.restTimerEnd);
     }
   }, [activeWorkout]);
 
@@ -249,40 +259,46 @@ export default function WorkoutPage() {
 
   const showOvertraining = lastTrained && isYesterday(lastTrained);
 
-  const beginWorkout = useCallback(() => {
-    if (!selectedSplit) return;
-    const split = SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit)!;
-    const library = getExercisesForSplit(selectedSplit);
-    const splitMuscles = getMuscleFromSplit(selectedSplit);
-    const customForSplit = customExercises
-      .filter(
-        (c) =>
-          splitMuscles.includes(c.muscle) ||
-          (c.secondary && splitMuscles.includes(c.secondary))
-      )
-      .map((c) => ({
-        id: c.id,
-        name: c.name,
-        muscle: c.muscle,
-        secondary: c.secondary,
-        equipment: c.equipment,
-        difficulty: c.difficulty,
-        variations: c.variations,
-        tips: c.notes ? [c.notes] : [],
-        splitIds: [selectedSplit] as SplitId[],
-        category: [c.muscle] as never[],
-      }));
+  const splitExerciseLibrary = useMemo(() => {
+    if (!selectedSplit) return [];
+    return buildSplitExerciseLibrary(selectedSplit, customExercises, splitExtras);
+  }, [selectedSplit, customExercises, splitExtras]);
 
-    const baseIds = new Set(library.map((l) => l.id));
-    const savedExtraIds = splitExtras[selectedSplit] ?? [];
-    const extraLibrary = savedExtraIds
-      .filter((id) => !baseIds.has(id))
-      .map((id) => {
-        const lib = getExerciseById(id);
-        if (lib) return lib;
-        const custom = customExercises.find((c) => c.id === id);
-        if (!custom) return null;
-        return {
+  useEffect(() => {
+    if (!selectedSplit) {
+      setTodayPicks(new Map());
+      setPickerExercises([]);
+      pickInitSplitRef.current = null;
+      return;
+    }
+    if (pickInitSplitRef.current === selectedSplit) return;
+    pickInitSplitRef.current = selectedSplit;
+
+    const byId = new Map(splitExerciseLibrary.map((e) => [e.id, e]));
+    const extraIds = new Set<string>();
+    const saved = splitTodayPicks[selectedSplit];
+    if (saved?.length) {
+      for (const item of saved) {
+        const id = typeof item === 'string' ? item : item.exerciseId;
+        if (!byId.has(id)) extraIds.add(id);
+      }
+    }
+    const lastSession = workouts.find((w) => w.splitId === selectedSplit);
+    if (lastSession) {
+      for (const ex of lastSession.exercises) {
+        if (!byId.has(ex.exerciseId)) extraIds.add(ex.exerciseId);
+      }
+    }
+    const extras: LibraryExercise[] = [];
+    for (const id of Array.from(extraIds)) {
+      const lib = getExerciseById(id);
+      if (lib) {
+        extras.push(lib);
+        continue;
+      }
+      const custom = customExercises.find((c) => c.id === id);
+      if (custom) {
+        extras.push({
           id: custom.id,
           name: custom.name,
           muscle: custom.muscle,
@@ -291,19 +307,30 @@ export default function WorkoutPage() {
           difficulty: custom.difficulty,
           variations: custom.variations,
           tips: custom.notes ? [custom.notes] : [],
-          splitIds: [selectedSplit] as SplitId[],
-          category: [custom.muscle] as never[],
-        };
-      })
-      .filter((ex): ex is NonNullable<typeof ex> => !!ex);
+          splitIds: [selectedSplit],
+          category: [custom.muscle],
+        });
+      }
+    }
+    const pickerList = [...splitExerciseLibrary, ...extras.filter((e) => !byId.has(e.id))];
+    setPickerExercises(pickerList);
+    const defaults = getDefaultTodayPicks(selectedSplit, workouts, splitTodayPicks, pickerList);
+    setTodayPicks(todayPicksToMap(defaults));
+  }, [selectedSplit, splitExerciseLibrary, workouts, splitTodayPicks, customExercises]);
 
-    const allExercises = [
-      ...library,
-      ...customForSplit.filter((c) => !library.some((l) => l.id === c.id)),
-      ...extraLibrary.filter((c) => !library.some((l) => l.id === c.id) && !customForSplit.some((x) => x.id === c.id)),
-    ];
-
-    const exercises = createWorkoutExercises(allExercises, profile.prefs.defaultSets);
+  const beginWorkout = useCallback(() => {
+    if (!selectedSplit || todayPicks.size === 0) return;
+    const split = SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit)!;
+    const baseLibrary = buildSplitExerciseLibrary(selectedSplit, customExercises, splitExtras);
+    const baseIds = new Set(baseLibrary.map((e) => e.id));
+    const extraFromPicker = pickerExercises.filter((e) => !baseIds.has(e.id));
+    const allExercises = [...baseLibrary, ...extraFromPicker];
+    const exercises = createWorkoutExercises(allExercises, profile.prefs.defaultSets).map((ex) => ({
+      ...ex,
+      pickedToday: todayPicks.has(ex.exerciseId),
+      variation: todayPicks.get(ex.exerciseId) ?? ex.variation,
+    }));
+    rememberTodayPicks(selectedSplit, mapToTodayPicks(todayPicks));
     const state = {
       splitId: selectedSplit,
       splitName: split.name,
@@ -314,8 +341,28 @@ export default function WorkoutPage() {
       addedExerciseIds: [],
     };
     startActiveWorkout(state);
-    setExpandedEx(exercises[0]?.exerciseId ?? null);
-  }, [selectedSplit, profile.prefs.defaultSets, profile.prefs.restTimer, customExercises, splitExtras, startActiveWorkout]);
+    const firstPicked = exercises.find((e) => e.pickedToday);
+    setExpandedEx(firstPicked?.exerciseId ?? exercises[0]?.exerciseId ?? null);
+  }, [
+    selectedSplit,
+    todayPicks,
+    pickerExercises,
+    profile.prefs.defaultSets,
+    profile.prefs.restTimer,
+    customExercises,
+    splitExtras,
+    startActiveWorkout,
+    rememberTodayPicks,
+  ]);
+
+  const handlePickerCreateCustom = useCallback(
+    (data: Omit<CustomExercise, 'id'>, remember: boolean) => {
+      const created = addCustomExercise(data);
+      if (remember && selectedSplit) rememberSplitExercise(selectedSplit, created.id);
+      return created;
+    },
+    [addCustomExercise, rememberSplitExercise, selectedSplit]
+  );
 
   const addExerciseToWorkout = useCallback(
     (exerciseId: string, remember: boolean) => {
@@ -328,7 +375,7 @@ export default function WorkoutPage() {
       if (!item) return;
       updateActiveWorkout({
         ...activeWorkout,
-        exercises: [...activeWorkout.exercises, item],
+        exercises: [...activeWorkout.exercises, { ...item, pickedToday: true }],
         addedExerciseIds: [...(activeWorkout.addedExerciseIds ?? []), exerciseId],
       });
       if (remember) rememberSplitExercise(activeWorkout.splitId, exerciseId);
@@ -356,8 +403,16 @@ export default function WorkoutPage() {
     }));
   };
 
+  const togglePickedToday = (exerciseId: string) => {
+    patchActiveWorkout((prev) => ({
+      ...prev,
+      exercises: prev.exercises.map((ex) =>
+        ex.exerciseId === exerciseId ? { ...ex, pickedToday: !isPickedToday(ex) } : ex
+      ),
+    }));
+  };
+
   const startTimer = () => {
-    setRestEnd(Date.now() + restDuration * 1000);
     patchActiveWorkout((prev) => ({
       ...prev,
       restTimerEnd: Date.now() + restDuration * 1000,
@@ -375,9 +430,6 @@ export default function WorkoutPage() {
         if (!wasDone && sets[setIdx].done) startedRest = true;
         return { ...ex, sets };
       });
-      if (startedRest) {
-        setRestEnd(Date.now() + restDuration * 1000);
-      }
       return {
         ...prev,
         exercises,
@@ -429,14 +481,15 @@ export default function WorkoutPage() {
 
   const confirmFinish = () => {
     if (!activeWorkout) return;
+    const exercisesToSave = filterExercisesForSave(activeWorkout.exercises);
     saveWorkout({
       date: workoutDate,
       splitId: activeWorkout.splitId,
       splitName: activeWorkout.splitName,
       duration: elapsed,
-      exercises: activeWorkout.exercises,
-      totalSets: countCompletedSets(activeWorkout.exercises),
-      totalVolume: calcWorkoutVolume(activeWorkout.exercises),
+      exercises: exercisesToSave,
+      totalSets: countCompletedSets(exercisesToSave),
+      totalVolume: calcWorkoutVolume(exercisesToSave),
     });
     clearActiveWorkout();
     setShowSummary(false);
@@ -513,11 +566,283 @@ export default function WorkoutPage() {
       }
     };
 
-    const groupedExercises = groupExercisesByMuscle(activeWorkout.exercises, activeWorkout.splitId);
+    const { picked: pickedExercises, unpicked: unpickedExercises } = partitionExercisesByPick(
+      activeWorkout.exercises
+    );
+    const pickedGroups = groupExercisesByMuscle(pickedExercises, activeWorkout.splitId);
+    const unpickedGroups = groupExercisesByMuscle(unpickedExercises, activeWorkout.splitId);
+    const { done: pickedDone, total: pickedTotal } = countPickedExercisesDone(activeWorkout.exercises);
     const addedExerciseIds = activeWorkout.addedExerciseIds ?? [];
     const removeTarget = removeConfirmId
       ? activeWorkout.exercises.find((e) => e.exerciseId === removeConfirmId)
       : null;
+
+    const renderMuscleGroups = (
+      groups: { muscle: string; exercises: WorkoutExercise[] }[],
+      keyPrefix: string
+    ) =>
+      groups.map(({ muscle, exercises }) => (
+        <div key={`${keyPrefix}-${muscle}`} className="space-y-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-1 h-5 rounded-full shrink-0"
+              style={{ backgroundColor: MUSCLE_COLORS[muscle] ?? 'hsl(var(--primary))' }}
+            />
+            <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground">{muscle}</h2>
+          </div>
+          <LayoutGroup>
+            {exercises.map((ex) => {
+              const lib = getExerciseById(ex.exerciseId);
+              const variations = getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
+              const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
+              const isExpanded = expandedEx === ex.exerciseId;
+              const isFullyDone = isExerciseFullyDone(ex);
+              const picked = isPickedToday(ex);
+              const hasPR = ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
+              const setsCompleted = ex.sets.filter((s) => s.done).length;
+              const progress = (setsCompleted / ex.sets.length) * 100;
+              const isRemovable = addedExerciseIds.includes(ex.exerciseId);
+
+              return (
+                <motion.div
+                  key={ex.exerciseId}
+                  layout
+                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                >
+                  <div
+                    className={cn(
+                      'ft-exercise-card',
+                      isExpanded && 'ft-exercise-card--open',
+                      !picked && 'ft-exercise-card--skipped',
+                      picked && isFullyDone && 'ft-exercise-card--complete',
+                      picked && !isFullyDone && 'ft-exercise-card--picked-incomplete'
+                    )}
+                  >
+                    <div className="ft-exercise-progress">
+                      <div
+                        className={cn(
+                          'ft-exercise-progress-fill',
+                          isFullyDone && 'ft-exercise-progress-fill--complete'
+                        )}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+
+                    <div className="ft-exercise-trigger">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          togglePickedToday(ex.exerciseId);
+                        }}
+                        className={cn('ft-pick-toggle shrink-0', picked && 'ft-pick-toggle--on')}
+                        aria-label={picked ? `Remove ${ex.name} from today` : `Add ${ex.name} to today`}
+                      >
+                        <span className="ft-pick-toggle-box" aria-hidden>
+                          {picked && <Check className="h-3 w-3" />}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        className="flex flex-1 items-center gap-3 min-w-0 text-left bg-transparent border-0 cursor-pointer p-0"
+                        onClick={() => setExpandedEx(isExpanded ? null : ex.exerciseId)}
+                      >
+                        <div
+                          className={cn(
+                            'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
+                            picked && isFullyDone && 'bg-emerald-600 text-white',
+                            picked && !isFullyDone && 'bg-red-600 text-white',
+                            !picked && 'bg-muted text-muted-foreground',
+                            picked && !isFullyDone && isExpanded && 'ring-2 ring-red-400/50'
+                          )}
+                        >
+                          {picked && isFullyDone ? (
+                            <CheckCircle2 className="h-5 w-5" />
+                          ) : picked ? (
+                            <Check className="h-5 w-5" />
+                          ) : (
+                            <Dumbbell className="h-5 w-5" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-base truncate">{ex.name}</span>
+                            {isFullyDone && <span className="ft-exercise-done-badge">Done</span>}
+                            {hasPR && <Trophy className="h-4 w-4 text-amber-500 shrink-0" />}
+                          </div>
+                          <p
+                            className={cn(
+                              'text-xs mt-0.5',
+                              isFullyDone ? 'text-emerald-800 font-semibold' : 'text-muted-foreground'
+                            )}
+                          >
+                            {isFullyDone
+                              ? 'All sets completed'
+                              : `${setsCompleted} of ${ex.sets.length} sets done`}
+                          </p>
+                          {lastSession && (
+                            <p className="ft-last-session-preview mt-1 truncate">
+                              Last · {lastSession.variation} · {dayjs(lastSession.date).format('MMM D')} ·{' '}
+                              {formatLastSessionPreview(lastSession, profile.prefs.unit)}
+                            </p>
+                          )}
+                        </div>
+                        <ChevronRight
+                          className={cn(
+                            'h-5 w-5 text-muted-foreground transition-transform shrink-0',
+                            isExpanded && 'rotate-90 text-primary'
+                          )}
+                        />
+                      </button>
+                      <div className="flex items-center gap-1 shrink-0 ml-2">
+                        {isRemovable && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setRemoveConfirmId(ex.exerciseId);
+                              setRemovePin('');
+                              setRemovePinError(false);
+                            }}
+                            className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm !text-red-500 hover:!bg-red-500/10"
+                            aria-label={`Remove ${ex.name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => openExerciseInfo(ex)}
+                          className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm"
+                          aria-label={`Info for ${ex.name}`}
+                        >
+                          <Info className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="ft-exercise-body space-y-5 pt-5"
+                        >
+                          <VariationSelector
+                            value={ex.variation}
+                            variations={variations}
+                            onChange={(v) => updateExercise(ex.exerciseId, (e) => ({ ...e, variation: v }))}
+                            onAddVariation={(v) => addVariation(ex.exerciseId, v)}
+                          />
+
+                          {lastSession ? (
+                            <div className="space-y-3">
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                                  Last session · {lastSession.variation} ·{' '}
+                                  {dayjs(lastSession.date).format('MMM D, YYYY')}
+                                </p>
+                                <ul className="ft-last-session-list">
+                                  {lastSession.sets.map((set, setIdx) => (
+                                    <li key={setIdx}>
+                                      Set {setIdx + 1}: {formatWeight(set.weight, profile.prefs.unit)} ×{' '}
+                                      {set.reps}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                              <div className="ft-stat-pill">
+                                <div className="ft-stat-pill-icon bg-primary/15 text-primary">
+                                  <TrendingUp className="h-4 w-4" />
+                                </div>
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Suggested</p>
+                                  <p className="text-sm font-semibold tabular-nums">
+                                    {formatWeight(
+                                      suggestWeight(
+                                        lastSession.bestSet.weight,
+                                        lastSession.bestSet.reps,
+                                        profile.prefs.unit
+                                      ),
+                                      profile.prefs.unit
+                                    )}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border px-4 py-3">
+                              No previous session for{' '}
+                              <span className="font-medium text-foreground">{ex.variation}</span>. Log today&apos;s
+                              sets to track progress next time.
+                            </p>
+                          )}
+
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <p className="ft-section-title">Sets</p>
+                              <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                                {setsCompleted} / {ex.sets.length}
+                              </span>
+                            </div>
+
+                            <div className="space-y-3">
+                              {ex.sets.map((set, idx) => (
+                                <motion.div key={idx} layout>
+                                  <SessionSetRow
+                                    index={idx}
+                                    set={set}
+                                    unit={profile.prefs.unit}
+                                    isPR={set.done && isPR(ex.exerciseId, set.weight, prs)}
+                                    onWeightChange={(v) => updateSet(ex.exerciseId, idx, 'weight', v)}
+                                    onRepsChange={(v) => updateSet(ex.exerciseId, idx, 'reps', v)}
+                                    onToggleDone={() => toggleSetDone(ex.exerciseId, idx)}
+                                    onRemove={() => removeSet(ex.exerciseId, idx)}
+                                    onUnitChange={handleWeightUnitChange}
+                                  />
+                                </motion.div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <button
+                              type="button"
+                              onClick={() => addSet(ex.exerciseId)}
+                              className="ft-btn ft-btn--ghost ft-btn--block"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Add Set
+                            </button>
+                            <button type="button" onClick={startTimer} className="ft-btn ft-btn--ghost ft-btn--block">
+                              <Timer className="h-4 w-4" />
+                              Rest
+                            </button>
+                          </div>
+
+                          <div>
+                            <label className="ft-label">
+                              Notes <span className="font-normal text-muted-foreground">(optional)</span>
+                            </label>
+                            <textarea
+                              className="ft-textarea resize-none"
+                              value={ex.notes ?? ''}
+                              onChange={(e) =>
+                                updateExercise(ex.exerciseId, (exer) => ({ ...exer, notes: e.target.value }))
+                              }
+                              placeholder="RPE, form cues, how it felt..."
+                            />
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </LayoutGroup>
+        </div>
+      ));
 
     return (
       <PageTransition>
@@ -530,9 +855,16 @@ export default function WorkoutPage() {
                 </div>
                 <div className="min-w-0">
                   <h1 className="ft-title truncate">{activeWorkout.splitName}</h1>
-                  <div className="flex items-center gap-1.5 text-sm text-primary font-semibold tabular-nums mt-0.5">
-                    <Timer className="h-3.5 w-3.5" />
-                    {formatDuration(elapsed)}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm font-semibold tabular-nums mt-0.5">
+                    <span className="flex items-center gap-1.5 text-primary">
+                      <Timer className="h-3.5 w-3.5" />
+                      {formatCountdownHMS(elapsed)}
+                    </span>
+                    {pickedTotal > 0 && (
+                      <span className="text-muted-foreground text-xs">
+                        {pickedDone} of {pickedTotal} exercises done
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -546,245 +878,31 @@ export default function WorkoutPage() {
             </div>
           </header>
 
-          <RestTimer
-            endTime={restEnd}
-            defaultSeconds={restDuration}
-            soundEnabled={profile.prefs.sound}
-            onComplete={() => {}}
-            onDurationChange={(s) => {
-              const diff = s - restDuration;
-              setRestDuration(s);
-              setRestEnd((prev) => prev ? prev + diff * 1000 : null);
-              if (activeWorkout) updateActiveWorkout({ 
-                ...activeWorkout, 
-                restTimerSeconds: s,
-                restTimerEnd: restEnd ? restEnd + diff * 1000 : null
-              });
-            }}
-            onClose={() => {
-              setRestEnd(null);
-              if (activeWorkout) updateActiveWorkout({ ...activeWorkout, restTimerEnd: null });
-            }}
-          />
-
           {/* Exercises */}
           <div className="space-y-6">
             <div className="ft-last-session-legend">
               <span className="ft-last-session-legend-item">
-                <span className="ft-last-session-legend-dot ft-last-session-legend-dot--complete" />
-                Green card = all sets finished (moves to top of each muscle group)
+                <span className="ft-pick-status-dot ft-pick-status-dot--red" />
+                Picked for today, still in progress
               </span>
               <span className="ft-last-session-legend-item">
-                <span className="ft-last-session-legend-dot ft-last-session-legend-dot--history" />
-                Last session = previous workout for selected variation
+                <span className="ft-pick-status-dot ft-pick-status-dot--green" />
+                Picked for today, all sets finished
+              </span>
+              <span className="ft-last-session-legend-item">
+                <span className="ft-pick-status-dot ft-pick-status-dot--gray" />
+                Not doing today (dimmed at bottom)
               </span>
             </div>
-            {groupedExercises.map(({ muscle, exercises }) => (
-              <div key={muscle} className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-1 h-5 rounded-full shrink-0"
-                    style={{ backgroundColor: MUSCLE_COLORS[muscle] ?? 'hsl(var(--primary))' }}
-                  />
-                  <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground">{muscle}</h2>
+            {renderMuscleGroups(pickedGroups, 'picked')}
+            {unpickedGroups.length > 0 && (
+              <>
+                <div className="ft-skipped-divider">
+                  <span>Not doing today</span>
                 </div>
-                <LayoutGroup>
-                {exercises.map((ex) => {
-              const lib = getExerciseById(ex.exerciseId);
-              const variations = getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
-              const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
-              const isExpanded = expandedEx === ex.exerciseId;
-              const isFullyDone = isExerciseFullyDone(ex);
-              const hasPR = ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
-              const setsCompleted = ex.sets.filter(s => s.done).length;
-              const progress = (setsCompleted / ex.sets.length) * 100;
-              const isRemovable = addedExerciseIds.includes(ex.exerciseId);
-
-              return (
-                <motion.div
-                  key={ex.exerciseId}
-                  layout
-                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                >
-                <div className={cn('ft-exercise-card', isExpanded && 'ft-exercise-card--open', isFullyDone && 'ft-exercise-card--complete')}>
-                  <div className="ft-exercise-progress">
-                    <div
-                      className={cn('ft-exercise-progress-fill', isFullyDone && 'ft-exercise-progress-fill--complete')}
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-
-                  <div className="ft-exercise-trigger">
-                    <button
-                      type="button"
-                      className="flex flex-1 items-center gap-3 min-w-0 text-left bg-transparent border-0 cursor-pointer p-0"
-                      onClick={() => setExpandedEx(isExpanded ? null : ex.exerciseId)}
-                    >
-                      <div className={cn(
-                        'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
-                        isFullyDone
-                          ? 'bg-emerald-600 text-white'
-                          : isExpanded
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground'
-                      )}>
-                        {isFullyDone ? <CheckCircle2 className="h-5 w-5" /> : <Dumbbell className="h-5 w-5" />}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-base truncate">{ex.name}</span>
-                          {isFullyDone && <span className="ft-exercise-done-badge">Done</span>}
-                          {hasPR && <Trophy className="h-4 w-4 text-amber-500 shrink-0" />}
-                        </div>
-                        <p className={cn('text-xs mt-0.5', isFullyDone ? 'text-emerald-800 font-semibold' : 'text-muted-foreground')}>
-                          {isFullyDone ? 'All sets completed' : `${setsCompleted} of ${ex.sets.length} sets done`}
-                        </p>
-                        {lastSession && (
-                          <p className="ft-last-session-preview mt-1 truncate">
-                            Last · {lastSession.variation} · {dayjs(lastSession.date).format('MMM D')} ·{' '}
-                            {formatLastSessionPreview(lastSession, profile.prefs.unit)}
-                          </p>
-                        )}
-                      </div>
-                      <ChevronRight className={cn('h-5 w-5 text-muted-foreground transition-transform shrink-0', isExpanded && 'rotate-90 text-primary')} />
-                    </button>
-                    <div className="flex items-center gap-1 shrink-0 ml-2">
-                      {isRemovable && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setRemoveConfirmId(ex.exerciseId);
-                            setRemovePin('');
-                            setRemovePinError(false);
-                          }}
-                          className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm !text-red-500 hover:!bg-red-500/10"
-                          aria-label={`Remove ${ex.name}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => openExerciseInfo(ex)}
-                        className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm"
-                        aria-label={`Info for ${ex.name}`}
-                      >
-                        <Info className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="ft-exercise-body space-y-5 pt-5"
-                      >
-                        <VariationSelector
-                          value={ex.variation}
-                          variations={variations}
-                          onChange={(v) => updateExercise(ex.exerciseId, (e) => ({ ...e, variation: v }))}
-                          onAddVariation={(v) => addVariation(ex.exerciseId, v)}
-                        />
-
-                        {lastSession ? (
-                          <div className="space-y-3">
-                            <div>
-                              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                                Last session · {lastSession.variation} · {dayjs(lastSession.date).format('MMM D, YYYY')}
-                              </p>
-                              <ul className="ft-last-session-list">
-                                {lastSession.sets.map((set, setIdx) => (
-                                  <li key={setIdx}>
-                                    Set {setIdx + 1}: {formatWeight(set.weight, profile.prefs.unit)} × {set.reps}
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                            <div className="ft-stat-pill">
-                              <div className="ft-stat-pill-icon bg-primary/15 text-primary">
-                                <TrendingUp className="h-4 w-4" />
-                              </div>
-                              <div>
-                                <p className="text-xs text-muted-foreground">Suggested</p>
-                                <p className="text-sm font-semibold tabular-nums">
-                                  {formatWeight(
-                                    suggestWeight(lastSession.bestSet.weight, lastSession.bestSet.reps, profile.prefs.unit),
-                                    profile.prefs.unit
-                                  )}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border px-4 py-3">
-                            No previous session for <span className="font-medium text-foreground">{ex.variation}</span>.
-                            Log today&apos;s sets to track progress next time.
-                          </p>
-                        )}
-
-                        {/* Sets — card-based mobile-first log */}
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-between">
-                            <p className="ft-section-title">Sets</p>
-                            <span className="text-xs font-medium text-muted-foreground tabular-nums">
-                              {setsCompleted} / {ex.sets.length}
-                            </span>
-                          </div>
-
-                          <div className="space-y-3">
-                            {ex.sets.map((set, idx) => (
-                              <motion.div key={idx} layout>
-                                <SessionSetRow
-                                  index={idx}
-                                  set={set}
-                                  unit={profile.prefs.unit}
-                                  isPR={set.done && isPR(ex.exerciseId, set.weight, prs)}
-                                  onWeightChange={(v) => updateSet(ex.exerciseId, idx, 'weight', v)}
-                                  onRepsChange={(v) => updateSet(ex.exerciseId, idx, 'reps', v)}
-                                  onToggleDone={() => toggleSetDone(ex.exerciseId, idx)}
-                                  onRemove={() => removeSet(ex.exerciseId, idx)}
-                                  onUnitChange={handleWeightUnitChange}
-                                />
-                              </motion.div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <button type="button" onClick={() => addSet(ex.exerciseId)} className="ft-btn ft-btn--ghost ft-btn--block">
-                            <Plus className="h-4 w-4" />
-                            Add Set
-                          </button>
-                          <button type="button" onClick={startTimer} className="ft-btn ft-btn--ghost ft-btn--block">
-                            <Timer className="h-4 w-4" />
-                            Rest
-                          </button>
-                        </div>
-
-                        <div>
-                          <label className="ft-label">Notes <span className="font-normal text-muted-foreground">(optional)</span></label>
-                          <textarea
-                            className="ft-textarea resize-none"
-                            value={ex.notes ?? ''}
-                            onChange={(e) =>
-                              updateExercise(ex.exerciseId, (exer) => ({ ...exer, notes: e.target.value }))
-                            }
-                            placeholder="RPE, form cues, how it felt..."
-                          />
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-                </motion.div>
-              );
-                })}
-                </LayoutGroup>
-              </div>
-            ))}
+                {renderMuscleGroups(unpickedGroups, 'skipped')}
+              </>
+            )}
           </div>
 
           {/* Footer Controls */}
@@ -1299,6 +1417,24 @@ export default function WorkoutPage() {
           </div>
         )}
 
+        {selectedSplit && pickerExercises.length > 0 && (
+          <TodayExercisePicker
+            splitId={selectedSplit}
+            exercises={pickerExercises}
+            picks={todayPicks}
+            onPicksChange={setTodayPicks}
+            onExercisesChange={setPickerExercises}
+            getVariationsForExercise={getVariationsForExercise}
+            onAddVariation={addVariation}
+            customExercises={customExercises}
+            onCreateCustomExercise={handlePickerCreateCustom}
+            onRememberSplitExercise={
+              selectedSplit ? (id) => rememberSplitExercise(selectedSplit, id) : undefined
+            }
+            getVariationImage={getVariationImage}
+          />
+        )}
+
         <div className="ft-split-grid">
           {SPLIT_DEFINITIONS.map((split) => {
             const last = getLastTrainedDate(workouts, split.id);
@@ -1346,6 +1482,7 @@ export default function WorkoutPage() {
                   <button
                     type="button"
                     onClick={beginWorkout}
+                    disabled={todayPicks.size === 0}
                     className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg mt-4"
                   >
                     {startButtonLabel}
@@ -1362,6 +1499,7 @@ export default function WorkoutPage() {
             <button
               type="button"
               onClick={beginWorkout}
+              disabled={todayPicks.size === 0}
               className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg flex-1"
             >
               {startButtonLabel}

@@ -6,6 +6,8 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { WorkoutProvider, useWorkoutStore } from '@/workout/WorkoutContext';
 import { WorkoutSidebar } from '@/components/workout/WorkoutSidebar';
 import { WorkoutBottomNav } from '@/components/workout/WorkoutBottomNav';
+import { GlobalRestTimer } from '@/components/workout/GlobalRestTimer';
+import { GlobalWorkoutTimer } from '@/components/workout/GlobalWorkoutTimer';
 import { Navbar } from '@/components/layout/Navbar';
 import '@/fittrack/fittrack.css';
 
@@ -32,6 +34,8 @@ function FitTrackShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
       <WorkoutBottomNav />
+      <GlobalWorkoutTimer />
+      <GlobalRestTimer />
     </div>
   );
 }

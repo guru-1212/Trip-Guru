@@ -4,6 +4,8 @@ import { Toaster } from 'react-hot-toast';
 import { WorkoutProvider } from '@/workout/WorkoutContext';
 import { WorkoutSidebar } from '@/components/workout/WorkoutSidebar';
 import { WorkoutBottomNav } from '@/components/workout/WorkoutBottomNav';
+import { GlobalRestTimer } from '@/components/workout/GlobalRestTimer';
+import { GlobalWorkoutTimer } from '@/components/workout/GlobalWorkoutTimer';
 import '@/workout/workout.css';
 
 export default function WorkoutLayout({ children }: { children: React.ReactNode }) {
@@ -15,6 +17,8 @@ export default function WorkoutLayout({ children }: { children: React.ReactNode 
           <div className="max-w-7xl mx-auto px-4 py-6">{children}</div>
         </main>
         <WorkoutBottomNav />
+        <GlobalWorkoutTimer />
+        <GlobalRestTimer />
         <Toaster
           position="top-center"
           toastOptions={{

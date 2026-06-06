@@ -1,12 +1,14 @@
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type {
+  CustomExercise,
   DayKey,
   HabitDay,
   LibraryExercise,
   MuscleGroup,
   PersonalRecord,
   SplitId,
+  TodayExercisePick,
   UserProfile,
   WorkoutExercise,
   WorkoutSession,
@@ -14,6 +16,7 @@ import type {
   VariationImageMap,
 } from './types';
 import { DAY_KEYS } from './constants';
+import { getExerciseById, getExercisesForSplit } from './exerciseLibrary';
 
 dayjs.extend(isoWeek);
 
@@ -92,6 +95,14 @@ export function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+export function formatCountdownHMS(totalSeconds: number): string {
+  const abs = Math.abs(Math.ceil(totalSeconds));
+  const h = Math.floor(abs / 3600);
+  const m = Math.floor((abs % 3600) / 60);
+  const s = abs % 60;
+  return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
 export function getWeekStart(date = dayjs()): string {
@@ -179,6 +190,102 @@ export function sortExercisesByCompletion(exercises: WorkoutExercise[]): Workout
     if (tierDiff !== 0) return tierDiff;
     return a.name.localeCompare(b.name);
   });
+}
+
+export function isPickedToday(ex: WorkoutExercise): boolean {
+  return ex.pickedToday !== false;
+}
+
+export function partitionExercisesByPick(exercises: WorkoutExercise[]): {
+  picked: WorkoutExercise[];
+  unpicked: WorkoutExercise[];
+} {
+  const picked: WorkoutExercise[] = [];
+  const unpicked: WorkoutExercise[] = [];
+  for (const ex of exercises) {
+    if (isPickedToday(ex)) picked.push(ex);
+    else unpicked.push(ex);
+  }
+  return { picked, unpicked };
+}
+
+export function countPickedExercisesDone(exercises: WorkoutExercise[]): { done: number; total: number } {
+  const picked = exercises.filter(isPickedToday);
+  return {
+    done: picked.filter(isExerciseFullyDone).length,
+    total: picked.length,
+  };
+}
+
+export function exerciseHasLoggedSets(ex: WorkoutExercise): boolean {
+  return ex.sets.some((s) => s.done);
+}
+
+export function filterExercisesForSave(exercises: WorkoutExercise[]): WorkoutExercise[] {
+  return exercises.filter((ex) => isPickedToday(ex) || exerciseHasLoggedSets(ex));
+}
+
+export function defaultVariationForExercise(
+  exerciseId: string,
+  exercisesById: Map<string, Pick<LibraryExercise, 'variations'>>
+): string {
+  return exercisesById.get(exerciseId)?.variations[0] ?? 'Standard';
+}
+
+export function normalizeSavedTodayPicks(
+  saved: TodayExercisePick[] | string[] | undefined,
+  validExerciseIds: Set<string>,
+  exercisesById: Map<string, Pick<LibraryExercise, 'variations'>>
+): TodayExercisePick[] {
+  if (!saved?.length) return [];
+  if (typeof saved[0] === 'string') {
+    return (saved as string[])
+      .filter((id) => validExerciseIds.has(id))
+      .map((exerciseId) => ({
+        exerciseId,
+        variation: defaultVariationForExercise(exerciseId, exercisesById),
+      }));
+  }
+  return (saved as TodayExercisePick[])
+    .filter((p) => validExerciseIds.has(p.exerciseId))
+    .map((p) => ({
+      exerciseId: p.exerciseId,
+      variation: p.variation || defaultVariationForExercise(p.exerciseId, exercisesById),
+    }));
+}
+
+export function todayPicksToMap(picks: TodayExercisePick[]): Map<string, string> {
+  return new Map(picks.map((p) => [p.exerciseId, p.variation]));
+}
+
+export function mapToTodayPicks(picks: Map<string, string>): TodayExercisePick[] {
+  return Array.from(picks.entries()).map(([exerciseId, variation]) => ({ exerciseId, variation }));
+}
+
+export function getDefaultTodayPicks(
+  splitId: SplitId,
+  workouts: WorkoutSession[],
+  splitTodayPicks: Partial<Record<SplitId, TodayExercisePick[] | string[]>>,
+  exercises: LibraryExercise[]
+): TodayExercisePick[] {
+  const exercisesById = new Map(exercises.map((e) => [e.id, e]));
+  const allExerciseIds = new Set(exercises.map((e) => e.id));
+
+  const saved = normalizeSavedTodayPicks(splitTodayPicks[splitId], allExerciseIds, exercisesById);
+  if (saved.length) return saved;
+
+  const lastSession = workouts.find((w) => w.splitId === splitId);
+  if (lastSession) {
+    const fromLast = lastSession.exercises
+      .filter((e) => allExerciseIds.has(e.exerciseId))
+      .map((e) => ({ exerciseId: e.exerciseId, variation: e.variation }));
+    if (fromLast.length) return fromLast;
+  }
+
+  return exercises.map((e) => ({
+    exerciseId: e.id,
+    variation: e.variations[0] ?? 'Standard',
+  }));
 }
 
 export function formatLastSessionPreview(
@@ -422,6 +529,96 @@ export async function showLocalNotification(title: string, body: string) {
 
 export function notify(title: string, body: string) {
   void showLocalNotification(title, body);
+}
+
+export function buildSplitExerciseLibrary(
+  splitId: SplitId,
+  customExercises: CustomExercise[],
+  splitExtras: Partial<Record<SplitId, string[]>>
+): LibraryExercise[] {
+  const library = getExercisesForSplit(splitId);
+  const splitMuscles = getMuscleFromSplit(splitId);
+  const customForSplit = customExercises
+    .filter(
+      (c) =>
+        splitMuscles.includes(c.muscle) ||
+        (c.secondary && splitMuscles.includes(c.secondary))
+    )
+    .map(
+      (c): LibraryExercise => ({
+        id: c.id,
+        name: c.name,
+        muscle: c.muscle,
+        secondary: c.secondary,
+        equipment: c.equipment,
+        difficulty: c.difficulty,
+        variations: c.variations,
+        tips: c.notes ? [c.notes] : [],
+        splitIds: [splitId],
+        category: [c.muscle],
+      })
+    );
+
+  const baseIds = new Set(library.map((l) => l.id));
+  const savedExtraIds = splitExtras[splitId] ?? [];
+  const extraLibrary = savedExtraIds
+    .filter((id) => !baseIds.has(id))
+    .map((id) => {
+      const lib = getExerciseById(id);
+      if (lib) return lib;
+      const custom = customExercises.find((c) => c.id === id);
+      if (!custom) return null;
+      return {
+        id: custom.id,
+        name: custom.name,
+        muscle: custom.muscle,
+        secondary: custom.secondary,
+        equipment: custom.equipment,
+        difficulty: custom.difficulty,
+        variations: custom.variations,
+        tips: custom.notes ? [custom.notes] : [],
+        splitIds: [splitId] as SplitId[],
+        category: [custom.muscle] as LibraryExercise['category'],
+      } satisfies LibraryExercise;
+    })
+    .filter((ex): ex is LibraryExercise => !!ex);
+
+  return [
+    ...library,
+    ...customForSplit.filter((c) => !library.some((l) => l.id === c.id)),
+    ...extraLibrary.filter(
+      (c) => !library.some((l) => l.id === c.id) && !customForSplit.some((x) => x.id === c.id)
+    ),
+  ];
+}
+
+export function groupLibraryExercisesByMuscle(
+  exercises: LibraryExercise[],
+  splitId: SplitId
+): { muscle: string; exercises: LibraryExercise[] }[] {
+  const order = getMuscleOrderForSplit(splitId);
+  const groups = new Map<string, LibraryExercise[]>();
+
+  for (const ex of exercises) {
+    const list = groups.get(ex.muscle) ?? [];
+    list.push(ex);
+    groups.set(ex.muscle, list);
+  }
+
+  const result: { muscle: string; exercises: LibraryExercise[] }[] = [];
+  for (const muscle of order) {
+    const list = groups.get(muscle);
+    if (list?.length) {
+      result.push({ muscle, exercises: [...list].sort((a, b) => a.name.localeCompare(b.name)) });
+      groups.delete(muscle);
+    }
+  }
+  Array.from(groups.entries()).forEach(([muscle, list]) => {
+    if (list.length) {
+      result.push({ muscle, exercises: [...list].sort((a, b) => a.name.localeCompare(b.name)) });
+    }
+  });
+  return result;
 }
 
 export function getMuscleFromSplit(splitId: SplitId): string[] {

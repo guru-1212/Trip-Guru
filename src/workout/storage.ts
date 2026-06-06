@@ -141,6 +141,16 @@ export function saveSplitExtras(extras: Partial<Record<SplitId, string[]>>): voi
   write(STORAGE_KEYS.splitExtras, extras);
 }
 
+export function loadSplitTodayPicks(): Partial<Record<SplitId, import('./types').TodayExercisePick[]>> {
+  return read(STORAGE_KEYS.splitTodayPicks, {});
+}
+
+export function saveSplitTodayPicks(
+  picks: Partial<Record<SplitId, import('./types').TodayExercisePick[]>>
+): void {
+  write(STORAGE_KEYS.splitTodayPicks, picks);
+}
+
 export function exportAllData(): string {
   const data = {
     profile: loadProfile(),
@@ -154,6 +164,7 @@ export function exportAllData(): string {
     customVariations: loadCustomVariations(),
     variationImages: loadVariationImages(),
     splitExtras: loadSplitExtras(),
+    splitTodayPicks: loadSplitTodayPicks(),
     exportedAt: new Date().toISOString(),
   };
   return JSON.stringify(data, null, 2);
@@ -173,6 +184,7 @@ export function importAllData(json: string): boolean {
     if (data.customVariations) saveCustomVariations(data.customVariations);
     if (data.variationImages) saveVariationImages(data.variationImages);
     if (data.splitExtras) saveSplitExtras(data.splitExtras);
+    if (data.splitTodayPicks) saveSplitTodayPicks(data.splitTodayPicks);
     return true;
   } catch {
     return false;
