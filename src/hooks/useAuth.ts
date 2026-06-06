@@ -11,7 +11,9 @@ export function useAuth() {
 
   useEffect(() => {
     if (firebaseUid) {
-      requestFCMToken(firebaseUid);
+      requestFCMToken(firebaseUid).catch((err) =>
+        console.warn('FCM background registration failed:', err)
+      );
     }
   }, [firebaseUid]);
 

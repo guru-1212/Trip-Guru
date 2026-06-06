@@ -107,62 +107,128 @@ async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     return null;
   }
-  try {
-    await navigator.serviceWorker.register('/sw.js').catch(() => null);
-    const registration = await navigator.serviceWorker.ready;
-    return registration;
-  } catch {
+
+  const isDev = process.env.NODE_ENV === 'development';
+  const scripts = isDev
+    ? ['/firebase-messaging-sw.js', '/sw.js']
+    : ['/sw.js', '/firebase-messaging-sw.js'];
+
+  for (const script of scripts) {
     try {
-      return await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-    } catch {
-      return null;
+      const registration = await navigator.serviceWorker.register(script);
+      await navigator.serviceWorker.ready;
+      return registration;
+    } catch (error) {
+      console.warn(`FCM: service worker registration failed for ${script}:`, error);
     }
   }
+
+  return null;
 }
 
-export async function requestFCMToken(uid: string): Promise<string | null> {
+export type FCMTokenResult = {
+  token: string | null;
+  error?:
+    | 'not_supported'
+    | 'vapid_missing'
+    | 'permission_denied'
+    | 'service_worker_failed'
+    | 'get_token_failed'
+    | 'save_failed';
+  message: string;
+};
+
+function formatFcmError(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+export async function requestFCMToken(uid: string): Promise<FCMTokenResult> {
   const messaging = await getMessaging();
   if (!messaging) {
-    console.warn('FCM: messaging not supported in this browser.');
-    return null;
+    const message =
+      'Push notifications are not supported in this browser. On iPhone, add the app to your Home Screen first (iOS 16.4+).';
+    console.warn('FCM:', message);
+    return { token: null, error: 'not_supported', message };
   }
 
   const vapidKey = await getVapidKey();
   if (!vapidKey) {
-    console.warn(
-      'FCM: VAPID key missing. Run: node scripts/generate-messaging-sw.js then rebuild, or set NEXT_PUBLIC_FIREBASE_VAPID_KEY.'
-    );
-    return null;
+    const message =
+      'VAPID key is missing. Add NEXT_PUBLIC_FIREBASE_VAPID_KEY to .env.local, run: node scripts/generate-messaging-sw.js, then restart the dev server.';
+    console.warn('FCM:', message);
+    return { token: null, error: 'vapid_missing', message };
   }
 
   try {
-    if (typeof Notification === 'undefined') return null;
+    if (typeof Notification === 'undefined') {
+      return {
+        token: null,
+        error: 'not_supported',
+        message: 'Notifications are not available in this environment.',
+      };
+    }
+
     let permission = Notification.permission;
     if (permission === 'default') {
       permission = await Notification.requestPermission();
     }
-    if (permission !== 'granted') return null;
+    if (permission !== 'granted') {
+      const message =
+        permission === 'denied'
+          ? 'Notifications are blocked. Click the lock icon in the address bar and allow notifications for this site.'
+          : 'Notification permission was not granted. Please allow notifications when prompted.';
+      return { token: null, error: 'permission_denied', message };
+    }
 
     const registration = await getServiceWorkerRegistration();
-    if (!registration) return null;
+    if (!registration) {
+      const message =
+        process.env.NODE_ENV === 'development'
+          ? 'Service worker failed to register. Try: DevTools → Application → Service Workers → Unregister all, then hard refresh (Ctrl+Shift+R).'
+          : 'Service worker failed to register. Try clearing site data and reloading the app.';
+      return { token: null, error: 'service_worker_failed', message };
+    }
 
     const token = await getToken(messaging, {
       vapidKey,
       serviceWorkerRegistration: registration,
     });
 
-    if (token) {
+    if (!token) {
+      return {
+        token: null,
+        error: 'get_token_failed',
+        message:
+          'Firebase did not return a device token. Unregister service workers in DevTools, hard refresh, and try again.',
+      };
+    }
+
+    try {
       const userRef = doc(getFirebaseDb(), 'users', uid);
       await updateDoc(userRef, {
         fcmToken: token,
         fcmTokens: arrayUnion(token),
         notifyEnabled: true,
       });
+    } catch (saveError) {
+      console.warn('FCM: failed to save token to Firestore:', saveError);
+      return {
+        token: null,
+        error: 'save_failed',
+        message: `Token was created but could not be saved: ${formatFcmError(saveError)}`,
+      };
     }
-    return token;
+
+    return { token, message: 'Push notifications registered successfully.' };
   } catch (error) {
+    const detail = formatFcmError(error);
     console.warn('FCM token registration failed:', error);
-    return null;
+    return {
+      token: null,
+      error: 'get_token_failed',
+      message: `Could not register for push: ${detail}`,
+    };
   }
 }
 

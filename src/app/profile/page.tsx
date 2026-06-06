@@ -57,7 +57,8 @@ function ProfileContent() {
   const { user, uid } = useAuth();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [notifyEnabled, setNotifyEnabled] = useState(true);
+  const [notifyEnabled, setNotifyEnabled] = useState(false);
+  const [notifySaving, setNotifySaving] = useState(false);
   const [primaryUseCase, setPrimaryUseCase] = useState<PrimaryUseCase>('trips');
   const [pendingInvites, setPendingInvites] = useState<TripMember[]>([]);
   const [inviteTripNames, setInviteTripNames] = useState<Record<string, string>>({});
@@ -182,36 +183,51 @@ function ProfileContent() {
   };
 
   const handleToggleNotify = async (enabled: boolean) => {
-    setNotifyEnabled(enabled);
-    if (!uid) return;
+    if (!uid || notifySaving) return;
+
+    const previousEnabled = user?.notifyEnabled ?? false;
+    const previousToken = user?.fcmToken ?? '';
+    setNotifySaving(true);
 
     try {
-      if (enabled) {
-        const token = await requestFCMToken(uid);
-        if (!token) {
-          const configured = await isPushConfigured();
-          if (!configured) {
-            alert(
-              'Push is not set up on this build. Redeploy the app after adding your VAPID key to .env.local and running npm run build.'
-            );
-          } else if (Notification.permission !== 'granted') {
-            alert('Please allow notifications in your browser or phone settings.');
-          } else {
-            alert(
-              'Could not register for push on this device. Try reinstalling the app from the browser menu (Add to Home Screen), then enable notifications again.'
-            );
-          }
-        } else {
-          dispatch(updateProfileLocal({ fcmToken: token }));
-        }
+      if (!enabled) {
+        setNotifyEnabled(false);
+        await updateUser(uid, { notifyEnabled: false });
+        dispatch(updateProfileLocal({ notifyEnabled: false }));
+        const status = await getPushSetupStatus(uid, previousToken);
+        setPushStatus(status);
+        // alert('Push notifications disabled.');
+        return;
       }
-      await updateUser(uid, { notifyEnabled: enabled });
-      dispatch(updateProfileLocal({ notifyEnabled: enabled }));
-      const status = await getPushSetupStatus(uid, user?.fcmToken);
+
+      setNotifyEnabled(true);
+      const result = await requestFCMToken(uid);
+
+      if (!result.token) {
+        setNotifyEnabled(previousEnabled);
+        // alert(result.message);
+        return;
+      }
+
+      dispatch(
+        updateProfileLocal({
+          notifyEnabled: true,
+          fcmToken: result.token,
+        })
+      );
+      const status = await getPushSetupStatus(uid, result.token);
       setPushStatus(status);
+      // alert(result.message);
     } catch (error) {
+      setNotifyEnabled(previousEnabled);
       console.error('Failed to update notification settings:', error);
-      // Do not revert UI state; the user's intent should be preserved.
+      // alert(
+      //   `Failed to save notification settings: ${
+      //     error instanceof Error ? error.message : 'Unknown error'
+      //   }`
+      // );
+    } finally {
+      setNotifySaving(false);
     }
   };
 
@@ -344,8 +360,9 @@ function ProfileContent() {
             <input
               type="checkbox"
               checked={notifyEnabled}
+              disabled={notifySaving}
               onChange={(e) => handleToggleNotify(e.target.checked)}
-              className="h-5 w-5 rounded-lg border-primary accent-primary cursor-pointer"
+              className="h-5 w-5 rounded-lg border-primary accent-primary cursor-pointer disabled:opacity-50"
             />
             <div className="space-y-0.5">
               <p className="text-sm font-bold">Enable Push Notifications</p>
