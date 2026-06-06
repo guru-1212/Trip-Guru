@@ -54,6 +54,28 @@ export async function isPushConfigured(): Promise<boolean> {
   return (await getVapidKey()) !== null;
 }
 
+let warmPushPromise: Promise<void> | null = null;
+
+/** Preload VAPID, messaging, and SW so the permission tap only waits on getToken. */
+export function warmPushInfrastructure(): void {
+  if (typeof window === 'undefined') return;
+  if (!warmPushPromise) {
+    warmPushPromise = (async () => {
+      await getVapidKey();
+      await getMessaging();
+      await getServiceWorkerRegistration();
+    })().catch((err) => {
+      console.warn('FCM warm-up failed:', err);
+      warmPushPromise = null;
+    });
+  }
+}
+
+async function awaitWarmPush(): Promise<void> {
+  warmPushInfrastructure();
+  if (warmPushPromise) await warmPushPromise;
+}
+
 export type PushSetupStatus = {
   configured: boolean;
   permission: NotificationPermission | 'unsupported';
@@ -170,34 +192,8 @@ function formatFcmError(error: unknown): string {
   return String(error);
 }
 
-function isMobileDevice(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-}
-
-function isIosDevice(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
-/** User-facing steps when the browser will not show the permission prompt again. */
-export function getBlockedNotificationMessage(): string {
-  if (isIosDevice()) {
-    return (
-      'Notifications are blocked for this site. On iPhone: Settings → Safari → Advanced → ' +
-      'Website Data → find this site → Notifications → Allow. Or add TripMate to your Home Screen (iOS 16.4+), open it from there, then enable notifications again.'
-    );
-  }
-  if (isMobileDevice()) {
-    return (
-      'Notifications are blocked for this site. In Chrome: tap the ⋮ menu → Settings → ' +
-      'Site settings → Notifications → find this site → Allow, then return here and toggle on again.'
-    );
-  }
-  return (
-    'Notifications are blocked for this site. Click the lock icon in the address bar → ' +
-    'Site settings → Notifications → Allow, then toggle on again.'
-  );
+function permissionDeniedMessage(): string {
+  return 'Tap Allow when your browser asks to enable notifications.';
 }
 
 /**
@@ -222,14 +218,6 @@ export async function requestNotificationPermissionOnGesture(): Promise<{
     return { granted: true, permission: 'granted', message: '' };
   }
 
-  if (current === 'denied') {
-    return {
-      granted: false,
-      permission: 'denied',
-      message: getBlockedNotificationMessage(),
-    };
-  }
-
   const permission = await Notification.requestPermission();
   if (permission === 'granted') {
     return { granted: true, permission: 'granted', message: '' };
@@ -238,10 +226,7 @@ export async function requestNotificationPermissionOnGesture(): Promise<{
   return {
     granted: false,
     permission,
-    message:
-      permission === 'denied'
-        ? getBlockedNotificationMessage()
-        : 'Notification permission was not granted. Tap Allow when the browser asks.',
+    message: permissionDeniedMessage(),
   };
 }
 
@@ -258,9 +243,11 @@ export async function requestFCMToken(uid: string): Promise<FCMTokenResult> {
     return {
       token: null,
       error: 'permission_denied',
-      message: getBlockedNotificationMessage(),
+      message: permissionDeniedMessage(),
     };
   }
+
+  await awaitWarmPush();
 
   const messaging = await getMessaging();
   if (!messaging) {

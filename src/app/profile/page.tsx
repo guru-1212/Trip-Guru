@@ -28,11 +28,13 @@ import { writeStoredMode } from '@/lib/appMode';
 import { LogOut, Bell, Camera, User as UserIcon, ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import { ImageCropper } from '@/components/profile/ImageCropper';
+import toast from 'react-hot-toast';
 import {
   getPushSetupStatus,
   isPushConfigured,
   requestFCMToken,
   requestNotificationPermissionOnGesture,
+  warmPushInfrastructure,
   type PushSetupStatus,
 } from '@/services/fcmService';
 import {
@@ -71,6 +73,10 @@ function ProfileContent() {
   const [pushStatus, setPushStatus] = useState<PushSetupStatus | null>(null);
   const [pushConfigured, setPushConfigured] = useState<boolean | null>(null);
   const notifyTogglingRef = useRef(false);
+
+  useEffect(() => {
+    warmPushInfrastructure();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -186,44 +192,53 @@ function ProfileContent() {
     }
   };
 
-  const handleToggleNotify = async (enabled: boolean) => {
+  const handleNotificationTap = async () => {
     if (!uid || notifySaving) return;
 
     const previousEnabled = user?.notifyEnabled ?? false;
     const previousToken = user?.fcmToken ?? '';
-    notifyTogglingRef.current = true;
-    setNotifySaving(true);
 
-    try {
-      if (!enabled) {
+    if (notifyEnabled) {
+      notifyTogglingRef.current = true;
+      setNotifySaving(true);
+      try {
         setNotifyEnabled(false);
         await updateUser(uid, { notifyEnabled: false });
         dispatch(updateProfileLocal({ notifyEnabled: false }));
         const status = await getPushSetupStatus(uid, previousToken);
         setPushStatus(status);
-        alert('Push notifications disabled.');
-        return;
-      }
-
-      setNotifyEnabled(true);
-
-      // Must be first await in this handler — mobile Chrome requires an active user gesture.
-      const permissionResult = await requestNotificationPermissionOnGesture();
-      if (!permissionResult.granted) {
+        toast.success('Notifications turned off');
+      } catch (error) {
         setNotifyEnabled(previousEnabled);
-        alert(permissionResult.message);
-        return;
+        console.error('Failed to disable notifications:', error);
+        toast.error('Could not update notification settings');
+      } finally {
+        notifyTogglingRef.current = false;
+        setNotifySaving(false);
       }
+      return;
+    }
 
+    // Enable: first await MUST be the browser permission prompt (mobile Chrome user-gesture rule).
+    const permissionResult = await requestNotificationPermissionOnGesture();
+    if (!permissionResult.granted) {
+      toast.error(permissionResult.message);
+      return;
+    }
+
+    notifyTogglingRef.current = true;
+    setNotifySaving(true);
+    setNotifyEnabled(true);
+
+    try {
       const result = await requestFCMToken(uid);
 
       if (!result.token) {
         setNotifyEnabled(previousEnabled);
-        alert(result.message);
+        toast.error(result.message);
         return;
       }
 
-      setNotifyEnabled(true);
       dispatch(
         updateProfileLocal({
           notifyEnabled: true,
@@ -232,15 +247,11 @@ function ProfileContent() {
       );
       const status = await getPushSetupStatus(uid, result.token);
       setPushStatus(status);
-      alert(result.message);
+      toast.success('Notifications enabled');
     } catch (error) {
       setNotifyEnabled(previousEnabled);
-      console.error('Failed to update notification settings:', error);
-      alert(
-        `Failed to save notification settings: ${
-          error instanceof Error ? error.message : 'Unknown error'
-        }`
-      );
+      console.error('Failed to enable notifications:', error);
+      toast.error('Could not enable notifications. Try again.');
     } finally {
       notifyTogglingRef.current = false;
       setNotifySaving(false);
@@ -371,65 +382,47 @@ function ProfileContent() {
             <Bell className="h-5 w-5 text-primary" /> Notifications
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-8 pb-8">
-          <label className="flex items-center gap-4 cursor-pointer group bg-muted/30 p-4 rounded-2xl hover:bg-muted/50 transition-colors">
-            <input
-              type="checkbox"
-              checked={notifyEnabled}
-              disabled={notifySaving}
-              onChange={(e) => handleToggleNotify(e.target.checked)}
-              className="h-5 w-5 rounded-lg border-primary accent-primary cursor-pointer disabled:opacity-50"
-            />
-            <div className="space-y-0.5">
-              <p className="text-sm font-bold">Enable Push Notifications</p>
-              <p className="text-[10px] font-medium text-muted-foreground leading-none">
-                Get alerts when roommates add or change expenses, settlements, bring-list items, rent, and trip expenses — even when the app is closed.
+        <CardContent className="px-8 pb-8 space-y-3">
+          <div className="flex items-center justify-between gap-4 bg-muted/30 p-4 rounded-2xl">
+            <div className="space-y-0.5 min-w-0">
+              <p className="text-sm font-bold">Push notifications</p>
+              <p className="text-[10px] font-medium text-muted-foreground leading-snug">
+                {notifyEnabled
+                  ? 'You will get alerts for expenses, invites, and room activity.'
+                  : 'One tap to allow — Chrome will ask you to confirm.'}
               </p>
             </div>
-          </label>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={notifyEnabled}
+              aria-label={notifyEnabled ? 'Disable notifications' : 'Enable notifications'}
+              disabled={notifySaving || pushConfigured === false}
+              onClick={handleNotificationTap}
+              className={`relative inline-flex h-8 w-14 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50 ${
+                notifyEnabled ? 'bg-primary' : 'bg-muted-foreground/30'
+              }`}
+            >
+              <span
+                className={`inline-block h-6 w-6 transform rounded-full bg-white shadow transition-transform ${
+                  notifyEnabled ? 'translate-x-7' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          {notifySaving && (
+            <p className="text-xs text-muted-foreground text-center">Setting up notifications…</p>
+          )}
           {pushConfigured === false && (
-            <p className="mt-3 text-xs text-amber-700 dark:text-amber-400 font-medium rounded-xl bg-amber-500/10 p-3">
-              Push is not configured on this install. Add your Web Push key from Firebase
-              (Cloud Messaging → Web Push certificates) to{' '}
-              <code className="text-[10px]">NEXT_PUBLIC_FIREBASE_VAPID_KEY</code> in{' '}
-              <code className="text-[10px]">.env.local</code>, run{' '}
-              <code className="text-[10px]">npm run build</code>, and redeploy the PWA.
+            <p className="text-xs text-amber-700 dark:text-amber-400 font-medium rounded-xl bg-amber-500/10 p-3">
+              Push is not configured on this server. Contact the app admin.
             </p>
           )}
-          {pushStatus && (
-            <ul className="mt-3 text-xs text-muted-foreground space-y-1 rounded-xl bg-muted/30 p-3">
-              <li>
-                VAPID key:{' '}
-                {pushStatus.configured ? (
-                  <span className="text-emerald-600 font-semibold">OK</span>
-                ) : (
-                  <span className="text-amber-600 font-semibold">Missing</span>
-                )}
-              </li>
-              <li>
-                Browser permission:{' '}
-                <span className="font-semibold capitalize">{pushStatus.permission}</span>
-                {pushStatus.permission === 'denied' && (
-                  <span className="block mt-1 text-amber-600 font-medium normal-case">
-                    Unblock in browser site settings, then toggle on again.
-                  </span>
-                )}
-              </li>
-              <li>
-                Device registered:{' '}
-                {pushStatus.hasToken ? (
-                  <span className="text-emerald-600 font-semibold">Yes</span>
-                ) : (
-                  <span className="text-amber-600 font-semibold">No — toggle on above</span>
-                )}
-              </li>
-              {!pushStatus.messagingSupported && (
-                <li className="text-amber-600">
-                  Push not supported in this browser. On iPhone, install TripMate to the Home
-                  Screen first (iOS 16.4+).
-                </li>
-              )}
-            </ul>
+          {pushStatus && !pushStatus.messagingSupported && (
+            <p className="text-xs text-amber-600 font-medium rounded-xl bg-amber-500/10 p-3">
+              This browser does not support web push. On iPhone, add TripMate to your Home Screen
+              first, then enable notifications here.
+            </p>
           )}
         </CardContent>
       </Card>

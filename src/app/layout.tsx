@@ -6,6 +6,7 @@ import { FCMProvider } from '@/components/providers/FCMProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
 import { AppModeProvider } from '@/components/providers/AppModeProvider';
 import { PWAInstallPrompt } from '@/components/common/PWAInstallPrompt';
+import { ToastProvider } from '@/components/providers/ToastProvider';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -48,6 +49,7 @@ export default function RootLayout({
             <FCMProvider>
               {children}
               <PWAInstallPrompt />
+              <ToastProvider />
             </FCMProvider>
             </AppModeProvider>
           </AuthProvider>
