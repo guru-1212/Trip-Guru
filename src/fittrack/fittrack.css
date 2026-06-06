@@ -871,6 +871,24 @@
   background: hsl(var(--primary));
 }
 
+.ft-today-variation-check {
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 0.25rem;
+  border: 2px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: hsl(var(--primary-foreground));
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.ft-today-variation-check--on {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary));
+}
+
 .ft-today-variation-thumb {
   width: 2.25rem;
   height: 2.25rem;

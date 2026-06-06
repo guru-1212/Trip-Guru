@@ -67,6 +67,12 @@ import {
   isPickedToday,
   todayPicksToMap,
   mapToTodayPicks,
+  applyWorkoutExerciseFromPicks,
+  switchActiveVariation,
+  patchExerciseSets,
+  getPickedVariations,
+  getSetsForVariation,
+  migrateActiveWorkoutState,
 } from '@/workout/utils';
 import {
   buildShareCardData,
@@ -153,7 +159,7 @@ export default function WorkoutPage() {
   } = useWorkoutStore();
 
   const [selectedSplit, setSelectedSplit] = useState<SplitId | null>(null);
-  const [todayPicks, setTodayPicks] = useState<Map<string, string>>(new Map());
+  const [todayPicks, setTodayPicks] = useState<Map<string, string[]>>(new Map());
   const [pickerExercises, setPickerExercises] = useState<LibraryExercise[]>([]);
   const pickInitSplitRef = useRef<SplitId | null>(null);
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
@@ -246,6 +252,14 @@ export default function WorkoutPage() {
 
   useEffect(() => {
     if (!activeWorkout) return;
+    const needsMigration = activeWorkout.exercises.some((ex) => !ex.setsByVariation);
+    if (!needsMigration) return;
+    const migrated = migrateActiveWorkoutState(activeWorkout, profile.prefs.defaultSets);
+    updateActiveWorkout(migrated);
+  }, [activeWorkout, profile.prefs.defaultSets, updateActiveWorkout]);
+
+  useEffect(() => {
+    if (!activeWorkout) return;
     const tick = () => setElapsed(Math.floor((Date.now() - activeWorkout.startedAt) / 1000));
     tick();
     const id = setInterval(tick, 1000);
@@ -325,11 +339,18 @@ export default function WorkoutPage() {
     const baseIds = new Set(baseLibrary.map((e) => e.id));
     const extraFromPicker = pickerExercises.filter((e) => !baseIds.has(e.id));
     const allExercises = [...baseLibrary, ...extraFromPicker];
-    const exercises = createWorkoutExercises(allExercises, profile.prefs.defaultSets).map((ex) => ({
-      ...ex,
-      pickedToday: todayPicks.has(ex.exerciseId),
-      variation: todayPicks.get(ex.exerciseId) ?? ex.variation,
-    }));
+    const exercises = createWorkoutExercises(allExercises, profile.prefs.defaultSets).map((ex) => {
+      const pickedVariations = todayPicks.get(ex.exerciseId);
+      const isPicked = todayPicks.has(ex.exerciseId);
+      if (isPicked && pickedVariations?.length) {
+        return applyWorkoutExerciseFromPicks(
+          { ...ex, pickedToday: true },
+          pickedVariations,
+          profile.prefs.defaultSets
+        );
+      }
+      return { ...ex, pickedToday: isPicked };
+    });
     rememberTodayPicks(selectedSplit, mapToTodayPicks(todayPicks));
     const state = {
       splitId: selectedSplit,
@@ -428,7 +449,7 @@ export default function WorkoutPage() {
         const wasDone = sets[setIdx].done;
         sets[setIdx] = { ...sets[setIdx], done: !wasDone };
         if (!wasDone && sets[setIdx].done) startedRest = true;
-        return { ...ex, sets };
+        return patchExerciseSets(ex, sets);
       });
       return {
         ...prev,
@@ -446,25 +467,20 @@ export default function WorkoutPage() {
       } else {
         sets[setIdx] = { ...sets[setIdx], [field]: value };
       }
-      return { ...ex, sets };
+      return patchExerciseSets(ex, sets);
     });
   };
 
   const addSet = (exerciseId: string) => {
     updateExercise(exerciseId, (ex) => {
       const last = ex.sets[ex.sets.length - 1];
-      return {
-        ...ex,
-        sets: [...ex.sets, { weight: last?.weight ?? 0, reps: last?.reps ?? 0, done: false }],
-      };
+      const sets = [...ex.sets, { weight: last?.weight ?? 0, reps: last?.reps ?? 0, done: false }];
+      return patchExerciseSets(ex, sets);
     });
   };
 
   const removeSet = (exerciseId: string, setIdx: number) => {
-    updateExercise(exerciseId, (ex) => ({
-      ...ex,
-      sets: ex.sets.filter((_, i) => i !== setIdx),
-    }));
+    updateExercise(exerciseId, (ex) => patchExerciseSets(ex, ex.sets.filter((_, i) => i !== setIdx)));
   };
 
   const finishWorkout = () => {
@@ -593,14 +609,20 @@ export default function WorkoutPage() {
           <LayoutGroup>
             {exercises.map((ex) => {
               const lib = getExerciseById(ex.exerciseId);
-              const variations = getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
+              const pickedVariations = getPickedVariations(ex);
+              const workoutVariations =
+                ex.pickedVariations?.length && ex.pickedVariations.length > 0
+                  ? ex.pickedVariations
+                  : getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
               const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
               const isExpanded = expandedEx === ex.exerciseId;
               const isFullyDone = isExerciseFullyDone(ex);
               const picked = isPickedToday(ex);
-              const hasPR = ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
-              const setsCompleted = ex.sets.filter((s) => s.done).length;
-              const progress = (setsCompleted / ex.sets.length) * 100;
+              const activeSets = ex.sets;
+              const hasPR = activeSets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
+              const setsCompleted = activeSets.filter((s) => s.done).length;
+              const progress = (setsCompleted / Math.max(activeSets.length, 1)) * 100;
+              const multiVariation = pickedVariations.length > 1;
               const isRemovable = addedExerciseIds.includes(ex.exerciseId);
 
               return (
@@ -677,8 +699,10 @@ export default function WorkoutPage() {
                             )}
                           >
                             {isFullyDone
-                              ? 'All sets completed'
-                              : `${setsCompleted} of ${ex.sets.length} sets done`}
+                              ? multiVariation
+                                ? 'All variations completed'
+                                : 'All sets completed'
+                              : `${ex.variation} · ${setsCompleted} of ${activeSets.length} sets done`}
                           </p>
                           {lastSession && (
                             <p className="ft-last-session-preview mt-1 truncate">
@@ -730,9 +754,26 @@ export default function WorkoutPage() {
                         >
                           <VariationSelector
                             value={ex.variation}
-                            variations={variations}
-                            onChange={(v) => updateExercise(ex.exerciseId, (e) => ({ ...e, variation: v }))}
+                            variations={workoutVariations}
+                            onChange={(v) =>
+                              updateExercise(ex.exerciseId, (current) =>
+                                switchActiveVariation(current, v, profile.prefs.defaultSets)
+                              )
+                            }
                             onAddVariation={(v) => addVariation(ex.exerciseId, v)}
+                            variationProgress={
+                              multiVariation
+                                ? Object.fromEntries(
+                                    pickedVariations.map((v) => {
+                                      const sets = getSetsForVariation(ex, v);
+                                      return [
+                                        v,
+                                        `${sets.filter((s) => s.done).length}/${sets.length}`,
+                                      ];
+                                    })
+                                  )
+                                : undefined
+                            }
                           />
 
                           {lastSession ? (
@@ -780,14 +821,16 @@ export default function WorkoutPage() {
 
                           <div className="space-y-3">
                             <div className="flex items-center justify-between">
-                              <p className="ft-section-title">Sets</p>
+                              <p className="ft-section-title">
+                                Sets · <span className="text-foreground">{ex.variation}</span>
+                              </p>
                               <span className="text-xs font-medium text-muted-foreground tabular-nums">
-                                {setsCompleted} / {ex.sets.length}
+                                {setsCompleted} / {activeSets.length}
                               </span>
                             </div>
 
                             <div className="space-y-3">
-                              {ex.sets.map((set, idx) => (
+                              {activeSets.map((set, idx) => (
                                 <motion.div key={idx} layout>
                                   <SessionSetRow
                                     index={idx}

@@ -13,8 +13,8 @@ import { cn } from '@/lib/utils';
 interface TodayExercisePickerProps {
   splitId: SplitId;
   exercises: LibraryExercise[];
-  picks: Map<string, string>;
-  onPicksChange: (picks: Map<string, string>) => void;
+  picks: Map<string, string[]>;
+  onPicksChange: (picks: Map<string, string[]>) => void;
   onExercisesChange: (exercises: LibraryExercise[]) => void;
   getVariationsForExercise: (exerciseId: string, baseVariations: string[]) => string[];
   onAddVariation: (exerciseId: string, variation: string) => void;
@@ -46,7 +46,7 @@ export function TodayExercisePicker({
   const [newMuscle, setNewMuscle] = useState<MuscleGroup>('Chest');
   const [newVariation, setNewVariation] = useState('Standard');
   const [pendingAddId, setPendingAddId] = useState<string | null>(null);
-  const [pendingVariation, setPendingVariation] = useState('Standard');
+  const [pendingVariations, setPendingVariations] = useState<string[]>(['Standard']);
   const [newVarInputs, setNewVarInputs] = useState<Record<string, string>>({});
   const [fullImagePreview, setFullImagePreview] = useState<{ src: string; alt: string } | null>(null);
 
@@ -84,31 +84,51 @@ export function TodayExercisePicker({
     if (next.has(ex.id)) {
       next.delete(ex.id);
     } else {
-      next.set(ex.id, ex.variations[0] ?? 'Standard');
+      next.set(ex.id, [ex.variations[0] ?? 'Standard']);
     }
     onPicksChange(next);
   };
 
-  const setVariation = (exerciseId: string, variation: string) => {
-    if (!picks.has(exerciseId)) return;
+  const toggleVariation = (exerciseId: string, variation: string) => {
     const next = new Map(picks);
-    next.set(exerciseId, variation);
+    const current = next.get(exerciseId);
+    if (!current?.length) return;
+
+    const idx = current.indexOf(variation);
+    if (idx >= 0) {
+      if (current.length === 1) {
+        next.delete(exerciseId);
+      } else {
+        next.set(
+          exerciseId,
+          current.filter((v) => v !== variation)
+        );
+      }
+    } else {
+      next.set(exerciseId, [...current, variation]);
+    }
     onPicksChange(next);
   };
 
   const selectAll = () => {
     const next = new Map(picks);
     for (const ex of exercises) {
-      if (!next.has(ex.id)) next.set(ex.id, ex.variations[0] ?? 'Standard');
+      if (!next.has(ex.id)) next.set(ex.id, [ex.variations[0] ?? 'Standard']);
     }
     onPicksChange(next);
   };
 
   const clearAll = () => onPicksChange(new Map());
 
-  const addExerciseWithVariation = (ex: LibraryExercise, variation: string) => {
+  const addExerciseWithVariations = (ex: LibraryExercise, variations: string[]) => {
+    const uniqueVariations = Array.from(new Set(variations.filter(Boolean)));
+    if (!uniqueVariations.length) {
+      toast.error('Select at least one variation');
+      return;
+    }
+
     const nextPicks = new Map(picks);
-    nextPicks.set(ex.id, variation);
+    nextPicks.set(ex.id, uniqueVariations);
     onPicksChange(nextPicks);
 
     if (!pickerIds.has(ex.id)) {
@@ -117,8 +137,18 @@ export function TodayExercisePicker({
     }
 
     setPendingAddId(null);
+    setPendingVariations(['Standard']);
     setSearch('');
     toast.success(`${ex.name} added to today's picks`);
+  };
+
+  const togglePendingVariation = (variation: string) => {
+    setPendingVariations((prev) => {
+      if (prev.includes(variation)) {
+        return prev.length === 1 ? prev : prev.filter((v) => v !== variation);
+      }
+      return [...prev, variation];
+    });
   };
 
   const handleCreateCustom = () => {
@@ -150,17 +180,25 @@ export function TodayExercisePicker({
       splitIds: [splitId],
       category: [created.muscle],
     };
-    addExerciseWithVariation(lib, variation);
+    addExerciseWithVariations(lib, [variation]);
     setNewName('');
     setNewVariation('Standard');
     setShowCreate(false);
   };
 
-  const submitInlineVariation = (exerciseId: string, baseVariations: string[]) => {
+  const submitInlineVariation = (exerciseId: string) => {
     const trimmed = (newVarInputs[exerciseId] ?? '').trim();
     if (!trimmed) return;
     onAddVariation(exerciseId, trimmed);
-    setVariation(exerciseId, trimmed);
+
+    const next = new Map(picks);
+    const current = next.get(exerciseId);
+    if (!current?.length) {
+      next.set(exerciseId, [trimmed]);
+    } else if (!current.includes(trimmed)) {
+      next.set(exerciseId, [...current, trimmed]);
+    }
+    onPicksChange(next);
     setNewVarInputs((prev) => ({ ...prev, [exerciseId]: '' }));
   };
 
@@ -170,19 +208,19 @@ export function TodayExercisePicker({
 
   const renderVariationList = (
     ex: LibraryExercise,
-    selectedVariation: string,
-    onSelect: (variation: string) => void,
+    selectedVariations: string[],
+    onToggle: (variation: string) => void,
     showCustomInput = true
   ) => {
     const variations = getVariationsForExercise(ex.id, ex.variations);
 
     return (
       <div className="ft-today-variation-block">
-        <p className="ft-today-variation-label">Select variation</p>
+        <p className="ft-today-variation-label">Select variation(s)</p>
         <ul className="ft-today-variation-list">
           {variations.map((v) => {
             const storedImage = getVariationImage(ex.id, v);
-            const isSelected = selectedVariation === v;
+            const isSelected = selectedVariations.includes(v);
             return (
               <li key={v}>
                 <div
@@ -194,12 +232,12 @@ export function TodayExercisePicker({
                   <button
                     type="button"
                     className="ft-today-variation-option-main"
-                    onClick={() => onSelect(v)}
+                    onClick={() => onToggle(v)}
                   >
                     <span
                       className={cn(
-                        'ft-today-variation-radio',
-                        isSelected && 'ft-today-variation-radio--on'
+                        'ft-today-variation-check',
+                        isSelected && 'ft-today-variation-check--on'
                       )}
                       aria-hidden
                     >
@@ -235,12 +273,12 @@ export function TodayExercisePicker({
                 placeholder="e.g. Incline, Sumo..."
                 value={newVarInputs[ex.id] ?? ''}
                 onChange={(e) => setNewVarInputs((prev) => ({ ...prev, [ex.id]: e.target.value }))}
-                onKeyDown={(e) => e.key === 'Enter' && submitInlineVariation(ex.id, ex.variations)}
+                onKeyDown={(e) => e.key === 'Enter' && submitInlineVariation(ex.id)}
               />
               <button
                 type="button"
                 className="ft-btn ft-btn--secondary ft-btn--sm shrink-0"
-                onClick={() => submitInlineVariation(ex.id, ex.variations)}
+                onClick={() => submitInlineVariation(ex.id)}
               >
                 Add
               </button>
@@ -315,7 +353,7 @@ export function TodayExercisePicker({
                       <span className="text-sm font-medium truncate flex-1">{ex.name}</span>
                       {checked && (
                         <span className="text-xs text-primary font-medium shrink-0 truncate max-w-[40%]">
-                          {picks.get(ex.id)}
+                          {(picks.get(ex.id) ?? []).join(', ')}
                         </span>
                       )}
                       {!checked && (
@@ -323,9 +361,7 @@ export function TodayExercisePicker({
                       )}
                     </label>
                     {checked &&
-                      renderVariationList(ex, picks.get(ex.id) ?? ex.variations[0] ?? 'Standard', (v) =>
-                        setVariation(ex.id, v)
-                      )}
+                      renderVariationList(ex, picks.get(ex.id) ?? [], (v) => toggleVariation(ex.id, v))}
                   </li>
                 );
               })}
@@ -430,7 +466,7 @@ export function TodayExercisePicker({
                 return (
                   <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
                     <p className="text-sm font-semibold">{ex.name}</p>
-                    {renderVariationList(ex, pendingVariation, setPendingVariation, false)}
+                    {renderVariationList(ex, pendingVariations, togglePendingVariation, false)}
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -442,7 +478,7 @@ export function TodayExercisePicker({
                       <button
                         type="button"
                         className="ft-btn ft-btn--primary flex-1"
-                        onClick={() => addExerciseWithVariation(ex, pendingVariation)}
+                        onClick={() => addExerciseWithVariations(ex, pendingVariations)}
                       >
                         Add to picks
                       </button>
@@ -462,7 +498,7 @@ export function TodayExercisePicker({
                       type="button"
                       onClick={() => {
                         setPendingAddId(ex.id);
-                        setPendingVariation(ex.variations[0] ?? 'Standard');
+                        setPendingVariations([ex.variations[0] ?? 'Standard']);
                       }}
                       className="w-full ft-today-picker-row text-left"
                     >

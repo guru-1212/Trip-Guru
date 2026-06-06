@@ -35,12 +35,18 @@ export interface WorkoutSet {
 export interface WorkoutExercise {
   exerciseId: string;
   name: string;
+  /** Active variation chip in the workout UI. */
   variation: string;
   muscle: MuscleGroup;
+  /** Sets for the active variation (synced with setsByVariation[variation]). */
   sets: WorkoutSet[];
   notes?: string;
   /** True when selected for today's workout plan. */
   pickedToday?: boolean;
+  /** Variations selected for today's plan (from picks). */
+  pickedVariations?: string[];
+  /** Per-variation set tracking during an active session. */
+  setsByVariation?: Record<string, WorkoutSet[]>;
 }
 
 export interface WorkoutSession {
@@ -175,10 +181,10 @@ export interface SplitDefinition {
   icon: string;
 }
 
-/** Exercise + variation selected for a split's daily workout plan. */
+/** Exercise + variation(s) selected for a split's daily workout plan. */
 export interface TodayExercisePick {
   exerciseId: string;
-  variation: string;
+  variations: string[];
 }
 
 export interface ActiveWorkoutState {

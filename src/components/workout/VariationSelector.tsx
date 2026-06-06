@@ -10,9 +10,17 @@ interface VariationSelectorProps {
   variations: string[];
   onChange: (v: string) => void;
   onAddVariation: (v: string) => void;
+  /** Optional set progress label per variation, e.g. "2/3". */
+  variationProgress?: Record<string, string>;
 }
 
-export function VariationSelector({ value, variations, onChange, onAddVariation }: VariationSelectorProps) {
+export function VariationSelector({
+  value,
+  variations,
+  onChange,
+  onAddVariation,
+  variationProgress,
+}: VariationSelectorProps) {
   const [newVar, setNewVar] = useState('');
   const [showAdd, setShowAdd] = useState(false);
 
@@ -73,7 +81,12 @@ export function VariationSelector({ value, variations, onChange, onAddVariation 
                 onClick={() => onChange(v)}
                 className={cn('ft-chip', value === v && 'ft-chip--active')}
               >
-                {v}
+                <span>{v}</span>
+                {variationProgress?.[v] && (
+                  <span className="ml-1.5 text-[10px] font-bold opacity-80 tabular-nums">
+                    {variationProgress[v]}
+                  </span>
+                )}
               </button>
             ))}
           </motion.div>

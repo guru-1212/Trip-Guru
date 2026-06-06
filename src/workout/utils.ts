@@ -1,6 +1,7 @@
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type {
+  ActiveWorkoutState,
   CustomExercise,
   DayKey,
   HabitDay,
@@ -174,13 +175,130 @@ export function getLastExerciseSession(
   return null;
 }
 
+export function getPickedVariations(ex: WorkoutExercise): string[] {
+  if (ex.pickedVariations?.length) return ex.pickedVariations;
+  return [ex.variation];
+}
+
+export function getSetsForVariation(ex: WorkoutExercise, variation: string): WorkoutSet[] {
+  if (ex.setsByVariation?.[variation]) return ex.setsByVariation[variation];
+  if (variationMatches(ex.variation, variation)) return ex.sets;
+  return [];
+}
+
+export function patchExerciseSets(ex: WorkoutExercise, sets: WorkoutSet[]): WorkoutExercise {
+  if (!ex.setsByVariation) {
+    return { ...ex, sets };
+  }
+  return {
+    ...ex,
+    sets,
+    setsByVariation: { ...ex.setsByVariation, [ex.variation]: sets },
+  };
+}
+
+export function migrateWorkoutExercise(ex: WorkoutExercise, defaultSets: number): WorkoutExercise {
+  if (ex.setsByVariation && Object.keys(ex.setsByVariation).length > 0) {
+    const pickedVariations = ex.pickedVariations?.length ? ex.pickedVariations : getPickedVariations(ex);
+    const setsByVariation = { ...ex.setsByVariation, [ex.variation]: ex.sets };
+    return {
+      ...ex,
+      pickedVariations,
+      setsByVariation,
+      sets: setsByVariation[ex.variation] ?? ex.sets,
+    };
+  }
+
+  const pickedVariations = ex.pickedVariations?.length ? ex.pickedVariations : [ex.variation];
+  const setsByVariation: Record<string, WorkoutSet[]> = {};
+  for (const v of pickedVariations) {
+    setsByVariation[v] = variationMatches(v, ex.variation) ? ex.sets : createDefaultSets(defaultSets);
+  }
+  if (!setsByVariation[ex.variation]) {
+    setsByVariation[ex.variation] = ex.sets;
+  }
+
+  return {
+    ...ex,
+    pickedVariations,
+    setsByVariation,
+    sets: setsByVariation[ex.variation] ?? ex.sets,
+  };
+}
+
+export function migrateActiveWorkoutState(
+  state: ActiveWorkoutState,
+  defaultSets: number
+): ActiveWorkoutState {
+  return {
+    ...state,
+    exercises: state.exercises.map((ex) => migrateWorkoutExercise(ex, defaultSets)),
+  };
+}
+
+export function switchActiveVariation(
+  ex: WorkoutExercise,
+  nextVariation: string,
+  defaultSets: number
+): WorkoutExercise {
+  if (variationMatches(ex.variation, nextVariation)) return ex;
+
+  const setsByVariation = { ...(ex.setsByVariation ?? { [ex.variation]: ex.sets }) };
+  setsByVariation[ex.variation] = ex.sets;
+
+  const nextSets = setsByVariation[nextVariation] ?? createDefaultSets(defaultSets);
+  setsByVariation[nextVariation] = nextSets;
+
+  return {
+    ...ex,
+    variation: nextVariation,
+    sets: nextSets,
+    setsByVariation,
+  };
+}
+
+export function applyWorkoutExerciseFromPicks(
+  ex: WorkoutExercise,
+  pickedVariations: string[],
+  defaultSets: number
+): WorkoutExercise {
+  const uniqueVariations = Array.from(new Set(pickedVariations.filter(Boolean)));
+  if (!uniqueVariations.length) return ex;
+
+  const setsByVariation = Object.fromEntries(
+    uniqueVariations.map((v) => [v, createDefaultSets(defaultSets)])
+  );
+  const activeVariation = uniqueVariations[0];
+
+  return {
+    ...ex,
+    pickedToday: true,
+    pickedVariations: uniqueVariations,
+    variation: activeVariation,
+    sets: setsByVariation[activeVariation],
+    setsByVariation,
+  };
+}
+
 export function isExerciseFullyDone(ex: WorkoutExercise): boolean {
-  return ex.sets.length > 0 && ex.sets.every((s) => s.done);
+  const vars = getPickedVariations(ex);
+  if (!vars.length) return false;
+  return vars.every((v) => {
+    const sets = getSetsForVariation(ex, v);
+    return sets.length > 0 && sets.every((s) => s.done);
+  });
+}
+
+export function exerciseHasLoggedSets(ex: WorkoutExercise): boolean {
+  if (ex.setsByVariation) {
+    return Object.values(ex.setsByVariation).some((sets) => sets.some((s) => s.done));
+  }
+  return ex.sets.some((s) => s.done);
 }
 
 function exerciseCompletionTier(ex: WorkoutExercise): number {
   if (isExerciseFullyDone(ex)) return 0;
-  if (ex.sets.some((s) => s.done)) return 1;
+  if (exerciseHasLoggedSets(ex)) return 1;
   return 2;
 }
 
@@ -217,12 +335,43 @@ export function countPickedExercisesDone(exercises: WorkoutExercise[]): { done: 
   };
 }
 
-export function exerciseHasLoggedSets(ex: WorkoutExercise): boolean {
-  return ex.sets.some((s) => s.done);
+function stripSessionExerciseFields(ex: WorkoutExercise): WorkoutExercise {
+  const { pickedVariations: _pv, setsByVariation: _sbv, ...rest } = ex;
+  return rest;
+}
+
+export function expandExercisesForSave(exercises: WorkoutExercise[]): WorkoutExercise[] {
+  const result: WorkoutExercise[] = [];
+
+  for (const ex of exercises) {
+    const vars = getPickedVariations(ex);
+    const syncedSetsByVariation = ex.setsByVariation
+      ? { ...ex.setsByVariation, [ex.variation]: ex.sets }
+      : undefined;
+
+    if (!syncedSetsByVariation || vars.length <= 1) {
+      result.push(stripSessionExerciseFields(ex));
+      continue;
+    }
+
+    for (const v of vars) {
+      result.push(
+        stripSessionExerciseFields({
+          ...ex,
+          variation: v,
+          sets: syncedSetsByVariation[v] ?? createDefaultSets(ex.sets.length || 3),
+        })
+      );
+    }
+  }
+
+  return result;
 }
 
 export function filterExercisesForSave(exercises: WorkoutExercise[]): WorkoutExercise[] {
-  return exercises.filter((ex) => isPickedToday(ex) || exerciseHasLoggedSets(ex));
+  return expandExercisesForSave(exercises).filter(
+    (ex) => isPickedToday(ex) || exerciseHasLoggedSets(ex)
+  );
 }
 
 export function defaultVariationForExercise(
@@ -232,34 +381,68 @@ export function defaultVariationForExercise(
   return exercisesById.get(exerciseId)?.variations[0] ?? 'Standard';
 }
 
+type LegacyTodayExercisePick = {
+  exerciseId: string;
+  variation?: string;
+  variations?: string[];
+};
+
+function mergeTodayPickVariations(
+  byExercise: Map<string, Set<string>>,
+  exerciseId: string,
+  variations: string[]
+): void {
+  const set = byExercise.get(exerciseId) ?? new Set<string>();
+  for (const v of variations) {
+    if (v) set.add(v);
+  }
+  byExercise.set(exerciseId, set);
+}
+
 export function normalizeSavedTodayPicks(
-  saved: TodayExercisePick[] | string[] | undefined,
+  saved: TodayExercisePick[] | string[] | LegacyTodayExercisePick[] | undefined,
   validExerciseIds: Set<string>,
   exercisesById: Map<string, Pick<LibraryExercise, 'variations'>>
 ): TodayExercisePick[] {
   if (!saved?.length) return [];
+
+  const byExercise = new Map<string, Set<string>>();
+
   if (typeof saved[0] === 'string') {
-    return (saved as string[])
-      .filter((id) => validExerciseIds.has(id))
-      .map((exerciseId) => ({
-        exerciseId,
-        variation: defaultVariationForExercise(exerciseId, exercisesById),
-      }));
+    for (const exerciseId of saved as string[]) {
+      if (!validExerciseIds.has(exerciseId)) continue;
+      mergeTodayPickVariations(byExercise, exerciseId, [
+        defaultVariationForExercise(exerciseId, exercisesById),
+      ]);
+    }
+  } else {
+    for (const raw of saved as LegacyTodayExercisePick[]) {
+      if (!validExerciseIds.has(raw.exerciseId)) continue;
+      const variations = raw.variations?.length
+        ? raw.variations
+        : [
+            raw.variation ||
+              defaultVariationForExercise(raw.exerciseId, exercisesById),
+          ];
+      mergeTodayPickVariations(byExercise, raw.exerciseId, variations);
+    }
   }
-  return (saved as TodayExercisePick[])
-    .filter((p) => validExerciseIds.has(p.exerciseId))
-    .map((p) => ({
-      exerciseId: p.exerciseId,
-      variation: p.variation || defaultVariationForExercise(p.exerciseId, exercisesById),
-    }));
+
+  return Array.from(byExercise.entries()).map(([exerciseId, variations]) => ({
+    exerciseId,
+    variations: Array.from(variations),
+  }));
 }
 
-export function todayPicksToMap(picks: TodayExercisePick[]): Map<string, string> {
-  return new Map(picks.map((p) => [p.exerciseId, p.variation]));
+export function todayPicksToMap(picks: TodayExercisePick[]): Map<string, string[]> {
+  return new Map(picks.map((p) => [p.exerciseId, p.variations]));
 }
 
-export function mapToTodayPicks(picks: Map<string, string>): TodayExercisePick[] {
-  return Array.from(picks.entries()).map(([exerciseId, variation]) => ({ exerciseId, variation }));
+export function mapToTodayPicks(picks: Map<string, string[]>): TodayExercisePick[] {
+  return Array.from(picks.entries()).map(([exerciseId, variations]) => ({
+    exerciseId,
+    variations,
+  }));
 }
 
 export function getDefaultTodayPicks(
@@ -276,15 +459,21 @@ export function getDefaultTodayPicks(
 
   const lastSession = workouts.find((w) => w.splitId === splitId);
   if (lastSession) {
-    const fromLast = lastSession.exercises
-      .filter((e) => allExerciseIds.has(e.exerciseId))
-      .map((e) => ({ exerciseId: e.exerciseId, variation: e.variation }));
+    const byExercise = new Map<string, Set<string>>();
+    for (const e of lastSession.exercises) {
+      if (!allExerciseIds.has(e.exerciseId)) continue;
+      mergeTodayPickVariations(byExercise, e.exerciseId, [e.variation]);
+    }
+    const fromLast = Array.from(byExercise.entries()).map(([exerciseId, variations]) => ({
+      exerciseId,
+      variations: Array.from(variations),
+    }));
     if (fromLast.length) return fromLast;
   }
 
   return exercises.map((e) => ({
     exerciseId: e.id,
-    variation: e.variations[0] ?? 'Standard',
+    variations: [e.variations[0] ?? 'Standard'],
   }));
 }
 
@@ -648,7 +837,7 @@ export function getMuscleOrderForSplit(splitId: SplitId): MuscleGroup[] {
 function muscleGroupCompletionScore(exercises: WorkoutExercise[]): number {
   const fullyDone = exercises.filter(isExerciseFullyDone).length;
   const partial = exercises.filter(
-    (e) => !isExerciseFullyDone(e) && e.sets.some((s) => s.done)
+    (e) => !isExerciseFullyDone(e) && exerciseHasLoggedSets(e)
   ).length;
   return fullyDone * 1000 + partial * 10;
 }
