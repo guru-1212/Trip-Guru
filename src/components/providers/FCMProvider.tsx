@@ -60,7 +60,7 @@ export function FCMProvider({ children }: { children: React.ReactNode }) {
       };
       const targetUrl = getPayloadUrl(payload);
 
-      if (data.data?.type?.startsWith('gym.')) {
+      if (data.data?.type === 'gym.workout_saved') {
         return;
       }
 

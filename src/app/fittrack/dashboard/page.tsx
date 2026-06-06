@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import dayjs from 'dayjs';
 import {
@@ -25,10 +26,20 @@ import {
   Zap,
   ArrowUpRight,
   Timer,
-  LayoutDashboard
+  LayoutDashboard,
+  Share2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import toast from 'react-hot-toast';
+import { WorkoutShareCard } from '@/components/workout/WorkoutShareCard';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
+import {
+  buildShareCardDataFromSession,
+  exportWorkoutShareCard,
+  waitForShareCardPaint,
+  type WorkoutShareCardData,
+} from '@/workout/shareCard';
+import type { WorkoutSession } from '@/workout/types';
 import { MUSCLE_COLORS, SPLIT_NAMES } from '@/workout/constants';
 import {
   calcStreak,
@@ -44,11 +55,14 @@ import { PageTransition } from '@/components/workout/PageTransition';
 import { cn } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const { profile, workouts, weeklyGoals, hydrated } = useWorkoutStore();
+  const { profile, workouts, weeklyGoals, hydrated, prs, updateWorkoutDate } = useWorkoutStore();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<Record<string, string>>({});
-  const { updateWorkoutDate } = useWorkoutStore();
+  const [sharingId, setSharingId] = useState<string | null>(null);
+  const [shareCardData, setShareCardData] = useState<WorkoutShareCardData | null>(null);
+  const shareCardRef = useRef<HTMLDivElement>(null);
 
+  const todayStr = dayjs().format('YYYY-MM-DD');
   const todaySplit = getTodaysSplit(profile);
   const splitName = SPLIT_NAMES[todaySplit];
 
@@ -68,6 +82,28 @@ export default function DashboardPage() {
       weekDaysCount,
     };
   }, [workouts]);
+
+  const handleShareWorkout = async (session: WorkoutSession) => {
+    setSharingId(session.id);
+    const data = buildShareCardDataFromSession(session, profile, workouts, prs);
+    flushSync(() => setShareCardData(data));
+    try {
+      await waitForShareCardPaint();
+      if (!shareCardRef.current) {
+        throw new Error('Share card not ready');
+      }
+      const result = await exportWorkoutShareCard(shareCardRef.current, data);
+      toast.success(result === 'shared' ? 'Story shared' : 'Story image downloaded');
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        console.error(err);
+        toast.error('Could not create share image');
+      }
+    } finally {
+      setSharingId(null);
+      setShareCardData(null);
+    }
+  };
 
   const { muscleData, weeklyData } = useMemo(() => {
     const last8Weeks = Array.from({ length: 8 })
@@ -382,6 +418,17 @@ export default function DashboardPage() {
                         >
                           Save
                         </button>
+                        {w.date === todayStr && (
+                          <button
+                            type="button"
+                            className="ft-btn ft-btn--secondary h-11 py-0 px-6 flex items-center justify-center gap-2 rounded-xl"
+                            disabled={sharingId === w.id}
+                            onClick={() => handleShareWorkout(w)}
+                          >
+                            <Share2 className="h-4 w-4" />
+                            {sharingId === w.id ? 'Creating…' : 'Share story'}
+                          </button>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -418,6 +465,8 @@ export default function DashboardPage() {
           )}
         </motion.div>
       </div>
+
+      {shareCardData && <WorkoutShareCard ref={shareCardRef} data={shareCardData} />}
     </motion.div>
   );
 }

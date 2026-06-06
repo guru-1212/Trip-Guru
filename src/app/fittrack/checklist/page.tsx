@@ -12,6 +12,8 @@ import { getWeekProgress, getHabitStreak } from '@/workout/analytics';
 import { formatWeight } from '@/workout/utils';
 import type { ChecklistItem } from '@/workout/types';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import * as fittrackDb from '@/firebase/fittrack.firestore';
 
 dayjs.extend(isoWeek);
 
@@ -30,6 +32,7 @@ export default function ChecklistPage() {
     toggleHabit,
   } = useWorkoutStore();
 
+  const { uid } = useAuth();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<'daily' | 'weekly' | 'habits'>('daily');
   const [newItem, setNewItem] = useState('');
@@ -59,6 +62,11 @@ export default function ChecklistPage() {
   ];
 
   const toggleItem = (id: string) => {
+    const item =
+      checklist.dailyItems.find((i) => i.id === id) ??
+      checklist.custom.find((i) => i.id === id);
+    const markingDone = item && !item.done;
+
     const update = (items: ChecklistItem[]) =>
       items.map((i) => (i.id === id ? { ...i, done: !i.done } : i));
     updateChecklist({
@@ -66,6 +74,11 @@ export default function ChecklistPage() {
       dailyItems: update(checklist.dailyItems),
       custom: update(checklist.custom),
     });
+
+    if (id === 'post-protein' && markingDone && uid) {
+      const localDate = dayjs().format('YYYY-MM-DD');
+      void fittrackDb.cancelPendingProteinReminders(uid, localDate);
+    }
   };
 
   if (!hydrated) return <div className="ft-loading"><span>Loading tasks...</span></div>;

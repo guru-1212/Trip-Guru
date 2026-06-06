@@ -21,7 +21,7 @@ import type {
   WeeklyGoals,
   WorkoutSession,
 } from '@/workout/types';
-import { getDefaultProfile, mergeVariationImages } from '@/workout/utils';
+import { getDefaultProfile, mergeVariationImages, normalizeProfile } from '@/workout/utils';
 import { loadVariationImages } from '@/workout/storage';
 
 export interface FitTrackSyncCallbacks {
@@ -75,7 +75,9 @@ export function useFitTrackSync(uid: string | null | undefined, callbacks: FitTr
         doc(db(), 'users', uid, 'fittrack', 'profile'),
         (snap) => {
           if (cancelled) return;
-          cb().setProfile(snap.exists() ? (snap.data() as UserProfile) : getDefaultProfile());
+          cb().setProfile(
+            snap.exists() ? normalizeProfile(snap.data() as Partial<UserProfile>) : getDefaultProfile()
+          );
         },
         (err) => console.error('[FitTrack] profile listener:', err)
       )

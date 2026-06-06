@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dayjs from 'dayjs';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,8 +23,10 @@ import {
   ArrowRight,
   ChevronLeft,
   Trash2,
+  Share2,
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
+import { WorkoutShareCard } from '@/components/workout/WorkoutShareCard';
 import { RestTimer } from '@/components/workout/RestTimer';
 import { VariationSelector } from '@/components/workout/VariationSelector';
 import { SessionSetRow } from '@/components/workout/SessionSetRow';
@@ -56,6 +58,11 @@ import {
   defaultExerciseImageUrl,
   variationImageKey,
 } from '@/workout/utils';
+import {
+  buildShareCardData,
+  exportWorkoutShareCard,
+  waitForShareCardPaint,
+} from '@/workout/shareCard';
 import { cn } from '@/lib/utils';
 
 const SPLIT_ICONS: Record<string, string> = {
@@ -142,6 +149,8 @@ export default function WorkoutPage() {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showAddExercise, setShowAddExercise] = useState(false);
   const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
+  const [sharingStory, setSharingStory] = useState(false);
+  const shareCardRef = useRef<HTMLDivElement>(null);
   const [restEnd, setRestEnd] = useState<number | null>(null);
   const [restDuration, setRestDuration] = useState(profile.prefs.restTimer);
   const [infoModal, setInfoModal] = useState<{
@@ -453,6 +462,39 @@ export default function WorkoutPage() {
     const prsBroken = activeWorkout.exercises.filter((ex) =>
       ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs))
     );
+
+    const shareCardData = showSummary
+      ? buildShareCardData({
+          splitId: activeWorkout.splitId,
+          splitName: activeWorkout.splitName,
+          date: workoutDate,
+          durationSeconds: elapsed,
+          exercises: activeWorkout.exercises,
+          profile,
+          workouts,
+          prs,
+        })
+      : null;
+
+    const handleDownloadStory = async () => {
+      if (!shareCardData || !shareCardRef.current) return;
+      setSharingStory(true);
+      try {
+        await waitForShareCardPaint();
+        const result = await exportWorkoutShareCard(shareCardRef.current, shareCardData);
+        toast.success(
+          result === 'shared' ? 'Story shared' : 'Story image downloaded'
+        );
+      } catch (err) {
+        if ((err as Error).name !== 'AbortError') {
+          console.error(err);
+          toast.error('Could not create share image');
+        }
+      } finally {
+        setSharingStory(false);
+      }
+    };
+
     const groupedExercises = groupExercisesByMuscle(activeWorkout.exercises, activeWorkout.splitId);
     const addedExerciseIds = activeWorkout.addedExerciseIds ?? [];
     const removeTarget = removeConfirmId
@@ -724,6 +766,18 @@ export default function WorkoutPage() {
                     <SummaryMetric label="Volume" value={formatWeight(calcWorkoutVolume(activeWorkout.exercises), profile.prefs.unit)} icon={TrendingUp} />
                     <SummaryMetric label="PRs" value={String(prsBroken.length)} icon={Trophy} />
                   </div>
+
+                  <button
+                    type="button"
+                    className="ft-btn ft-btn--secondary ft-btn--block"
+                    disabled={sharingStory}
+                    onClick={handleDownloadStory}
+                  >
+                    <Share2 className="h-4 w-4" />
+                    {sharingStory ? 'Creating story…' : 'Download story'}
+                  </button>
+
+                  {shareCardData && <WorkoutShareCard ref={shareCardRef} data={shareCardData} />}
 
                   <div>
                     <label className="ft-label">Session date</label>

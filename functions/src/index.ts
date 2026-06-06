@@ -4,7 +4,9 @@ import {
   onDocumentCreated,
   onDocumentUpdated,
   onDocumentDeleted,
+  onDocumentWritten,
 } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import {
   collectRoomMemberTokens,
@@ -16,6 +18,11 @@ import {
   sendPushToUser,
   tripNotificationLink,
 } from './notifications';
+import {
+  dispatchDueFitTrackReminders,
+  reschedulePreGymReminders,
+  scheduleProteinReminderForUser,
+} from './fittrackReminders';
 
 setGlobalOptions({ region: 'us-central1' });
 
@@ -274,8 +281,30 @@ export const onFitTrackWorkoutCreated = onDocumentCreated(
       link: '/fittrack/dashboard',
       data: { type: 'gym.workout_saved', path: '/fittrack/dashboard' },
     });
+
+    const profileSnap = await admin.firestore().doc(`users/${uid}/fittrack/profile`).get();
+    if (profileSnap.exists) {
+      await scheduleProteinReminderForUser(uid, profileSnap.data() ?? {});
+    }
   }
 );
+
+/** Reschedule pre-gym reminders when FitTrack profile changes. */
+export const onFitTrackProfileWritten = onDocumentWritten(
+  'users/{uid}/fittrack/profile',
+  async (event) => {
+    const uid = event.params.uid;
+    const after = event.data?.after.data();
+    if (!after) return;
+    await reschedulePreGymReminders(uid, after);
+  }
+);
+
+/** Dispatch due FitTrack reminders every 5 minutes. */
+export const dispatchFitTrackReminders = onSchedule('every 5 minutes', async () => {
+  const sent = await dispatchDueFitTrackReminders();
+  console.info(`[FitTrack] Dispatched ${sent} gym reminder(s)`);
+});
 
 /** Legacy gym module workout log. */
 export const onGymWorkoutLogCreated = onDocumentCreated(

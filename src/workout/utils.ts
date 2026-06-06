@@ -299,7 +299,31 @@ export function getDefaultProfile(): UserProfile {
       defaultSets: 3,
       sound: true,
     },
+    gymTime: null,
+    gymRemindersEnabled: false,
+    timezone: typeof Intl !== 'undefined'
+      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+      : 'UTC',
   };
+}
+
+export function normalizeProfile(profile: Partial<UserProfile> | null | undefined): UserProfile {
+  const defaults = getDefaultProfile();
+  if (!profile) return defaults;
+  return {
+    ...defaults,
+    ...profile,
+    prefs: { ...defaults.prefs, ...profile.prefs },
+    weekSchedule: { ...defaults.weekSchedule, ...profile.weekSchedule },
+    gymTime: profile.gymTime ?? null,
+    gymRemindersEnabled: profile.gymRemindersEnabled ?? false,
+    timezone: profile.timezone ?? defaults.timezone,
+  };
+}
+
+export function getBrowserTimezone(): string {
+  if (typeof Intl === 'undefined') return 'UTC';
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 }
 
 export function playBeep(frequency = 880, duration = 0.3) {

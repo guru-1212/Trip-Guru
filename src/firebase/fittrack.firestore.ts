@@ -8,6 +8,8 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/firebase/db';
@@ -16,6 +18,7 @@ import type {
   BodyStat,
   ChecklistData,
   CustomExercise,
+  FitTrackReminderType,
   HabitDay,
   PersonalRecord,
   SplitId,
@@ -23,7 +26,13 @@ import type {
   WeeklyGoals,
   WorkoutSession,
 } from '@/workout/types';
-import { getDefaultChecklistItems, getDefaultProfile, getWeekStart, cloudSafeVariationImages } from '@/workout/utils';
+import {
+  getDefaultChecklistItems,
+  getDefaultProfile,
+  getWeekStart,
+  cloudSafeVariationImages,
+  normalizeProfile,
+} from '@/workout/utils';
 import * as localStorage from '@/workout/storage';
 
 export interface FitTrackStateDoc {
@@ -57,6 +66,14 @@ function customExercisesCol(uid: string) {
 
 function bodyStatsCol(uid: string) {
   return collection(db(), 'users', uid, 'fittrackBodyStats');
+}
+
+function remindersCol(uid: string) {
+  return collection(db(), 'users', uid, 'fittrackReminders');
+}
+
+function reminderDoc(uid: string, id: string) {
+  return doc(db(), 'users', uid, 'fittrackReminders', id);
 }
 
 export function defaultStateDoc(): FitTrackStateDoc {
@@ -98,7 +115,7 @@ export function normalizeChecklist(stored: ChecklistData | undefined): Checklist
 export async function getFitTrackProfile(uid: string): Promise<UserProfile | null> {
   const snap = await getDoc(profileDoc(uid));
   if (!snap.exists()) return null;
-  return snap.data() as UserProfile;
+  return normalizeProfile(snap.data() as Partial<UserProfile>);
 }
 
 export async function saveFitTrackProfile(uid: string, profile: UserProfile): Promise<void> {
@@ -271,4 +288,54 @@ export async function ensureFitTrackDefaults(uid: string): Promise<void> {
   if (!stateSnap.exists()) {
     await saveFitTrackState(uid, defaultStateDoc());
   }
+}
+
+export async function cancelPendingProteinReminders(uid: string, localDate?: string): Promise<void> {
+  const constraints = [where('status', '==', 'pending'), where('type', '==', 'protein')];
+  const q = localDate
+    ? query(remindersCol(uid), ...constraints, where('localDate', '==', localDate))
+    : query(remindersCol(uid), ...constraints);
+  const snap = await getDocs(q);
+  if (snap.empty) return;
+
+  const batch = writeBatch(db());
+  snap.docs.forEach((d) => {
+    batch.update(d.ref, { status: 'cancelled', updatedAt: serverTimestamp() });
+  });
+  await batch.commit();
+}
+
+export async function cancelPendingRemindersByTypes(
+  uid: string,
+  types: FitTrackReminderType[]
+): Promise<void> {
+  const snap = await getDocs(
+    query(remindersCol(uid), where('status', '==', 'pending'), where('type', 'in', types))
+  );
+  if (snap.empty) return;
+
+  const batch = writeBatch(db());
+  snap.docs.forEach((d) => {
+    batch.update(d.ref, { status: 'cancelled', updatedAt: serverTimestamp() });
+  });
+  await batch.commit();
+}
+
+export async function scheduleProteinReminder(
+  uid: string,
+  sendAt: Date,
+  localDate: string,
+  payload: { title: string; body: string; url: string }
+): Promise<void> {
+  await cancelPendingProteinReminders(uid);
+  const id = `protein_${localDate}_${sendAt.getTime()}`;
+  await setDoc(reminderDoc(uid, id), {
+    type: 'protein',
+    sendAt: Timestamp.fromDate(sendAt),
+    status: 'pending',
+    localDate,
+    payload,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
 }

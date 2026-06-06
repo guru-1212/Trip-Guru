@@ -1,13 +1,15 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import dayjs from 'dayjs';
-import { Pencil, Upload, Download, Trash2, AlertTriangle } from 'lucide-react';
+import { Pencil, Upload, Download, Trash2, AlertTriangle, Bell, BellOff } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
+import { useAuth } from '@/hooks/useAuth';
 import { DAY_KEYS, SPLIT_DEFINITIONS } from '@/workout/constants';
 import { getFavouriteSplit, getFavouriteExercise } from '@/workout/analytics';
-import { formatWeight, formatDuration, countScheduledWorkoutDays } from '@/workout/utils';
+import { formatWeight, formatDuration, countScheduledWorkoutDays, getBrowserTimezone } from '@/workout/utils';
 import type { DayKey, FitnessGoal, SplitId, ThemePref } from '@/workout/types';
 
 export default function ProfilePage() {
@@ -22,11 +24,21 @@ export default function ProfilePage() {
     clearHistory,
     clearAllPRs,
   } = useWorkoutStore();
+  const { user } = useAuth();
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(profile);
   const [confirmClear, setConfirmClear] = useState<'history' | 'prs' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const pushEnabled =
+    user?.notifyEnabled !== false &&
+    typeof Notification !== 'undefined' &&
+    Notification.permission === 'granted';
+
+  useEffect(() => {
+    if (!editing) setForm(profile);
+  }, [profile, editing]);
 
   const totalVolume = workouts.reduce((s, w) => s + w.totalVolume, 0);
   const totalTime = workouts.reduce((s, w) => s + w.duration, 0);
@@ -35,8 +47,14 @@ export default function ProfilePage() {
     : dayjs().format('YYYY-MM-DD');
 
   const saveProfile = () => {
-    updateProfile(form);
-    updateWeeklyGoals({ workoutsPerWeek: countScheduledWorkoutDays(form) });
+    const next = {
+      ...form,
+      timezone: getBrowserTimezone(),
+      gymTime: form.gymRemindersEnabled && !form.gymTime ? '18:00' : form.gymTime,
+    };
+    setForm(next);
+    updateProfile(next);
+    updateWeeklyGoals({ workoutsPerWeek: countScheduledWorkoutDays(next) });
     setEditing(false);
   };
 
@@ -148,6 +166,80 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* Gym Reminders */}
+        <section className="ft-card ft-card-padded">
+          <div className="flex items-center gap-2 mb-1">
+            <Bell className="h-4 w-4 text-primary" />
+            <h2 className="ft-title font-semibold">Gym Reminders</h2>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            On training days only · 2h pre-workout meal · 1h get ready · protein 20 min after workout
+          </p>
+
+          {!pushEnabled && (
+            <div className="mb-4 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-start gap-3">
+              <BellOff className="h-4 w-4 text-amber-500 mt-0.5 shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-amber-600 dark:text-amber-400">Push notifications are off</p>
+                <p className="text-muted-foreground mt-1">
+                  Enable notifications in{' '}
+                  <Link href="/profile" className="text-primary underline underline-offset-2">
+                    App Profile
+                  </Link>{' '}
+                  to receive gym reminders when the app is closed.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs text-muted-foreground">Enable gym reminders</label>
+              {editing ? (
+                <select
+                  className="ft-input mt-1"
+                  value={form.gymRemindersEnabled ? 'On' : 'Off'}
+                  onChange={(e) =>
+                    setForm({
+                      ...form,
+                      gymRemindersEnabled: e.target.value === 'On',
+                      gymTime: e.target.value === 'On' && !form.gymTime ? '18:00' : form.gymTime,
+                    })
+                  }
+                >
+                  <option value="On">On</option>
+                  <option value="Off">Off</option>
+                </select>
+              ) : (
+                <p className="mt-1 font-medium">{form.gymRemindersEnabled ? 'On' : 'Off'}</p>
+              )}
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground">Gym time</label>
+              {editing ? (
+                <input
+                  className="ft-input mt-1"
+                  type="time"
+                  value={form.gymTime ?? '18:00'}
+                  disabled={!form.gymRemindersEnabled}
+                  onChange={(e) => setForm({ ...form, gymTime: e.target.value || null })}
+                />
+              ) : (
+                <p className="mt-1 font-medium">
+                  {form.gymRemindersEnabled && form.gymTime
+                    ? dayjs(`2000-01-01T${form.gymTime}`).format('h:mm A')
+                    : 'Not set'}
+                </p>
+              )}
+            </div>
+          </div>
+          {(editing ? form : profile).gymRemindersEnabled && (editing ? form : profile).gymTime && (
+            <p className="text-xs text-muted-foreground mt-3">
+              Timezone: {(editing ? form : profile).timezone || getBrowserTimezone()}
+            </p>
+          )}
         </section>
 
         {/* Preferences */}

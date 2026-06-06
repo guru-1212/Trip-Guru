@@ -23,9 +23,22 @@ Recipients: accepted `roomMembers` except `actorUid`. Respects `users.notifyEnab
 
 ## Gym / FitTrack notifications
 
-- `users/{uid}/fittrackWorkouts/{id}` create — workout saved (personal push)
+- `users/{uid}/fittrackWorkouts/{id}` create — workout saved (personal push) + schedules protein reminder (20 min later)
 - `users/{uid}/gymWorkoutLogs/{id}` create — legacy gym log (personal push)
+- `users/{uid}/fittrack/profile` write — reschedules pre-gym reminders for next 7 training days
+- `dispatchFitTrackReminders` scheduled function (every 5 min) — sends due queued reminders
 - Rest timer uses local/service-worker notification when the app is open or backgrounded
+
+### Gym reminder types (FCM `data.type`)
+
+| Type | When | Deep link |
+|------|------|-----------|
+| `gym.reminder.pre_meal` | 2 hours before gym time (training days) | `/fittrack/checklist` |
+| `gym.reminder.get_ready` | 1 hour before gym time (training days) | `/fittrack/workout` |
+| `gym.reminder.protein` | 20 minutes after Finish Workout | `/fittrack/checklist` |
+| `gym.workout_saved` | Workout saved to history | `/fittrack/dashboard` |
+
+Requires: gym time + reminders enabled in **FitTrack Profile**, push enabled in **App Profile**.
 
 ## Room invites
 

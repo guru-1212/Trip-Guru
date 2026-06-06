@@ -124,6 +124,18 @@ export interface WeekSchedule {
   Sun: SplitId;
 }
 
+export type FitTrackReminderType = 'pre_meal' | 'get_ready' | 'protein';
+
+export type FitTrackReminderStatus = 'pending' | 'sent' | 'cancelled';
+
+export interface FitTrackReminder {
+  type: FitTrackReminderType;
+  sendAt: unknown;
+  status: FitTrackReminderStatus;
+  localDate: string;
+  payload?: { title: string; body: string; url: string };
+}
+
 export interface UserProfile {
   name: string;
   age: number;
@@ -134,6 +146,11 @@ export interface UserProfile {
   avatar: string;
   weekSchedule: WeekSchedule;
   prefs: UserPrefs;
+  /** 24h format, e.g. "18:00" */
+  gymTime: string | null;
+  gymRemindersEnabled: boolean;
+  /** IANA timezone, e.g. "Asia/Kolkata" */
+  timezone: string;
 }
 
 export interface LibraryExercise {
