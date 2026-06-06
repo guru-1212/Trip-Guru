@@ -1,10 +1,13 @@
+// next-pwa precaching breaks on Vercel (404 on app-build-manifest.json). FCM uses firebase-messaging-sw.js instead.
+const pwaDisabled =
+  process.env.NODE_ENV === 'development' || process.env.VERCEL === '1';
+
 const withPWA = require('next-pwa')({
   dest: 'public',
-  register: true,
+  register: !pwaDisabled,
   skipWaiting: true,
-  disable: process.env.NODE_ENV === 'development',
-  buildExcludes: [/middleware-manifest\.json$/],
-  // FCM background push when PWA is closed (handlers in firebase-messaging-sw.js)
+  disable: pwaDisabled,
+  buildExcludes: [/middleware-manifest\.json$/, /app-build-manifest\.json$/],
   importScripts: ['/firebase-messaging-sw.js'],
 });
 

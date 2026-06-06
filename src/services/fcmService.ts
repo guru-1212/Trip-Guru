@@ -103,15 +103,42 @@ async function getMessaging(): Promise<Messaging | null> {
   }
 }
 
+/** Remove stale Workbox sw.js left from older deploys (breaks FCM on Vercel). */
+async function unregisterWorkboxServiceWorkers(): Promise<void> {
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
+    return;
+  }
+  try {
+    const registrations = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(
+      registrations.map(async (registration) => {
+        const scriptUrl =
+          registration.active?.scriptURL ??
+          registration.installing?.scriptURL ??
+          registration.waiting?.scriptURL ??
+          '';
+        const isWorkboxSw =
+          scriptUrl.includes('/sw.js') &&
+          !scriptUrl.includes('firebase-messaging-sw');
+        if (isWorkboxSw) {
+          await registration.unregister();
+        }
+      })
+    );
+  } catch (error) {
+    console.warn('FCM: could not unregister old service workers:', error);
+  }
+}
+
 async function getServiceWorkerRegistration(): Promise<ServiceWorkerRegistration | null> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
     return null;
   }
 
-  const isDev = process.env.NODE_ENV === 'development';
-  const scripts = isDev
-    ? ['/firebase-messaging-sw.js', '/sw.js']
-    : ['/sw.js', '/firebase-messaging-sw.js'];
+  await unregisterWorkboxServiceWorkers();
+
+  // Always prefer firebase-messaging-sw.js — Workbox sw.js precache fails on Vercel.
+  const scripts = ['/firebase-messaging-sw.js', '/sw.js'];
 
   for (const script of scripts) {
     try {

@@ -54,7 +54,7 @@ export function FCMProvider({ children }: { children: React.ReactNode }) {
       ) {
         const n = new Notification(data.notification.title ?? 'TripMate', {
           body: data.notification.body,
-          icon: '/icons/icon-192x192.png',
+          icon: '/logo.svg',
           tag: 'tripmate-foreground',
         });
         n.onclick = () => {
