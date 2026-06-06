@@ -11,10 +11,22 @@ import {
   calcStreak,
   calcWorkoutVolume,
   countCompletedSets,
-  formatDuration,
   formatWeight,
   isPR,
 } from './utils';
+
+/** Duration for share card: hours, minutes, seconds (e.g. "1h 23m 45s"). */
+export function formatShareCardDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  const parts: string[] = [];
+  if (h > 0) parts.push(`${h}h`);
+  if (m > 0 || h > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
+}
 
 export type ShareCardHighlight =
   | { type: 'pr'; name: string; detail: string }
@@ -148,7 +160,7 @@ export function buildShareCardData(input: ShareInput): WorkoutShareCardData {
     splitId: input.splitId,
     splitName: input.splitName,
     durationSeconds: input.durationSeconds,
-    durationLabel: formatDuration(input.durationSeconds),
+    durationLabel: formatShareCardDuration(input.durationSeconds),
     totalSets: countCompletedSets(exercises),
     totalVolume: calcWorkoutVolume(exercises),
     volumeLabel: formatWeight(calcWorkoutVolume(exercises), unit),
@@ -220,7 +232,7 @@ export async function shareOrDownloadShareCard(
     try {
       await navigator.share({
         files: [file],
-        title: 'FitTrack Workout',
+        title: 'Workout Story',
         text: 'My workout today',
       });
       return 'shared';

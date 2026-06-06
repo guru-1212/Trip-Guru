@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FitTrack Share Card — Chest + PRs</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      background: #0a0a0a;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px 48px;
+      color: #94a3b8;
+    }
+    .page-title {
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: #1D9E75;
+      margin-bottom: 8px;
+    }
+    .page-sub {
+      font-size: 13px;
+      margin-bottom: 24px;
+      text-align: center;
+      max-width: 360px;
+    }
+    .preview-wrap {
+      width: min(100%, 405px);
+      aspect-ratio: 9 / 16;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+    .card {
+      width: 1080px;
+      height: 1920px;
+      transform: scale(0.375);
+      transform-origin: top left;
+      color: #f8fafc;
+      background: linear-gradient(165deg, #0f172a 0%, #1e293b 45%, #0f172a 100%);
+      overflow: hidden;
+      position: relative;
+    }
+    .glow-1 {
+      position: absolute; top: -120px; right: -80px;
+      width: 420px; height: 420px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(29,158,117,0.35) 0%, transparent 70%);
+    }
+    .glow-2 {
+      position: absolute; bottom: 200px; left: -100px;
+      width: 360px; height: 360px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(55,138,221,0.25) 0%, transparent 70%);
+    }
+    .inner {
+      position: relative; z-index: 1; height: 100%;
+      display: flex; flex-direction: column;
+      padding: 96px 72px 120px;
+    }
+    .header { display: flex; justify-content: space-between; align-items: flex-start; }
+    .brand { font-size: 28px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: #1D9E75; }
+    .athlete { margin-top: 12px; font-size: 36px; font-weight: 700; color: #94a3b8; }
+    .date { font-size: 30px; font-weight: 600; color: #64748b; }
+    .bars { display: flex; gap: 8px; margin-top: 48px; }
+    .bar { flex: 1; height: 8px; border-radius: 999px; }
+    .hero-label { margin-top: 56px; font-size: 26px; font-weight: 800; letter-spacing: 0.25em; text-transform: uppercase; color: #64748b; }
+    .hero-title { margin-top: 20px; font-size: 88px; font-weight: 900; line-height: 1.05; letter-spacing: -0.03em; color: #fff; }
+    .stats { margin-top: 56px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .stat {
+      background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 24px; padding: 28px 32px;
+    }
+    .stat-label { font-size: 22px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: #64748b; }
+    .stat-value { margin-top: 12px; font-size: 48px; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .section-label { margin: 48px 0 20px; font-size: 24px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: #fbbf24; }
+    .highlight {
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(251,191,36,0.12); border: 1px solid rgba(251,191,36,0.35);
+      border-radius: 20px; padding: 24px 28px; margin-bottom: 16px;
+    }
+    .highlight-name { font-size: 34px; font-weight: 800; }
+    .highlight-detail { font-size: 32px; font-weight: 700; color: #fbbf24; font-variant-numeric: tabular-nums; }
+    .exercises { margin-top: 40px; flex: 1; }
+    .ex-label { margin-bottom: 20px; font-size: 24px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase; color: #64748b; }
+    .ex-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 18px 0; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .ex-name { font-size: 30px; font-weight: 700; color: #e2e8f0; max-width: 58%; }
+    .ex-detail { font-size: 26px; font-weight: 600; color: #94a3b8; font-variant-numeric: tabular-nums; }
+    .footer { margin-top: auto; padding-top: 40px; display: flex; justify-content: space-between; align-items: flex-end; }
+    .streak-label { font-size: 22px; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; color: #64748b; }
+    .streak-value { margin-top: 8px; font-size: 44px; font-weight: 900; color: #1D9E75; }
+    .watermark { font-size: 24px; font-weight: 600; color: #475569; }
+    .nav { margin-top: 20px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+    .nav a { color: #1D9E75; font-size: 12px; font-weight: 700; text-decoration: none; }
+    .nav a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <p class="page-title">Share card preview 1 / 3</p>
+  <p class="page-sub">Chest + Triceps session with new personal records (gold highlights)</p>
+  <div class="preview-wrap">
+    <div class="card">
+      <div class="glow-1"></div>
+      <div class="glow-2"></div>
+      <div class="inner">
+        <div class="header">
+          <p class="athlete" style="margin:0;font-size:44px;font-weight:900;color:#f8fafc">Gurunath</p>
+          <p class="date">Jun 6, 2026</p>
+        </div>
+        <div class="bars">
+          <div class="bar" style="background:#1D9E75"></div>
+          <div class="bar" style="background:#A855F7"></div>
+        </div>
+        <div>
+          <p class="hero-label">Workout Session</p>
+          <h1 class="hero-title">Chest + Triceps</h1>
+        </div>
+        <div class="stats">
+          <div class="stat"><p class="stat-label">Duration</p><p class="stat-value">52m 18s</p></div>
+          <div class="stat"><p class="stat-label">Sets</p><p class="stat-value">18</p></div>
+          <div class="stat"><p class="stat-label">Volume</p><p class="stat-value">4280kg</p></div>
+          <div class="stat"><p class="stat-label">PRs</p><p class="stat-value">2</p></div>
+        </div>
+        <p class="section-label">New Personal Records</p>
+        <div class="highlight">
+          <span class="highlight-name">Bench Press</span>
+          <span class="highlight-detail">80kg × 8</span>
+        </div>
+        <div class="highlight">
+          <span class="highlight-name">Cable Fly</span>
+          <span class="highlight-detail">25kg × 12</span>
+        </div>
+        <div class="exercises">
+          <p class="ex-label">Session Highlights</p>
+          <div class="ex-row"><span class="ex-name">Bench Press</span><span class="ex-detail">4 sets · 80kg × 8</span></div>
+          <div class="ex-row"><span class="ex-name">Incline DB Press</span><span class="ex-detail">3 sets · 28kg × 10</span></div>
+          <div class="ex-row"><span class="ex-name">Cable Fly</span><span class="ex-detail">3 sets · 25kg × 12</span></div>
+          <div class="ex-row"><span class="ex-name">Tricep Pushdown</span><span class="ex-detail">3 sets · 35kg × 12</span></div>
+        </div>
+        <div class="footer">
+          <div>
+            <p class="streak-label">Streak</p>
+            <p class="streak-value">5 days</p>
+          </div>
+          <p class="watermark">Developer Guru</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <nav class="nav">
+    <a href="preview-chest-prs.html">Chest + PRs</a>
+    <a href="preview-back-lifts.html">Back + Top Lifts</a>
+    <a href="preview-legs-volume.html">Legs Volume</a>
+  </nav>
+</body>
+</html>

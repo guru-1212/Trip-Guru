@@ -62,7 +62,6 @@ export default function DashboardPage() {
   const [shareCardData, setShareCardData] = useState<WorkoutShareCardData | null>(null);
   const shareCardRef = useRef<HTMLDivElement>(null);
 
-  const todayStr = dayjs().format('YYYY-MM-DD');
   const todaySplit = getTodaysSplit(profile);
   const splitName = SPLIT_NAMES[todaySplit];
 
@@ -418,17 +417,15 @@ export default function DashboardPage() {
                         >
                           Save
                         </button>
-                        {w.date === todayStr && (
-                          <button
-                            type="button"
-                            className="ft-btn ft-btn--secondary h-11 py-0 px-6 flex items-center justify-center gap-2 rounded-xl"
-                            disabled={sharingId === w.id}
-                            onClick={() => handleShareWorkout(w)}
-                          >
-                            <Share2 className="h-4 w-4" />
-                            {sharingId === w.id ? 'Creating…' : 'Share story'}
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="ft-btn ft-btn--secondary h-11 py-0 px-6 flex items-center justify-center gap-2 rounded-xl"
+                          disabled={sharingId === w.id}
+                          onClick={() => handleShareWorkout(w)}
+                        >
+                          <Share2 className="h-4 w-4" />
+                          {sharingId === w.id ? 'Creating…' : 'Download story'}
+                        </button>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

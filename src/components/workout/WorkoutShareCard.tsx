@@ -69,23 +69,17 @@ export const WorkoutShareCard = forwardRef<HTMLDivElement, WorkoutShareCardProps
         >
           {/* Header */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <div>
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 28,
-                  fontWeight: 800,
-                  letterSpacing: '0.2em',
-                  textTransform: 'uppercase',
-                  color: '#1D9E75',
-                }}
-              >
-                FitTrack
-              </p>
-              <p style={{ margin: '12px 0 0', fontSize: 36, fontWeight: 700, color: '#94a3b8' }}>
-                {data.athleteName}
-              </p>
-            </div>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 44,
+                fontWeight: 900,
+                letterSpacing: '-0.02em',
+                color: '#f8fafc',
+              }}
+            >
+              {data.athleteName}
+            </p>
             <p style={{ margin: 0, fontSize: 30, fontWeight: 600, color: '#64748b' }}>
               {data.dateLabel}
             </p>
@@ -118,7 +112,7 @@ export const WorkoutShareCard = forwardRef<HTMLDivElement, WorkoutShareCardProps
                 color: '#64748b',
               }}
             >
-              Today&apos;s Workout
+              Workout Session
             </p>
             <h1
               style={{
@@ -313,8 +307,8 @@ export const WorkoutShareCard = forwardRef<HTMLDivElement, WorkoutShareCardProps
                 {data.streak} day{data.streak === 1 ? '' : 's'}
               </p>
             </div>
-            <p style={{ margin: 0, fontSize: 24, fontWeight: 600, color: '#475569' }}>
-              TripMate FitTrack
+            <p style={{ margin: 0, fontSize: 24, fontWeight: 700, color: '#64748b' }}>
+              Developer Guru
             </p>
           </div>
         </div>
