@@ -39,6 +39,8 @@ const SPLIT_ICONS: Record<string, string> = {
   shoulders: '🎯',
   upper: '⚡',
   legs: '🦵',
+  core: '🧘',
+  coresh: '⚡',
 };
 
 export default function WorkoutPage() {

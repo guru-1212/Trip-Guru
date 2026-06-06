@@ -47,16 +47,28 @@ export const SPLIT_DEFINITIONS: SplitDefinition[] = [
     muscles: ['Quads', 'Hamstrings', 'Glutes', 'Calves'],
     icon: 'legs',
   },
+  {
+    id: 'core',
+    name: 'Core',
+    muscles: ['Abs', 'Obliques'],
+    icon: 'core',
+  },
+  {
+    id: 'coresh',
+    name: 'Core + Shoulders',
+    muscles: ['Core', 'Shoulders'],
+    icon: 'coresh',
+  },
 ];
 
 export const DEFAULT_WEEK_SCHEDULE: WeekSchedule = {
   Mon: 'ct',
   Tue: 'bb',
   Wed: 'sh',
-  Thu: 'rest',
+  Thu: 'core',
   Fri: 'ctbb',
   Sat: 'legs',
-  Sun: 'rest',
+  Sun: 'coresh',
 };
 
 export const DAY_KEYS: DayKey[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -67,6 +79,8 @@ export const SPLIT_NAMES: Record<SplitId, string> = {
   sh: 'Shoulders',
   ctbb: 'Chest+Tri / Back+Bi',
   legs: 'Legs',
+  core: 'Core',
+  coresh: 'Core + Shoulders',
   rest: 'Rest',
 };
 

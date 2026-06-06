@@ -1,11 +1,17 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { Check, Eye, Plus, Search, X } from 'lucide-react';
+import { AnimatePresence, Reorder, motion } from 'framer-motion';
+import { Check, Eye, GripVertical, ListOrdered, Plus, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { EXERCISE_LIBRARY } from '@/workout/exerciseLibrary';
-import type { CustomExercise, LibraryExercise, MuscleGroup, SplitId } from '@/workout/types';
+import type {
+  CustomExercise,
+  LibraryExercise,
+  MuscleGroup,
+  SplitId,
+  TodayExercisePick,
+} from '@/workout/types';
 import { MUSCLE_COLORS } from '@/workout/constants';
 import { groupLibraryExercisesByMuscle } from '@/workout/utils';
 import { cn } from '@/lib/utils';
@@ -13,8 +19,8 @@ import { cn } from '@/lib/utils';
 interface TodayExercisePickerProps {
   splitId: SplitId;
   exercises: LibraryExercise[];
-  picks: Map<string, string[]>;
-  onPicksChange: (picks: Map<string, string[]>) => void;
+  picks: TodayExercisePick[];
+  onPicksChange: (picks: TodayExercisePick[]) => void;
   onExercisesChange: (exercises: LibraryExercise[]) => void;
   getVariationsForExercise: (exerciseId: string, baseVariations: string[]) => string[];
   onAddVariation: (exerciseId: string, variation: string) => void;
@@ -22,6 +28,10 @@ interface TodayExercisePickerProps {
   onCreateCustomExercise: (data: Omit<CustomExercise, 'id'>, remember: boolean) => CustomExercise;
   onRememberSplitExercise?: (exerciseId: string) => void;
   getVariationImage: (exerciseId: string, variation: string) => string | undefined;
+}
+
+function findPickIndex(picks: TodayExercisePick[], exerciseId: string): number {
+  return picks.findIndex((p) => p.exerciseId === exerciseId);
 }
 
 export function TodayExercisePicker({
@@ -38,6 +48,7 @@ export function TodayExercisePicker({
   getVariationImage,
 }: TodayExercisePickerProps) {
   const grouped = groupLibraryExercisesByMuscle(exercises, splitId);
+  const exerciseById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [search, setSearch] = useState('');
   const [rememberAdded, setRememberAdded] = useState(true);
@@ -80,45 +91,60 @@ export function TodayExercisePicker({
   }, [search, pickerIds, customAsLibrary]);
 
   const toggle = (ex: LibraryExercise) => {
-    const next = new Map(picks);
-    if (next.has(ex.id)) {
-      next.delete(ex.id);
+    const idx = findPickIndex(picks, ex.id);
+    if (idx >= 0) {
+      onPicksChange(picks.filter((_, i) => i !== idx));
     } else {
-      next.set(ex.id, [ex.variations[0] ?? 'Standard']);
+      onPicksChange([
+        ...picks,
+        { exerciseId: ex.id, variations: [ex.variations[0] ?? 'Standard'] },
+      ]);
     }
-    onPicksChange(next);
   };
 
   const toggleVariation = (exerciseId: string, variation: string) => {
-    const next = new Map(picks);
-    const current = next.get(exerciseId);
-    if (!current?.length) return;
+    const idx = findPickIndex(picks, exerciseId);
+    if (idx < 0) return;
 
-    const idx = current.indexOf(variation);
-    if (idx >= 0) {
+    const current = picks[idx].variations;
+    const varIdx = current.indexOf(variation);
+    let next: TodayExercisePick[];
+
+    if (varIdx >= 0) {
       if (current.length === 1) {
-        next.delete(exerciseId);
+        next = picks.filter((_, i) => i !== idx);
       } else {
-        next.set(
-          exerciseId,
-          current.filter((v) => v !== variation)
+        next = picks.map((p, i) =>
+          i === idx ? { ...p, variations: current.filter((v) => v !== variation) } : p
         );
       }
     } else {
-      next.set(exerciseId, [...current, variation]);
+      next = picks.map((p, i) =>
+        i === idx ? { ...p, variations: [...current, variation] } : p
+      );
     }
     onPicksChange(next);
   };
 
   const selectAll = () => {
-    const next = new Map(picks);
-    for (const ex of exercises) {
-      if (!next.has(ex.id)) next.set(ex.id, [ex.variations[0] ?? 'Standard']);
+    const next = [...picks];
+    const pickedIds = new Set(picks.map((p) => p.exerciseId));
+    for (const { exercises: muscleExercises } of grouped) {
+      for (const ex of muscleExercises) {
+        if (!pickedIds.has(ex.id)) {
+          next.push({ exerciseId: ex.id, variations: [ex.variations[0] ?? 'Standard'] });
+          pickedIds.add(ex.id);
+        }
+      }
     }
     onPicksChange(next);
   };
 
-  const clearAll = () => onPicksChange(new Map());
+  const clearAll = () => onPicksChange([]);
+
+  const removeFromSequence = (exerciseId: string) => {
+    onPicksChange(picks.filter((p) => p.exerciseId !== exerciseId));
+  };
 
   const addExerciseWithVariations = (ex: LibraryExercise, variations: string[]) => {
     const uniqueVariations = Array.from(new Set(variations.filter(Boolean)));
@@ -127,9 +153,12 @@ export function TodayExercisePicker({
       return;
     }
 
-    const nextPicks = new Map(picks);
-    nextPicks.set(ex.id, uniqueVariations);
-    onPicksChange(nextPicks);
+    const idx = findPickIndex(picks, ex.id);
+    const next =
+      idx >= 0
+        ? picks.map((p, i) => (i === idx ? { exerciseId: ex.id, variations: uniqueVariations } : p))
+        : [...picks, { exerciseId: ex.id, variations: uniqueVariations }];
+    onPicksChange(next);
 
     if (!pickerIds.has(ex.id)) {
       onExercisesChange([...exercises, ex]);
@@ -191,14 +220,19 @@ export function TodayExercisePicker({
     if (!trimmed) return;
     onAddVariation(exerciseId, trimmed);
 
-    const next = new Map(picks);
-    const current = next.get(exerciseId);
-    if (!current?.length) {
-      next.set(exerciseId, [trimmed]);
-    } else if (!current.includes(trimmed)) {
-      next.set(exerciseId, [...current, trimmed]);
+    const idx = findPickIndex(picks, exerciseId);
+    if (idx < 0) {
+      onPicksChange([...picks, { exerciseId, variations: [trimmed] }]);
+    } else {
+      const current = picks[idx].variations;
+      if (!current.includes(trimmed)) {
+        onPicksChange(
+          picks.map((p, i) =>
+            i === idx ? { ...p, variations: [...current, trimmed] } : p
+          )
+        );
+      }
     }
-    onPicksChange(next);
     setNewVarInputs((prev) => ({ ...prev, [exerciseId]: '' }));
   };
 
@@ -299,7 +333,7 @@ export function TodayExercisePicker({
           </p>
         </div>
         <span className="text-sm font-semibold text-primary tabular-nums shrink-0">
-          {picks.size} of {exercises.length}
+          {picks.length} of {exercises.length}
         </span>
       </div>
 
@@ -311,6 +345,67 @@ export function TodayExercisePicker({
           Clear
         </button>
       </div>
+
+      {picks.length > 0 && (
+        <div className="ft-sequence-panel rounded-xl border border-primary/20 bg-primary/[0.03] p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <ListOrdered className="h-4 w-4" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black tracking-tight">Workout sequence</h3>
+              <p className="text-xs text-muted-foreground">Drag to set the order you will train</p>
+            </div>
+          </div>
+          <Reorder.Group
+            axis="y"
+            values={picks}
+            onReorder={onPicksChange}
+            className="space-y-2"
+          >
+            {picks.map((pick, index) => {
+              const ex = exerciseById.get(pick.exerciseId);
+              const name = ex?.name ?? pick.exerciseId;
+              const muscle = ex?.muscle;
+              return (
+                <Reorder.Item
+                  key={pick.exerciseId}
+                  value={pick}
+                  className="ft-sequence-row"
+                >
+                  <span className="ft-sequence-index">{index + 1}</span>
+                  <GripVertical className="h-4 w-4 text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate">{name}</p>
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {pick.variations.join(', ')}
+                    </p>
+                  </div>
+                  {muscle && (
+                    <span
+                      className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md shrink-0"
+                      style={{
+                        backgroundColor: `${MUSCLE_COLORS[muscle] ?? 'hsl(var(--primary))'}20`,
+                        color: MUSCLE_COLORS[muscle] ?? 'hsl(var(--primary))',
+                      }}
+                    >
+                      {muscle}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeFromSequence(pick.exerciseId)}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors shrink-0"
+                    aria-label={`Remove ${name} from sequence`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </Reorder.Item>
+              );
+            })}
+          </Reorder.Group>
+        </div>
+      )}
 
       <div className="space-y-4">
         {grouped.map(({ muscle, exercises: muscleExercises }) => (
@@ -326,7 +421,9 @@ export function TodayExercisePicker({
             </div>
             <ul className="space-y-2">
               {muscleExercises.map((ex) => {
-                const checked = picks.has(ex.id);
+                const pickIdx = findPickIndex(picks, ex.id);
+                const checked = pickIdx >= 0;
+                const pickVariations = checked ? picks[pickIdx].variations : [];
                 return (
                   <li key={ex.id} className="space-y-2">
                     <label
@@ -353,7 +450,7 @@ export function TodayExercisePicker({
                       <span className="text-sm font-medium truncate flex-1">{ex.name}</span>
                       {checked && (
                         <span className="text-xs text-primary font-medium shrink-0 truncate max-w-[40%]">
-                          {(picks.get(ex.id) ?? []).join(', ')}
+                          {pickVariations.join(', ')}
                         </span>
                       )}
                       {!checked && (
@@ -361,7 +458,7 @@ export function TodayExercisePicker({
                       )}
                     </label>
                     {checked &&
-                      renderVariationList(ex, picks.get(ex.id) ?? [], (v) => toggleVariation(ex.id, v))}
+                      renderVariationList(ex, pickVariations, (v) => toggleVariation(ex.id, v))}
                   </li>
                 );
               })}

@@ -281,6 +281,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         exercises: prev.exercises.filter((e) => e.exerciseId !== exerciseId),
         addedExerciseIds: (prev.addedExerciseIds ?? []).filter((id) => id !== exerciseId),
+        pickOrder: (prev.pickOrder ?? []).filter((id) => id !== exerciseId),
       };
       persistState({ activeWorkout: next });
       return next;

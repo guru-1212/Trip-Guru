@@ -36,7 +36,7 @@ import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { SPLIT_DEFINITIONS, SPLIT_NAMES, MUSCLE_COLORS } from '@/workout/constants';
 import { getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
-import type { CustomExercise, SplitId, WorkoutExercise, WorkoutSet, LibraryExercise, WeightUnit } from '@/workout/types';
+import type { CustomExercise, SplitId, TodayExercisePick, WorkoutExercise, WorkoutSet, LibraryExercise, WeightUnit } from '@/workout/types';
 import {
   getGreeting,
   getTodayDayKey,
@@ -54,7 +54,6 @@ import {
   inputToKg,
   calcWorkoutVolume,
   countCompletedSets,
-  createWorkoutExercises,
   suggestWeight,
   groupExercisesByMuscle,
   defaultExerciseImageUrl,
@@ -65,9 +64,9 @@ import {
   getDefaultTodayPicks,
   filterExercisesForSave,
   isPickedToday,
-  todayPicksToMap,
-  mapToTodayPicks,
-  applyWorkoutExerciseFromPicks,
+  buildWorkoutExercisesInPickOrder,
+  pickOrderFromPicks,
+  sortExercisesByPickOrder,
   switchActiveVariation,
   patchExerciseSets,
   getPickedVariations,
@@ -87,6 +86,8 @@ const SPLIT_ICONS: Record<string, string> = {
   shoulders: '🎯',
   upper: '⚡',
   legs: '🦵',
+  core: '🧘',
+  coresh: '⚡',
 };
 
 function resolveExerciseInfo(
@@ -159,7 +160,7 @@ export default function WorkoutPage() {
   } = useWorkoutStore();
 
   const [selectedSplit, setSelectedSplit] = useState<SplitId | null>(null);
-  const [todayPicks, setTodayPicks] = useState<Map<string, string[]>>(new Map());
+  const [todayPicks, setTodayPicks] = useState<TodayExercisePick[]>([]);
   const [pickerExercises, setPickerExercises] = useState<LibraryExercise[]>([]);
   const pickInitSplitRef = useRef<SplitId | null>(null);
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
@@ -280,7 +281,7 @@ export default function WorkoutPage() {
 
   useEffect(() => {
     if (!selectedSplit) {
-      setTodayPicks(new Map());
+      setTodayPicks([]);
       setPickerExercises([]);
       pickInitSplitRef.current = null;
       return;
@@ -329,29 +330,23 @@ export default function WorkoutPage() {
     const pickerList = [...splitExerciseLibrary, ...extras.filter((e) => !byId.has(e.id))];
     setPickerExercises(pickerList);
     const defaults = getDefaultTodayPicks(selectedSplit, workouts, splitTodayPicks, pickerList);
-    setTodayPicks(todayPicksToMap(defaults));
+    setTodayPicks(defaults);
   }, [selectedSplit, splitExerciseLibrary, workouts, splitTodayPicks, customExercises]);
 
   const beginWorkout = useCallback(() => {
-    if (!selectedSplit || todayPicks.size === 0) return;
+    if (!selectedSplit || todayPicks.length === 0) return;
     const split = SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit)!;
     const baseLibrary = buildSplitExerciseLibrary(selectedSplit, customExercises, splitExtras);
     const baseIds = new Set(baseLibrary.map((e) => e.id));
     const extraFromPicker = pickerExercises.filter((e) => !baseIds.has(e.id));
     const allExercises = [...baseLibrary, ...extraFromPicker];
-    const exercises = createWorkoutExercises(allExercises, profile.prefs.defaultSets).map((ex) => {
-      const pickedVariations = todayPicks.get(ex.exerciseId);
-      const isPicked = todayPicks.has(ex.exerciseId);
-      if (isPicked && pickedVariations?.length) {
-        return applyWorkoutExerciseFromPicks(
-          { ...ex, pickedToday: true },
-          pickedVariations,
-          profile.prefs.defaultSets
-        );
-      }
-      return { ...ex, pickedToday: isPicked };
-    });
-    rememberTodayPicks(selectedSplit, mapToTodayPicks(todayPicks));
+    const pickOrder = pickOrderFromPicks(todayPicks);
+    const exercises = buildWorkoutExercisesInPickOrder(
+      allExercises,
+      todayPicks,
+      profile.prefs.defaultSets
+    );
+    rememberTodayPicks(selectedSplit, todayPicks);
     const state = {
       splitId: selectedSplit,
       splitName: split.name,
@@ -360,10 +355,10 @@ export default function WorkoutPage() {
       restTimerSeconds: profile.prefs.restTimer,
       restTimerEnd: null,
       addedExerciseIds: [],
+      pickOrder,
     };
     startActiveWorkout(state);
-    const firstPicked = exercises.find((e) => e.pickedToday);
-    setExpandedEx(firstPicked?.exerciseId ?? exercises[0]?.exerciseId ?? null);
+    setExpandedEx(pickOrder[0] ?? exercises[0]?.exerciseId ?? null);
   }, [
     selectedSplit,
     todayPicks,
@@ -398,6 +393,7 @@ export default function WorkoutPage() {
         ...activeWorkout,
         exercises: [...activeWorkout.exercises, { ...item, pickedToday: true }],
         addedExerciseIds: [...(activeWorkout.addedExerciseIds ?? []), exerciseId],
+        pickOrder: [...(activeWorkout.pickOrder ?? []), exerciseId],
       });
       if (remember) rememberSplitExercise(activeWorkout.splitId, exerciseId);
       setExpandedEx(exerciseId);
@@ -585,13 +581,309 @@ export default function WorkoutPage() {
     const { picked: pickedExercises, unpicked: unpickedExercises } = partitionExercisesByPick(
       activeWorkout.exercises
     );
-    const pickedGroups = groupExercisesByMuscle(pickedExercises, activeWorkout.splitId);
+    const pickOrder =
+      activeWorkout.pickOrder ??
+      pickedExercises.filter(isPickedToday).map((e) => e.exerciseId);
+    const pickedSorted = sortExercisesByPickOrder(pickedExercises, pickOrder);
     const unpickedGroups = groupExercisesByMuscle(unpickedExercises, activeWorkout.splitId);
     const { done: pickedDone, total: pickedTotal } = countPickedExercisesDone(activeWorkout.exercises);
     const addedExerciseIds = activeWorkout.addedExerciseIds ?? [];
     const removeTarget = removeConfirmId
       ? activeWorkout.exercises.find((e) => e.exerciseId === removeConfirmId)
       : null;
+
+    const renderExerciseCard = (ex: WorkoutExercise, sequenceIndex?: number) => {
+      const lib = getExerciseById(ex.exerciseId);
+      const pickedVariations = getPickedVariations(ex);
+      const workoutVariations =
+        ex.pickedVariations?.length && ex.pickedVariations.length > 0
+          ? ex.pickedVariations
+          : getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
+      const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
+      const isExpanded = expandedEx === ex.exerciseId;
+      const isFullyDone = isExerciseFullyDone(ex);
+      const picked = isPickedToday(ex);
+      const activeSets = ex.sets;
+      const hasPR = activeSets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
+      const setsCompleted = activeSets.filter((s) => s.done).length;
+      const progress = (setsCompleted / Math.max(activeSets.length, 1)) * 100;
+      const multiVariation = pickedVariations.length > 1;
+      const isRemovable = addedExerciseIds.includes(ex.exerciseId);
+
+      return (
+        <motion.div
+          key={ex.exerciseId}
+          layout
+          transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+        >
+          <div
+            className={cn(
+              'ft-exercise-card',
+              isExpanded && 'ft-exercise-card--open',
+              !picked && 'ft-exercise-card--skipped',
+              picked && isFullyDone && 'ft-exercise-card--complete',
+              picked && !isFullyDone && 'ft-exercise-card--picked-incomplete'
+            )}
+          >
+            <div className="ft-exercise-progress">
+              <div
+                className={cn(
+                  'ft-exercise-progress-fill',
+                  isFullyDone && 'ft-exercise-progress-fill--complete'
+                )}
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+
+            <div className="ft-exercise-trigger">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePickedToday(ex.exerciseId);
+                }}
+                className={cn('ft-pick-toggle shrink-0', picked && 'ft-pick-toggle--on')}
+                aria-label={picked ? `Remove ${ex.name} from today` : `Add ${ex.name} to today`}
+              >
+                <span className="ft-pick-toggle-box" aria-hidden>
+                  {picked && <Check className="h-3 w-3" />}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="flex flex-1 items-center gap-3 min-w-0 text-left bg-transparent border-0 cursor-pointer p-0"
+                onClick={() => setExpandedEx(isExpanded ? null : ex.exerciseId)}
+              >
+                <div
+                  className={cn(
+                    'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
+                    picked && isFullyDone && 'bg-emerald-600 text-white',
+                    picked && !isFullyDone && 'bg-red-600 text-white',
+                    !picked && 'bg-muted text-muted-foreground',
+                    picked && !isFullyDone && isExpanded && 'ring-2 ring-red-400/50'
+                  )}
+                >
+                  {picked && isFullyDone ? (
+                    <CheckCircle2 className="h-5 w-5" />
+                  ) : picked ? (
+                    <Check className="h-5 w-5" />
+                  ) : (
+                    <Dumbbell className="h-5 w-5" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {sequenceIndex !== undefined && (
+                      <span className="text-[10px] font-black tabular-nums text-primary bg-primary/10 px-1.5 py-0.5 rounded-md shrink-0">
+                        #{sequenceIndex}
+                      </span>
+                    )}
+                    <span className="font-semibold text-base truncate">{ex.name}</span>
+                    {sequenceIndex !== undefined && (
+                      <span
+                        className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0"
+                        style={{
+                          backgroundColor: `${MUSCLE_COLORS[ex.muscle] ?? 'hsl(var(--primary))'}20`,
+                          color: MUSCLE_COLORS[ex.muscle] ?? 'hsl(var(--primary))',
+                        }}
+                      >
+                        {ex.muscle}
+                      </span>
+                    )}
+                    {isFullyDone && <span className="ft-exercise-done-badge">Done</span>}
+                    {hasPR && <Trophy className="h-4 w-4 text-amber-500 shrink-0" />}
+                  </div>
+                  <p
+                    className={cn(
+                      'text-xs mt-0.5',
+                      isFullyDone ? 'text-emerald-800 font-semibold' : 'text-muted-foreground'
+                    )}
+                  >
+                    {isFullyDone
+                      ? multiVariation
+                        ? 'All variations completed'
+                        : 'All sets completed'
+                      : `${ex.variation} · ${setsCompleted} of ${activeSets.length} sets done`}
+                  </p>
+                  {lastSession && (
+                    <p className="ft-last-session-preview mt-1 truncate">
+                      Last · {lastSession.variation} · {dayjs(lastSession.date).format('MMM D')} ·{' '}
+                      {formatLastSessionPreview(lastSession, profile.prefs.unit)}
+                    </p>
+                  )}
+                </div>
+                <ChevronRight
+                  className={cn(
+                    'h-5 w-5 text-muted-foreground transition-transform shrink-0',
+                    isExpanded && 'rotate-90 text-primary'
+                  )}
+                />
+              </button>
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                {isRemovable && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRemoveConfirmId(ex.exerciseId);
+                      setRemovePin('');
+                      setRemovePinError(false);
+                    }}
+                    className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm !text-red-500 hover:!bg-red-500/10"
+                    aria-label={`Remove ${ex.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => openExerciseInfo(ex)}
+                  className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm"
+                  aria-label={`Info for ${ex.name}`}
+                >
+                  <Info className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {isExpanded && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="ft-exercise-body space-y-5 pt-5"
+                >
+                  <VariationSelector
+                    value={ex.variation}
+                    variations={workoutVariations}
+                    onChange={(v) =>
+                      updateExercise(ex.exerciseId, (current) =>
+                        switchActiveVariation(current, v, profile.prefs.defaultSets)
+                      )
+                    }
+                    onAddVariation={(v) => addVariation(ex.exerciseId, v)}
+                    variationProgress={
+                      multiVariation
+                        ? Object.fromEntries(
+                            pickedVariations.map((v) => {
+                              const sets = getSetsForVariation(ex, v);
+                              return [
+                                v,
+                                `${sets.filter((s) => s.done).length}/${sets.length}`,
+                              ];
+                            })
+                          )
+                        : undefined
+                    }
+                  />
+
+                  {lastSession ? (
+                    <div className="space-y-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                          Last session · {lastSession.variation} ·{' '}
+                          {dayjs(lastSession.date).format('MMM D, YYYY')}
+                        </p>
+                        <ul className="ft-last-session-list">
+                          {lastSession.sets.map((set, setIdx) => (
+                            <li key={setIdx}>
+                              Set {setIdx + 1}: {formatWeight(set.weight, profile.prefs.unit)} ×{' '}
+                              {set.reps}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="ft-stat-pill">
+                        <div className="ft-stat-pill-icon bg-primary/15 text-primary">
+                          <TrendingUp className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground">Suggested</p>
+                          <p className="text-sm font-semibold tabular-nums">
+                            {formatWeight(
+                              suggestWeight(
+                                lastSession.bestSet.weight,
+                                lastSession.bestSet.reps,
+                                profile.prefs.unit
+                              ),
+                              profile.prefs.unit
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border px-4 py-3">
+                      No previous session for{' '}
+                      <span className="font-medium text-foreground">{ex.variation}</span>. Log today&apos;s
+                      sets to track progress next time.
+                    </p>
+                  )}
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="ft-section-title">
+                        Sets · <span className="text-foreground">{ex.variation}</span>
+                      </p>
+                      <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                        {setsCompleted} / {activeSets.length}
+                      </span>
+                    </div>
+
+                    <div className="space-y-3">
+                      {activeSets.map((set, idx) => (
+                        <motion.div key={idx} layout>
+                          <SessionSetRow
+                            index={idx}
+                            set={set}
+                            unit={profile.prefs.unit}
+                            isPR={set.done && isPR(ex.exerciseId, set.weight, prs)}
+                            onWeightChange={(v) => updateSet(ex.exerciseId, idx, 'weight', v)}
+                            onRepsChange={(v) => updateSet(ex.exerciseId, idx, 'reps', v)}
+                            onToggleDone={() => toggleSetDone(ex.exerciseId, idx)}
+                            onRemove={() => removeSet(ex.exerciseId, idx)}
+                            onUnitChange={handleWeightUnitChange}
+                          />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => addSet(ex.exerciseId)}
+                      className="ft-btn ft-btn--ghost ft-btn--block"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add Set
+                    </button>
+                    <button type="button" onClick={startTimer} className="ft-btn ft-btn--ghost ft-btn--block">
+                      <Timer className="h-4 w-4" />
+                      Rest
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="ft-label">
+                      Notes <span className="font-normal text-muted-foreground">(optional)</span>
+                    </label>
+                    <textarea
+                      className="ft-textarea resize-none"
+                      value={ex.notes ?? ''}
+                      onChange={(e) =>
+                        updateExercise(ex.exerciseId, (exer) => ({ ...exer, notes: e.target.value }))
+                      }
+                      placeholder="RPE, form cues, how it felt..."
+                    />
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </motion.div>
+      );
+    };
 
     const renderMuscleGroups = (
       groups: { muscle: string; exercises: WorkoutExercise[] }[],
@@ -606,284 +898,7 @@ export default function WorkoutPage() {
             />
             <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground">{muscle}</h2>
           </div>
-          <LayoutGroup>
-            {exercises.map((ex) => {
-              const lib = getExerciseById(ex.exerciseId);
-              const pickedVariations = getPickedVariations(ex);
-              const workoutVariations =
-                ex.pickedVariations?.length && ex.pickedVariations.length > 0
-                  ? ex.pickedVariations
-                  : getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
-              const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
-              const isExpanded = expandedEx === ex.exerciseId;
-              const isFullyDone = isExerciseFullyDone(ex);
-              const picked = isPickedToday(ex);
-              const activeSets = ex.sets;
-              const hasPR = activeSets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
-              const setsCompleted = activeSets.filter((s) => s.done).length;
-              const progress = (setsCompleted / Math.max(activeSets.length, 1)) * 100;
-              const multiVariation = pickedVariations.length > 1;
-              const isRemovable = addedExerciseIds.includes(ex.exerciseId);
-
-              return (
-                <motion.div
-                  key={ex.exerciseId}
-                  layout
-                  transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-                >
-                  <div
-                    className={cn(
-                      'ft-exercise-card',
-                      isExpanded && 'ft-exercise-card--open',
-                      !picked && 'ft-exercise-card--skipped',
-                      picked && isFullyDone && 'ft-exercise-card--complete',
-                      picked && !isFullyDone && 'ft-exercise-card--picked-incomplete'
-                    )}
-                  >
-                    <div className="ft-exercise-progress">
-                      <div
-                        className={cn(
-                          'ft-exercise-progress-fill',
-                          isFullyDone && 'ft-exercise-progress-fill--complete'
-                        )}
-                        style={{ width: `${progress}%` }}
-                      />
-                    </div>
-
-                    <div className="ft-exercise-trigger">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          togglePickedToday(ex.exerciseId);
-                        }}
-                        className={cn('ft-pick-toggle shrink-0', picked && 'ft-pick-toggle--on')}
-                        aria-label={picked ? `Remove ${ex.name} from today` : `Add ${ex.name} to today`}
-                      >
-                        <span className="ft-pick-toggle-box" aria-hidden>
-                          {picked && <Check className="h-3 w-3" />}
-                        </span>
-                      </button>
-                      <button
-                        type="button"
-                        className="flex flex-1 items-center gap-3 min-w-0 text-left bg-transparent border-0 cursor-pointer p-0"
-                        onClick={() => setExpandedEx(isExpanded ? null : ex.exerciseId)}
-                      >
-                        <div
-                          className={cn(
-                            'w-10 h-10 rounded-full flex items-center justify-center shrink-0',
-                            picked && isFullyDone && 'bg-emerald-600 text-white',
-                            picked && !isFullyDone && 'bg-red-600 text-white',
-                            !picked && 'bg-muted text-muted-foreground',
-                            picked && !isFullyDone && isExpanded && 'ring-2 ring-red-400/50'
-                          )}
-                        >
-                          {picked && isFullyDone ? (
-                            <CheckCircle2 className="h-5 w-5" />
-                          ) : picked ? (
-                            <Check className="h-5 w-5" />
-                          ) : (
-                            <Dumbbell className="h-5 w-5" />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-base truncate">{ex.name}</span>
-                            {isFullyDone && <span className="ft-exercise-done-badge">Done</span>}
-                            {hasPR && <Trophy className="h-4 w-4 text-amber-500 shrink-0" />}
-                          </div>
-                          <p
-                            className={cn(
-                              'text-xs mt-0.5',
-                              isFullyDone ? 'text-emerald-800 font-semibold' : 'text-muted-foreground'
-                            )}
-                          >
-                            {isFullyDone
-                              ? multiVariation
-                                ? 'All variations completed'
-                                : 'All sets completed'
-                              : `${ex.variation} · ${setsCompleted} of ${activeSets.length} sets done`}
-                          </p>
-                          {lastSession && (
-                            <p className="ft-last-session-preview mt-1 truncate">
-                              Last · {lastSession.variation} · {dayjs(lastSession.date).format('MMM D')} ·{' '}
-                              {formatLastSessionPreview(lastSession, profile.prefs.unit)}
-                            </p>
-                          )}
-                        </div>
-                        <ChevronRight
-                          className={cn(
-                            'h-5 w-5 text-muted-foreground transition-transform shrink-0',
-                            isExpanded && 'rotate-90 text-primary'
-                          )}
-                        />
-                      </button>
-                      <div className="flex items-center gap-1 shrink-0 ml-2">
-                        {isRemovable && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setRemoveConfirmId(ex.exerciseId);
-                              setRemovePin('');
-                              setRemovePinError(false);
-                            }}
-                            className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm !text-red-500 hover:!bg-red-500/10"
-                            aria-label={`Remove ${ex.name}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => openExerciseInfo(ex)}
-                          className="ft-btn ft-btn--ghost ft-btn--icon ft-btn--sm"
-                          aria-label={`Info for ${ex.name}`}
-                        >
-                          <Info className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="ft-exercise-body space-y-5 pt-5"
-                        >
-                          <VariationSelector
-                            value={ex.variation}
-                            variations={workoutVariations}
-                            onChange={(v) =>
-                              updateExercise(ex.exerciseId, (current) =>
-                                switchActiveVariation(current, v, profile.prefs.defaultSets)
-                              )
-                            }
-                            onAddVariation={(v) => addVariation(ex.exerciseId, v)}
-                            variationProgress={
-                              multiVariation
-                                ? Object.fromEntries(
-                                    pickedVariations.map((v) => {
-                                      const sets = getSetsForVariation(ex, v);
-                                      return [
-                                        v,
-                                        `${sets.filter((s) => s.done).length}/${sets.length}`,
-                                      ];
-                                    })
-                                  )
-                                : undefined
-                            }
-                          />
-
-                          {lastSession ? (
-                            <div className="space-y-3">
-                              <div>
-                                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-                                  Last session · {lastSession.variation} ·{' '}
-                                  {dayjs(lastSession.date).format('MMM D, YYYY')}
-                                </p>
-                                <ul className="ft-last-session-list">
-                                  {lastSession.sets.map((set, setIdx) => (
-                                    <li key={setIdx}>
-                                      Set {setIdx + 1}: {formatWeight(set.weight, profile.prefs.unit)} ×{' '}
-                                      {set.reps}
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                              <div className="ft-stat-pill">
-                                <div className="ft-stat-pill-icon bg-primary/15 text-primary">
-                                  <TrendingUp className="h-4 w-4" />
-                                </div>
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Suggested</p>
-                                  <p className="text-sm font-semibold tabular-nums">
-                                    {formatWeight(
-                                      suggestWeight(
-                                        lastSession.bestSet.weight,
-                                        lastSession.bestSet.reps,
-                                        profile.prefs.unit
-                                      ),
-                                      profile.prefs.unit
-                                    )}
-                                  </p>
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border px-4 py-3">
-                              No previous session for{' '}
-                              <span className="font-medium text-foreground">{ex.variation}</span>. Log today&apos;s
-                              sets to track progress next time.
-                            </p>
-                          )}
-
-                          <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <p className="ft-section-title">
-                                Sets · <span className="text-foreground">{ex.variation}</span>
-                              </p>
-                              <span className="text-xs font-medium text-muted-foreground tabular-nums">
-                                {setsCompleted} / {activeSets.length}
-                              </span>
-                            </div>
-
-                            <div className="space-y-3">
-                              {activeSets.map((set, idx) => (
-                                <motion.div key={idx} layout>
-                                  <SessionSetRow
-                                    index={idx}
-                                    set={set}
-                                    unit={profile.prefs.unit}
-                                    isPR={set.done && isPR(ex.exerciseId, set.weight, prs)}
-                                    onWeightChange={(v) => updateSet(ex.exerciseId, idx, 'weight', v)}
-                                    onRepsChange={(v) => updateSet(ex.exerciseId, idx, 'reps', v)}
-                                    onToggleDone={() => toggleSetDone(ex.exerciseId, idx)}
-                                    onRemove={() => removeSet(ex.exerciseId, idx)}
-                                    onUnitChange={handleWeightUnitChange}
-                                  />
-                                </motion.div>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <button
-                              type="button"
-                              onClick={() => addSet(ex.exerciseId)}
-                              className="ft-btn ft-btn--ghost ft-btn--block"
-                            >
-                              <Plus className="h-4 w-4" />
-                              Add Set
-                            </button>
-                            <button type="button" onClick={startTimer} className="ft-btn ft-btn--ghost ft-btn--block">
-                              <Timer className="h-4 w-4" />
-                              Rest
-                            </button>
-                          </div>
-
-                          <div>
-                            <label className="ft-label">
-                              Notes <span className="font-normal text-muted-foreground">(optional)</span>
-                            </label>
-                            <textarea
-                              className="ft-textarea resize-none"
-                              value={ex.notes ?? ''}
-                              onChange={(e) =>
-                                updateExercise(ex.exerciseId, (exer) => ({ ...exer, notes: e.target.value }))
-                              }
-                              placeholder="RPE, form cues, how it felt..."
-                            />
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </motion.div>
-              );
-            })}
-          </LayoutGroup>
+          <LayoutGroup>{exercises.map((ex) => renderExerciseCard(ex))}</LayoutGroup>
         </div>
       ));
 
@@ -937,7 +952,11 @@ export default function WorkoutPage() {
                 Not doing today (dimmed at bottom)
               </span>
             </div>
-            {renderMuscleGroups(pickedGroups, 'picked')}
+            <div className="space-y-4">
+              <LayoutGroup>
+                {pickedSorted.map((ex, index) => renderExerciseCard(ex, index + 1))}
+              </LayoutGroup>
+            </div>
             {unpickedGroups.length > 0 && (
               <>
                 <div className="ft-skipped-divider">
@@ -1525,7 +1544,7 @@ export default function WorkoutPage() {
                   <button
                     type="button"
                     onClick={beginWorkout}
-                    disabled={todayPicks.size === 0}
+                    disabled={todayPicks.length === 0}
                     className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg mt-4"
                   >
                     {startButtonLabel}
@@ -1542,7 +1561,7 @@ export default function WorkoutPage() {
             <button
               type="button"
               onClick={beginWorkout}
-              disabled={todayPicks.size === 0}
+              disabled={todayPicks.length === 0}
               className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg flex-1"
             >
               {startButtonLabel}

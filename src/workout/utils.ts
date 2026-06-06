@@ -1,5 +1,4 @@
 import dayjs from 'dayjs';
-import isoWeek from 'dayjs/plugin/isoWeek';
 import type {
   ActiveWorkoutState,
   CustomExercise,
@@ -18,8 +17,6 @@ import type {
 } from './types';
 import { DAY_KEYS } from './constants';
 import { getExerciseById, getExercisesForSplit } from './exerciseLibrary';
-
-dayjs.extend(isoWeek);
 
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -106,8 +103,40 @@ export function formatCountdownHMS(totalSeconds: number): string {
   return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-export function getWeekStart(date = dayjs()): string {
-  return date.startOf('isoWeek').format('YYYY-MM-DD');
+/** Training week runs Sun–Sat; resets at midnight each Sunday. */
+export function getTrackingWeekStart(date: dayjs.ConfigType = dayjs()): dayjs.Dayjs {
+  const d = dayjs(date);
+  return d.subtract(d.day(), 'day').startOf('day');
+}
+
+export function getTrackingWeekEnd(date: dayjs.ConfigType = dayjs()): dayjs.Dayjs {
+  return getTrackingWeekStart(date).add(6, 'day').endOf('day');
+}
+
+export function getWeekStart(date: dayjs.ConfigType = dayjs()): string {
+  return getTrackingWeekStart(date).format('YYYY-MM-DD');
+}
+
+export function getTrackingWeekNumber(date: dayjs.ConfigType = dayjs()): number {
+  const d = dayjs(date);
+  const weekStart = getTrackingWeekStart(d);
+  const yearWeekOne = getTrackingWeekStart(d.startOf('year'));
+  return weekStart.diff(yearWeekOne, 'week') + 1;
+}
+
+export function getTrackingWeekRangeLabel(date: dayjs.ConfigType = dayjs()): string {
+  const start = getTrackingWeekStart(date);
+  const end = getTrackingWeekEnd(date);
+  return `${start.format('MMM D')} – ${end.format('MMM D')}`;
+}
+
+export function filterWorkoutsInTrackingWeek(
+  workouts: WorkoutSession[],
+  refDate: dayjs.ConfigType = dayjs()
+): WorkoutSession[] {
+  const start = getTrackingWeekStart(refDate).format('YYYY-MM-DD');
+  const end = getTrackingWeekEnd(refDate).format('YYYY-MM-DD');
+  return getWorkoutsInRange(workouts, start, end);
 }
 
 export function isSameDay(d1: string, d2: string): boolean {
@@ -230,9 +259,15 @@ export function migrateActiveWorkoutState(
   state: ActiveWorkoutState,
   defaultSets: number
 ): ActiveWorkoutState {
+  const exercises = state.exercises.map((ex) => migrateWorkoutExercise(ex, defaultSets));
+  const pickOrder =
+    state.pickOrder?.length
+      ? state.pickOrder
+      : exercises.filter(isPickedToday).map((e) => e.exerciseId);
   return {
     ...state,
-    exercises: state.exercises.map((ex) => migrateWorkoutExercise(ex, defaultSets)),
+    exercises,
+    pickOrder,
   };
 }
 
@@ -406,32 +441,43 @@ export function normalizeSavedTodayPicks(
 ): TodayExercisePick[] {
   if (!saved?.length) return [];
 
-  const byExercise = new Map<string, Set<string>>();
-
   if (typeof saved[0] === 'string') {
+    const result: TodayExercisePick[] = [];
     for (const exerciseId of saved as string[]) {
       if (!validExerciseIds.has(exerciseId)) continue;
-      mergeTodayPickVariations(byExercise, exerciseId, [
-        defaultVariationForExercise(exerciseId, exercisesById),
-      ]);
+      result.push({
+        exerciseId,
+        variations: [defaultVariationForExercise(exerciseId, exercisesById)],
+      });
     }
-  } else {
-    for (const raw of saved as LegacyTodayExercisePick[]) {
-      if (!validExerciseIds.has(raw.exerciseId)) continue;
-      const variations = raw.variations?.length
-        ? raw.variations
-        : [
-            raw.variation ||
-              defaultVariationForExercise(raw.exerciseId, exercisesById),
-          ];
-      mergeTodayPickVariations(byExercise, raw.exerciseId, variations);
+    return result;
+  }
+
+  const result: TodayExercisePick[] = [];
+  const indexById = new Map<string, number>();
+
+  for (const raw of saved as LegacyTodayExercisePick[]) {
+    if (!validExerciseIds.has(raw.exerciseId)) continue;
+    const variations = raw.variations?.length
+      ? raw.variations
+      : [
+          raw.variation ||
+            defaultVariationForExercise(raw.exerciseId, exercisesById),
+        ];
+    const existingIdx = indexById.get(raw.exerciseId);
+    if (existingIdx !== undefined) {
+      const merged = new Set([...result[existingIdx].variations, ...variations.filter(Boolean)]);
+      result[existingIdx].variations = Array.from(merged);
+    } else {
+      indexById.set(raw.exerciseId, result.length);
+      result.push({
+        exerciseId: raw.exerciseId,
+        variations: Array.from(new Set(variations.filter(Boolean))),
+      });
     }
   }
 
-  return Array.from(byExercise.entries()).map(([exerciseId, variations]) => ({
-    exerciseId,
-    variations: Array.from(variations),
-  }));
+  return result;
 }
 
 export function todayPicksToMap(picks: TodayExercisePick[]): Map<string, string[]> {
@@ -443,6 +489,56 @@ export function mapToTodayPicks(picks: Map<string, string[]>): TodayExercisePick
     exerciseId,
     variations,
   }));
+}
+
+export function pickOrderFromPicks(picks: TodayExercisePick[]): string[] {
+  return picks.map((p) => p.exerciseId);
+}
+
+export function sortExercisesByPickOrder(
+  exercises: WorkoutExercise[],
+  pickOrderIds: string[]
+): WorkoutExercise[] {
+  const orderIndex = new Map(pickOrderIds.map((id, i) => [id, i]));
+  return [...exercises].sort((a, b) => {
+    const aIdx = orderIndex.get(a.exerciseId);
+    const bIdx = orderIndex.get(b.exerciseId);
+    const aOrder = aIdx === undefined ? Number.MAX_SAFE_INTEGER : aIdx;
+    const bOrder = bIdx === undefined ? Number.MAX_SAFE_INTEGER : bIdx;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+export function buildWorkoutExercisesInPickOrder(
+  allExercises: LibraryExercise[],
+  picks: TodayExercisePick[],
+  defaultSets: number
+): WorkoutExercise[] {
+  const picksMap = todayPicksToMap(picks);
+  const pickOrder = pickOrderFromPicks(picks);
+  const byId = new Map(allExercises.map((e) => [e.id, e]));
+
+  const picked: WorkoutExercise[] = [];
+  for (const id of pickOrder) {
+    const lib = byId.get(id);
+    if (!lib || !picksMap.has(id)) continue;
+    const variations = picksMap.get(id)!;
+    let ex = libraryItemToWorkoutExercise(lib, defaultSets);
+    ex =
+      variations.length > 0
+        ? applyWorkoutExerciseFromPicks(ex, variations, defaultSets)
+        : { ...ex, pickedToday: true };
+    picked.push(ex);
+  }
+
+  const unpicked: WorkoutExercise[] = [];
+  for (const lib of allExercises) {
+    if (picksMap.has(lib.id)) continue;
+    unpicked.push({ ...libraryItemToWorkoutExercise(lib, defaultSets), pickedToday: false });
+  }
+
+  return [...picked, ...unpicked];
 }
 
 export function getDefaultTodayPicks(
@@ -460,13 +556,15 @@ export function getDefaultTodayPicks(
   const lastSession = workouts.find((w) => w.splitId === splitId);
   if (lastSession) {
     const byExercise = new Map<string, Set<string>>();
+    const order: string[] = [];
     for (const e of lastSession.exercises) {
       if (!allExerciseIds.has(e.exerciseId)) continue;
+      if (!byExercise.has(e.exerciseId)) order.push(e.exerciseId);
       mergeTodayPickVariations(byExercise, e.exerciseId, [e.variation]);
     }
-    const fromLast = Array.from(byExercise.entries()).map(([exerciseId, variations]) => ({
+    const fromLast = order.map((exerciseId) => ({
       exerciseId,
-      variations: Array.from(variations),
+      variations: Array.from(byExercise.get(exerciseId)!),
     }));
     if (fromLast.length) return fromLast;
   }
@@ -545,8 +643,8 @@ export function getWorkoutsInRange(workouts: WorkoutSession[], start: string, en
 export function getWeeklyVolumes(workouts: WorkoutSession[], weeks = 8): { week: string; volume: number }[] {
   const result: { week: string; volume: number }[] = [];
   for (let i = weeks - 1; i >= 0; i--) {
-    const weekStart = dayjs().subtract(i, 'week').startOf('isoWeek');
-    const weekEnd = weekStart.endOf('isoWeek');
+    const weekStart = getTrackingWeekStart().subtract(i, 'week');
+    const weekEnd = weekStart.add(6, 'day').endOf('day');
     const label = weekStart.format('MMM D');
     const volume = workouts
       .filter((w) => {
@@ -636,10 +734,10 @@ export function getDefaultProfile(): UserProfile {
       Mon: 'ct',
       Tue: 'bb',
       Wed: 'sh',
-      Thu: 'rest',
+      Thu: 'core',
       Fri: 'ctbb',
       Sat: 'legs',
-      Sun: 'rest',
+      Sun: 'coresh',
     },
     prefs: {
       restTimer: 60,
@@ -817,6 +915,8 @@ export function getMuscleFromSplit(splitId: SplitId): string[] {
     sh: ['Shoulders'],
     ctbb: ['Chest', 'Triceps', 'Back', 'Biceps'],
     legs: ['Legs'],
+    core: ['Core'],
+    coresh: ['Core', 'Shoulders'],
     rest: [],
   };
   return map[splitId];
@@ -829,6 +929,8 @@ export function getMuscleOrderForSplit(splitId: SplitId): MuscleGroup[] {
     sh: ['Shoulders'],
     ctbb: ['Chest', 'Triceps', 'Back', 'Biceps'],
     legs: ['Legs'],
+    core: ['Core'],
+    coresh: ['Core', 'Shoulders'],
     rest: [],
   };
   return map[splitId] ?? [];

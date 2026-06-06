@@ -3,19 +3,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import dayjs from 'dayjs';
-import isoWeek from 'dayjs/plugin/isoWeek';
 import { Plus, Trash2, Check, CheckCircle2, Circle, Target, Flame, Calendar, Activity, Dumbbell, TrendingUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { getWeekProgress, getHabitStreak } from '@/workout/analytics';
-import { formatWeight } from '@/workout/utils';
+import { formatWeight, getTrackingWeekNumber, getTrackingWeekStart } from '@/workout/utils';
 import type { ChecklistItem } from '@/workout/types';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import * as fittrackDb from '@/firebase/fittrack.firestore';
-
-dayjs.extend(isoWeek);
 
 export default function ChecklistPage() {
   const {
@@ -49,7 +46,7 @@ export default function ChecklistPage() {
   const weekProgress = useMemo(() => getWeekProgress(workouts, weeklyGoals), [workouts, weeklyGoals]);
 
   const weekDays = useMemo(() => {
-    const start = dayjs().startOf('isoWeek');
+    const start = getTrackingWeekStart();
     return Array.from({ length: 7 }, (_, i) => start.add(i, 'day'));
   }, []);
 
@@ -201,13 +198,13 @@ export default function ChecklistPage() {
               <div className="ft-card ft-card-padded space-y-6">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <h3 className="ft-section-title text-base">This week&apos;s progress</h3>
-                  <span className="ft-badge ft-badge--primary self-start">Week {dayjs().isoWeek()}</span>
+                  <span className="ft-badge ft-badge--primary self-start">Week {getTrackingWeekNumber()}</span>
                 </div>
                 <div className="space-y-6">
                   <ProgressBar label="Workouts" current={weekProgress.workouts} target={weeklyGoals.workoutsPerWeek} pct={weekProgress.workoutPct} />
                   <ProgressBar label="Volume" current={formatWeight(weekProgress.volume, profile.prefs.unit)} target={formatWeight(weeklyGoals.volumeTarget, profile.prefs.unit)} pct={weekProgress.volumePct} />
                 </div>
-                <p className="text-xs text-muted-foreground">Goals reset every Monday.</p>
+                <p className="text-xs text-muted-foreground">Goals reset every Sunday night.</p>
               </div>
             </motion.div>
           )}

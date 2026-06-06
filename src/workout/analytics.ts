@@ -1,10 +1,11 @@
 import dayjs from 'dayjs';
-import isoWeek from 'dayjs/plugin/isoWeek';
 import type { HabitDay, UserProfile, WeeklyGoals, WorkoutSession } from './types';
-import { getMuscleFromSplit } from './utils';
+import {
+  filterWorkoutsInTrackingWeek,
+  getMuscleFromSplit,
+  getTrackingWeekStart,
+} from './utils';
 import { MUSCLE_COLORS } from './constants';
-
-dayjs.extend(isoWeek);
 
 export type TimeRange = 'week' | 'month' | '3months' | 'year';
 
@@ -79,12 +80,12 @@ export function calcTrainingOverview(
 }
 
 export function getStackedVolumeByMuscle(workouts: WorkoutSession[], weeks = 8) {
-  const muscles = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs'];
+  const muscles = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core'];
   const result: Record<string, number | string>[] = [];
 
   for (let i = weeks - 1; i >= 0; i--) {
-    const weekStart = dayjs().subtract(i, 'week').startOf('isoWeek');
-    const weekEnd = weekStart.endOf('isoWeek');
+    const weekStart = getTrackingWeekStart().subtract(i, 'week');
+    const weekEnd = weekStart.add(6, 'day').endOf('day');
     const entry: Record<string, number | string> = { week: weekStart.format('MMM D') };
     for (const m of muscles) entry[m] = 0;
 
@@ -145,15 +146,9 @@ export function getRepRangeDistribution(workouts: WorkoutSession[], start: strin
 
 export const TRACKED_MUSCLES = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core'] as const;
 
-/** Sessions per muscle group in the current ISO week (Mon–Sun). */
+/** Sessions per muscle group in the current tracking week (Sun–Sat). */
 export function getWeeklyMuscleTrainingCounts(workouts: WorkoutSession[]): { muscle: string; count: number }[] {
-  const start = dayjs().startOf('isoWeek');
-  const end = start.endOf('isoWeek');
-  const weekWorkouts = filterByRange(
-    workouts,
-    start.format('YYYY-MM-DD'),
-    end.format('YYYY-MM-DD')
-  );
+  const weekWorkouts = filterWorkoutsInTrackingWeek(workouts);
 
   return TRACKED_MUSCLES.map((muscle) => ({
     muscle,
@@ -164,7 +159,7 @@ export function getWeeklyMuscleTrainingCounts(workouts: WorkoutSession[]): { mus
 }
 
 export function getMuscleTrainingGaps(workouts: WorkoutSession[]): { muscle: string; avgDays: number }[] {
-  const muscles = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs'];
+  const muscles = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core'];
   return muscles.map((muscle) => {
     const dates = workouts
       .filter((w) => w.exercises.some((e) => e.muscle === muscle))
@@ -181,7 +176,7 @@ export function getMuscleTrainingGaps(workouts: WorkoutSession[]): { muscle: str
 
 export function detectOvertraining(workouts: WorkoutSession[]): string[] {
   const alerts: string[] = [];
-  const muscles = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs'];
+  const muscles = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core'];
   const last3 = [0, 1, 2].map((i) => dayjs().subtract(i, 'day').format('YYYY-MM-DD'));
 
   for (const muscle of muscles) {
@@ -201,8 +196,8 @@ export function calcConsistencyScore(
   profile: UserProfile,
   habits: Record<string, HabitDay>
 ): { score: number; breakdown: { label: string; value: number; max: number }[] } {
-  const weekStart = dayjs().startOf('isoWeek');
-  const weekWorkouts = workouts.filter((w) => dayjs(w.date).isAfter(weekStart.subtract(1, 'day')));
+  const weekWorkouts = filterWorkoutsInTrackingWeek(workouts);
+  const weekStart = getTrackingWeekStart();
   const freqScore = Math.min(100, (weekWorkouts.length / goals.workoutsPerWeek) * 100);
 
   const weekVolumes = weekWorkouts.map((w) => w.totalVolume);
@@ -241,8 +236,7 @@ export function calcConsistencyScore(
 }
 
 export function getWeekProgress(workouts: WorkoutSession[], goals: WeeklyGoals) {
-  const weekStart = dayjs().startOf('isoWeek');
-  const weekWorkouts = workouts.filter((w) => dayjs(w.date).isAfter(weekStart.subtract(1, 'day')));
+  const weekWorkouts = filterWorkoutsInTrackingWeek(workouts);
   const volume = weekWorkouts.reduce((s, w) => s + w.totalVolume, 0);
   return {
     workouts: weekWorkouts.length,
@@ -298,7 +292,7 @@ export function getMuscleVolumeTrend(
   const weekly: Record<string, { volume: number; avgWeight: number; maxWeight: number; reps: number; sets: number }> = {};
 
   for (const w of workouts.filter((wd) => dayjs(wd.date).isAfter(start))) {
-    const week = dayjs(w.date).startOf('isoWeek').format('MMM D');
+    const week = getTrackingWeekStart(w.date).format('MMM D');
     if (!weekly[week]) weekly[week] = { volume: 0, avgWeight: 0, maxWeight: 0, reps: 0, sets: 0 };
     for (const ex of w.exercises) {
       if (muscle && ex.muscle !== muscle) continue;

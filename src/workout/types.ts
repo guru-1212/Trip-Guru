@@ -1,6 +1,6 @@
 export type DayKey = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 
-export type SplitId = 'ct' | 'bb' | 'sh' | 'ctbb' | 'legs' | 'rest';
+export type SplitId = 'ct' | 'bb' | 'sh' | 'ctbb' | 'legs' | 'core' | 'coresh' | 'rest';
 
 export type MuscleGroup =
   | 'Chest'
@@ -196,6 +196,8 @@ export interface ActiveWorkoutState {
   restTimerEnd: number | null;
   /** Exercise IDs added mid-session via Add Exercise (removable before finish). */
   addedExerciseIds?: string[];
+  /** User-defined exercise order for picked items (exercise IDs). */
+  pickOrder?: string[];
 }
 
 /** Map key: `${exerciseId}::${variationName}` → base64 data URL */

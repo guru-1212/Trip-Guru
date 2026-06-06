@@ -4,7 +4,6 @@ import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import dayjs from 'dayjs';
-import isoWeek from 'dayjs/plugin/isoWeek';
 import {
   BarChart,
   Bar,
@@ -54,13 +53,15 @@ import {
   getTodayDayKey,
   getGreeting,
   getWorkoutsInRange,
+  getTrackingWeekNumber,
+  getTrackingWeekRangeLabel,
+  getTrackingWeekStart,
+  filterWorkoutsInTrackingWeek,
 } from '@/workout/utils';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { FitTrackInvitations } from '@/components/workout/FitTrackInvitations';
 import { getWeeklyMuscleTrainingCounts } from '@/workout/analytics';
 import { cn } from '@/lib/utils';
-
-dayjs.extend(isoWeek);
 
 export default function DashboardPage() {
   const { profile, workouts, weeklyGoals, hydrated, prs, updateWorkoutDate } = useWorkoutStore();
@@ -76,9 +77,8 @@ export default function DashboardPage() {
 
   const metrics = useMemo(() => {
     const monthStart = dayjs().startOf('month');
-    const weekStart = dayjs().startOf('isoWeek');
     const monthWorkouts = workouts.filter((w) => dayjs(w.date).isAfter(monthStart.subtract(1, 'day')));
-    const weekWorkouts = workouts.filter((w) => dayjs(w.date).isAfter(weekStart.subtract(1, 'day')));
+    const weekWorkouts = filterWorkoutsInTrackingWeek(workouts);
     const monthVolume = monthWorkouts.reduce((s, w) => s + w.totalVolume, 0);
     const weekDaysCount = new Set(weekWorkouts.map((w) => w.date)).size;
     
@@ -115,11 +115,11 @@ export default function DashboardPage() {
 
   const { muscleData, weeklyData } = useMemo(() => {
     const last8Weeks = Array.from({ length: 8 })
-      .map((_, i) => dayjs().subtract(i, 'week').startOf('isoWeek'))
+      .map((_, i) => getTrackingWeekStart().subtract(i, 'week'))
       .reverse();
 
     const wData = last8Weeks.map((start) => {
-      const end = start.endOf('isoWeek');
+      const end = start.add(6, 'day').endOf('day');
       const vol = workouts
         .filter((w) => {
           const d = dayjs(w.date);
@@ -149,11 +149,7 @@ export default function DashboardPage() {
     [workouts]
   );
 
-  const weekRangeLabel = useMemo(() => {
-    const start = dayjs().startOf('isoWeek');
-    const end = start.endOf('isoWeek');
-    return `${start.format('MMM D')} – ${end.format('MMM D')}`;
-  }, []);
+  const weekRangeLabel = useMemo(() => getTrackingWeekRangeLabel(), []);
 
   const calendarDays = useMemo(() => {
     const start = dayjs().startOf('month').startOf('week');
@@ -173,8 +169,8 @@ export default function DashboardPage() {
   }, [workouts]);
 
   const feedWeek = useMemo(() => {
-    const start = dayjs().subtract(feedWeekOffset, 'week').startOf('isoWeek');
-    const end = start.endOf('isoWeek');
+    const start = getTrackingWeekStart().subtract(feedWeekOffset, 'week');
+    const end = start.add(6, 'day').endOf('day');
     const sameYear = start.year() === end.year();
     const label = sameYear
       ? `${start.format('MMM D')} – ${end.format('MMM D, YYYY')}`
@@ -188,7 +184,7 @@ export default function DashboardPage() {
       (min, w) => (w.date < min ? w.date : min),
       workouts[0].date
     );
-    return dayjs().startOf('isoWeek').diff(dayjs(oldest).startOf('isoWeek'), 'week');
+    return getTrackingWeekStart().diff(getTrackingWeekStart(oldest), 'week');
   }, [workouts]);
 
   const feedWorkouts = useMemo(() => {
@@ -306,7 +302,7 @@ export default function DashboardPage() {
         <WeeklyGoalCard
           current={metrics.weekDaysCount}
           target={weeklyGoals.workoutsPerWeek}
-          weekNumber={dayjs().isoWeek()}
+          weekNumber={getTrackingWeekNumber()}
           weekLabel={weekRangeLabel}
           className="xl:col-span-4"
         />
@@ -346,7 +342,7 @@ export default function DashboardPage() {
       <WeeklyMuscleFrequency
         counts={weeklyMuscleCounts}
         weekLabel={weekRangeLabel}
-        weekNumber={dayjs().isoWeek()}
+        weekNumber={getTrackingWeekNumber()}
         variants={item}
       />
 
@@ -516,7 +512,7 @@ export default function DashboardPage() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-primary mt-0.5">This week</p>
                 ) : (
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-0.5">
-                    Week {feedWeek.start.isoWeek()}
+                    Week {getTrackingWeekNumber(feedWeek.start)}
                   </p>
                 )}
               </div>

@@ -390,11 +390,129 @@ export const EXERCISE_LIBRARY: LibraryExercise[] = [
     splitIds: ['legs'],
     category: ['Legs', 'Isolation'],
   },
+
+  // CORE
+  {
+    id: 'plank',
+    name: 'Plank',
+    muscle: 'Core',
+    equipment: 'Bodyweight',
+    difficulty: 'Beginner',
+    variations: ['Standard', 'Forearm Plank', 'Side Plank', 'RKC Plank', 'Weighted'],
+    tips: ['Brace abs and glutes', 'Neutral spine, no sagging hips', 'Breathe steadily throughout hold'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Compound'],
+  },
+  {
+    id: 'crunches',
+    name: 'Crunches',
+    muscle: 'Core',
+    equipment: 'Bodyweight',
+    difficulty: 'Beginner',
+    variations: ['Standard', 'Cable Crunch', 'Machine Crunch', 'Decline Crunch', 'Bicycle Crunch'],
+    tips: ['Curl ribs toward pelvis, not neck', 'Exhale on the crunch', 'Control the negative'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Isolation'],
+  },
+  {
+    id: 'hanging-leg-raises',
+    name: 'Hanging Leg Raises',
+    muscle: 'Core',
+    equipment: 'Bodyweight',
+    difficulty: 'Intermediate',
+    variations: ['Straight Leg', 'Bent Knee', 'Toes to Bar', "Captain's Chair"],
+    tips: ['Minimize swinging', 'Posterior pelvic tilt at top', 'Lower with control'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Compound'],
+  },
+  {
+    id: 'russian-twists',
+    name: 'Russian Twists',
+    muscle: 'Core',
+    equipment: 'Bodyweight',
+    difficulty: 'Beginner',
+    variations: ['Bodyweight', 'Dumbbell', 'Medicine Ball', 'Cable', 'Weighted'],
+    tips: ['Rotate from torso, not arms', 'Feet elevated for more challenge', 'Keep chest up'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Isolation'],
+  },
+  {
+    id: 'ab-wheel-rollout',
+    name: 'Ab Wheel Rollout',
+    muscle: 'Core',
+    equipment: 'Ab Wheel',
+    difficulty: 'Advanced',
+    variations: ['Kneeling', 'Standing', 'Barbell Rollout', 'Band Assisted'],
+    tips: ['Brace hard before rolling out', 'Stop before lower back arches', 'Pull back with abs, not hips'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Compound'],
+  },
+  {
+    id: 'cable-woodchoppers',
+    name: 'Cable Woodchoppers',
+    muscle: 'Core',
+    equipment: 'Cable',
+    difficulty: 'Intermediate',
+    variations: ['High to Low', 'Low to High', 'Standing', 'Kneeling'],
+    tips: ['Pivot feet and rotate hips', 'Arms stay extended', 'Control both directions'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Compound'],
+  },
+  {
+    id: 'dead-bug',
+    name: 'Dead Bug',
+    muscle: 'Core',
+    equipment: 'Bodyweight',
+    difficulty: 'Beginner',
+    variations: ['Standard', 'Weighted', 'Band Resisted', 'Alternating'],
+    tips: ['Press lower back into floor', 'Move opposite arm and leg slowly', 'Exhale as limbs extend'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Isolation'],
+  },
+  {
+    id: 'pallof-press',
+    name: 'Pallof Press',
+    muscle: 'Core',
+    secondary: 'Shoulders',
+    equipment: 'Cable',
+    difficulty: 'Beginner',
+    variations: ['Cable', 'Band', 'Half-Kneeling', 'Standing'],
+    tips: ['Resist rotation — stay square', 'Press straight out from chest', 'Brace core throughout'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Compound'],
+  },
+  {
+    id: 'hollow-hold',
+    name: 'Hollow Hold',
+    muscle: 'Core',
+    equipment: 'Bodyweight',
+    difficulty: 'Intermediate',
+    variations: ['Standard', 'Weighted', 'Hollow Rocks', 'Tuck Hold'],
+    tips: ['Lower back pressed to floor', 'Arms and legs extended', 'Hold without losing position'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Isolation'],
+  },
+  {
+    id: 'leg-raises',
+    name: 'Leg Raises',
+    muscle: 'Core',
+    equipment: 'Bodyweight',
+    difficulty: 'Beginner',
+    variations: ['Lying Leg Raise', 'Decline', "Captain's Chair", 'Flutter Kicks'],
+    tips: ['Posterior pelvic tilt at top', 'Avoid momentum from hips', 'Lower legs without arching back'],
+    splitIds: ['core', 'coresh'],
+    category: ['Core', 'Isolation'],
+  },
 ];
 
 export function getExercisesForSplit(splitId: string): LibraryExercise[] {
   if (splitId === 'ctbb') {
     return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes('ct') || e.splitIds.includes('bb'));
+  }
+  if (splitId === 'coresh') {
+    return EXERCISE_LIBRARY.filter(
+      (e) => e.splitIds.includes('core') || e.splitIds.includes('sh')
+    );
   }
   return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes(splitId as 'ct'));
 }

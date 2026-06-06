@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin';
 import { sendPushToUser } from './notifications';
 
 type DayKey = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
-type SplitId = 'ct' | 'bb' | 'sh' | 'ctbb' | 'legs' | 'rest';
+type SplitId = 'ct' | 'bb' | 'sh' | 'ctbb' | 'legs' | 'core' | 'coresh' | 'rest';
 type FitnessGoal = 'Build Muscle' | 'Lose Fat' | 'Strength' | 'Endurance' | 'General';
 type ReminderType = 'pre_meal' | 'get_ready' | 'protein';
 
@@ -12,6 +12,8 @@ const SPLIT_NAMES: Record<SplitId, string> = {
   sh: 'Shoulders',
   ctbb: 'Chest+Tri / Back+Bi',
   legs: 'Legs',
+  core: 'Core',
+  coresh: 'Core + Shoulders',
   rest: 'Rest',
 };
 
