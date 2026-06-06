@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProtectedRoute } from '@/components/common/ProtectedRoute';
 import { AppShell } from '@/components/layout/AppShell';
@@ -69,6 +69,7 @@ function ProfileContent() {
   const [displayPhotoUrl, setDisplayPhotoUrl] = useState<string | undefined>();
   const [pushStatus, setPushStatus] = useState<PushSetupStatus | null>(null);
   const [pushConfigured, setPushConfigured] = useState<boolean | null>(null);
+  const notifyTogglingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,7 +91,9 @@ function ProfileContent() {
       setName(user.name);
       setPhone(user.phone);
       setDisplayPhotoUrl(user.photoURL);
-      setNotifyEnabled(user.notifyEnabled ?? false);
+      if (!notifyTogglingRef.current) {
+        setNotifyEnabled(user.notifyEnabled ?? false);
+      }
       setPrimaryUseCase(user.primaryUseCase ?? 'trips');
     }
   }, [user]);
@@ -187,6 +190,7 @@ function ProfileContent() {
 
     const previousEnabled = user?.notifyEnabled ?? false;
     const previousToken = user?.fcmToken ?? '';
+    notifyTogglingRef.current = true;
     setNotifySaving(true);
 
     try {
@@ -196,7 +200,7 @@ function ProfileContent() {
         dispatch(updateProfileLocal({ notifyEnabled: false }));
         const status = await getPushSetupStatus(uid, previousToken);
         setPushStatus(status);
-        // alert('Push notifications disabled.');
+        alert('Push notifications disabled.');
         return;
       }
 
@@ -205,10 +209,11 @@ function ProfileContent() {
 
       if (!result.token) {
         setNotifyEnabled(previousEnabled);
-        // alert(result.message);
+        alert(result.message);
         return;
       }
 
+      setNotifyEnabled(true);
       dispatch(
         updateProfileLocal({
           notifyEnabled: true,
@@ -217,16 +222,17 @@ function ProfileContent() {
       );
       const status = await getPushSetupStatus(uid, result.token);
       setPushStatus(status);
-      // alert(result.message);
+      alert(result.message);
     } catch (error) {
       setNotifyEnabled(previousEnabled);
       console.error('Failed to update notification settings:', error);
-      // alert(
-      //   `Failed to save notification settings: ${
-      //     error instanceof Error ? error.message : 'Unknown error'
-      //   }`
-      // );
+      alert(
+        `Failed to save notification settings: ${
+          error instanceof Error ? error.message : 'Unknown error'
+        }`
+      );
     } finally {
+      notifyTogglingRef.current = false;
       setNotifySaving(false);
     }
   };

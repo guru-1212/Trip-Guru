@@ -31,11 +31,21 @@ export const store = configureStore({
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: ['auth/setUser', 'expenses/setExpenses'],
+        ignoredActions: [
+          'auth/setUser',
+          'auth/updateProfileLocal',
+          'expenses/setExpenses',
+          'trips/setTrips',
+          'trips/fetchUser/fulfilled',
+          'rooms/setRooms',
+          'rooms/fetchUser/fulfilled',
+          'appMode/setAppModeState',
+        ],
         ignoredPaths: [
           'auth.user.createdAt',
           'trips.trips',
           'expenses.expenses',
+          'rooms.rooms',
         ],
       },
     }),
