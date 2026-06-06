@@ -18,4 +18,6 @@ export interface User {
   primaryUseCase?: PrimaryUseCase;
   /** Active Trip vs Room UI mode (for "both" and legacy multi-use accounts). */
   activeMode?: AppMode;
+  /** When set, FitTrack reads/writes use this owner's data instead of own uid. */
+  fittrackLinkedOwnerId?: string;
 }

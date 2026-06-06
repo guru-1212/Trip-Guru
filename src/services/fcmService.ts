@@ -453,6 +453,24 @@ export async function sendTripInviteNotification(
   }
 }
 
+export async function sendFitTrackInviteNotification(
+  targetUserId: string,
+  ownerName: string
+): Promise<{ sent: boolean }> {
+  try {
+    const fn = httpsCallable<
+      { targetUserId: string; ownerName: string },
+      { sent: boolean }
+    >(getFirebaseFunctions(), 'sendFitTrackInvite');
+
+    const result = await fn({ targetUserId, ownerName });
+    return { sent: result.data.sent };
+  } catch (error) {
+    console.warn('FitTrack invite notification failed (deploy Cloud Functions):', error);
+    return { sent: false };
+  }
+}
+
 export async function sendRoomInviteNotification(
   targetUserId: string,
   roomId: string,

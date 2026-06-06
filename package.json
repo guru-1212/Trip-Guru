@@ -10,7 +10,8 @@
     "test": "npx tsx src/lib/settlementAlgorithm.test.ts && npx tsx src/lib/tripPackProgress.test.ts",
     "icons": "node scripts/generate-icons.js",
     "messaging-sw": "node scripts/generate-messaging-sw.js",
-    "firebase:deploy": "firebase deploy --only firestore,storage,functions"
+    "firebase:deploy": "firebase deploy --only firestore:rules,firestore:indexes,storage && node scripts/deploy-functions.js",
+    "firebase:deploy:functions": "node scripts/deploy-functions.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3",

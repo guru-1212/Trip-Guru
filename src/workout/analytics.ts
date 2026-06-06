@@ -143,6 +143,26 @@ export function getRepRangeDistribution(workouts: WorkoutSession[], start: strin
   return Object.entries(ranges).map(([range, count]) => ({ range, count }));
 }
 
+export const TRACKED_MUSCLES = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core'] as const;
+
+/** Sessions per muscle group in the current ISO week (Mon–Sun). */
+export function getWeeklyMuscleTrainingCounts(workouts: WorkoutSession[]): { muscle: string; count: number }[] {
+  const start = dayjs().startOf('isoWeek');
+  const end = start.endOf('isoWeek');
+  const weekWorkouts = filterByRange(
+    workouts,
+    start.format('YYYY-MM-DD'),
+    end.format('YYYY-MM-DD')
+  );
+
+  return TRACKED_MUSCLES.map((muscle) => ({
+    muscle,
+    count: weekWorkouts.filter((w) =>
+      w.exercises.some((e) => e.muscle === muscle && e.sets.some((s) => s.done))
+    ).length,
+  }));
+}
+
 export function getMuscleTrainingGaps(workouts: WorkoutSession[]): { muscle: string; avgDays: number }[] {
   const muscles = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs'];
   return muscles.map((muscle) => {

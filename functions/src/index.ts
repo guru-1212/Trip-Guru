@@ -26,7 +26,9 @@ import {
 
 setGlobalOptions({ region: 'us-central1' });
 
-admin.initializeApp();
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 interface InviteRequest {
   targetUserId: string;
@@ -65,6 +67,34 @@ export const sendTripInvite = onCall(async (request) => {
       body: `You've been added to "${tripName}"`,
       link,
       data: { type: 'trip_invite', tripId, tripName },
+    });
+  } catch (error) {
+    console.error('FCM send failed:', error);
+    throw new HttpsError('internal', 'Failed to send notification.');
+  }
+});
+
+export const sendFitTrackInvite = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in to send invites.');
+  }
+
+  const { targetUserId, ownerName } = request.data as {
+    targetUserId?: string;
+    ownerName?: string;
+  };
+
+  if (!targetUserId || !ownerName) {
+    throw new HttpsError('invalid-argument', 'targetUserId and ownerName are required.');
+  }
+
+  try {
+    const link = '/fittrack/dashboard';
+    return await sendInvitePush(targetUserId, {
+      title: 'Training partner invite',
+      body: `${ownerName} invited you to share their FitTrack workout plan`,
+      link,
+      data: { type: 'fittrack_invite', ownerName },
     });
   } catch (error) {
     console.error('FCM send failed:', error);

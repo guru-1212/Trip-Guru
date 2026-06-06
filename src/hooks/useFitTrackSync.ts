@@ -43,7 +43,16 @@ export interface FitTrackSyncCallbacks {
   setSyncing: (s: boolean) => void;
 }
 
-export function useFitTrackSync(uid: string | null | undefined, callbacks: FitTrackSyncCallbacks) {
+export interface FitTrackSyncOptions {
+  /** Run localStorage migration only for this uid (typically the auth uid, not a linked owner). */
+  migrateUid?: string | null;
+}
+
+export function useFitTrackSync(
+  uid: string | null | undefined,
+  callbacks: FitTrackSyncCallbacks,
+  options?: FitTrackSyncOptions
+) {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
 
@@ -58,12 +67,16 @@ export function useFitTrackSync(uid: string | null | undefined, callbacks: FitTr
     let cancelled = false;
     cb().setSyncing(true);
 
+    const migrateUid = options?.migrateUid;
+
     (async () => {
       try {
         await ensureFitTrackDefaults(uid);
-        const migrated = await migrateLocalStorageToFirebase(uid);
-        if (migrated && !cancelled) {
-          console.info('[FitTrack] Migrated local data to Firebase');
+        if (migrateUid) {
+          const migrated = await migrateLocalStorageToFirebase(migrateUid);
+          if (migrated && !cancelled) {
+            console.info('[FitTrack] Migrated local data to Firebase');
+          }
         }
       } catch (err) {
         console.error('[FitTrack] Migration error:', err);

@@ -5,6 +5,7 @@ import {
   getDocs,
   updateDoc,
   doc,
+  writeBatch,
 } from 'firebase/firestore';
 import { getFirebaseDb } from '@/firebase/config';
 import { normalizePhone } from '@/lib/utils';
@@ -60,6 +61,38 @@ export async function autoLinkMembersOnRegister(
         });
         linked++;
       }
+    }
+  }
+
+  if (normalizedEmail) {
+    const fittrackQ = query(
+      collection(db, 'fittrackPartners'),
+      where('partnerEmail', '==', normalizedEmail),
+      where('inviteStatus', '==', 'pending')
+    );
+    const fittrackSnap = await getDocs(fittrackQ);
+    if (!fittrackSnap.empty) {
+      const memberDoc = fittrackSnap.docs[0];
+      const data = memberDoc.data();
+      const ownerId = data.ownerId as string;
+      const newMemberId = `${ownerId}_${uid}`;
+      const updatedData = {
+        ...data,
+        partnerId: uid,
+        partnerName: name,
+        inviteStatus: 'accepted',
+      };
+
+      const batch = writeBatch(db);
+      if (memberDoc.id !== newMemberId) {
+        batch.set(doc(db, 'fittrackPartners', newMemberId), updatedData);
+        batch.delete(memberDoc.ref);
+      } else {
+        batch.update(memberDoc.ref, updatedData);
+      }
+      batch.update(doc(db, 'users', uid), { fittrackLinkedOwnerId: ownerId });
+      await batch.commit();
+      linked++;
     }
   }
 

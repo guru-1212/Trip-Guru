@@ -11,6 +11,7 @@ import { DAY_KEYS, SPLIT_DEFINITIONS } from '@/workout/constants';
 import { getFavouriteSplit, getFavouriteExercise } from '@/workout/analytics';
 import { formatWeight, formatDuration, countScheduledWorkoutDays, getBrowserTimezone } from '@/workout/utils';
 import type { DayKey, FitnessGoal, SplitId, ThemePref } from '@/workout/types';
+import { TrainingPartnersSection } from '@/components/workout/TrainingPartnersSection';
 
 export default function ProfilePage() {
   const {
@@ -284,6 +285,8 @@ export default function ProfilePage() {
             />
           </div>
         </section>
+
+        <TrainingPartnersSection />
 
         {/* Data Management */}
         <section className="ft-card ft-card-padded">

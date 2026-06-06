@@ -105,6 +105,23 @@
       ]
     },
     {
+      "collectionGroup": "fittrackPartners",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "partnerEmail", "order": "ASCENDING" },
+        { "fieldPath": "inviteStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "fittrackPartners",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "ownerId", "order": "ASCENDING" },
+        { "fieldPath": "partnerEmail", "order": "ASCENDING" },
+        { "fieldPath": "inviteStatus", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "fittrackReminders",
       "queryScope": "COLLECTION_GROUP",
       "fields": [

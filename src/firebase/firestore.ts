@@ -126,6 +126,19 @@ export {
 } from '@/firebase/tripPackItems.firestore';
 
 export {
+  getFitTrackOwnerId,
+  resolveFitTrackOwnerId,
+  inviteFitTrackPartner,
+  getPendingFitTrackInvitesForUser,
+  acceptFitTrackPartner,
+  declineFitTrackPartner,
+  getFitTrackPartnersForOwner,
+  getAcceptedFitTrackPartners,
+  removeFitTrackPartner,
+  cancelPendingFitTrackInvite,
+} from '@/firebase/fittrackPartners.firestore';
+
+export {
   getGymProfile,
   upsertGymProfile,
   getWorkoutLogs,

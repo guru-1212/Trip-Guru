@@ -4,6 +4,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import toast from 'react-hot-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useFitTrackSync } from '@/hooks/useFitTrackSync';
+import { getFitTrackOwnerId } from '@/firebase/fittrackPartners.firestore';
 import * as fittrackDb from '@/firebase/fittrack.firestore';
 import { uploadFitTrackVariationImage } from '@/firebase/storage';
 import type {
@@ -54,6 +55,8 @@ interface WorkoutContextValue {
   splitTodayPicks: Partial<Record<SplitId, TodayExercisePick[]>>;
   hydrated: boolean;
   syncing: boolean;
+  fittrackOwnerId: string | null;
+  isFitTrackPartner: boolean;
   updateProfile: (p: Partial<Omit<UserProfile, 'prefs'>> & { prefs?: Partial<UserPrefs> }) => void;
   saveWorkout: (session: Omit<WorkoutSession, 'id'>) => WorkoutSession;
   startActiveWorkout: (state: ActiveWorkoutState) => void;
@@ -89,9 +92,11 @@ interface WorkoutContextValue {
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
 
 export function WorkoutProvider({ children }: { children: React.ReactNode }) {
-  const { uid } = useAuth();
-  const uidRef = useRef(uid);
-  uidRef.current = uid;
+  const { uid, user } = useAuth();
+  const effectiveUid = uid ? getFitTrackOwnerId(uid, user) : null;
+  const isFitTrackPartner = !!(uid && user?.fittrackLinkedOwnerId);
+  const uidRef = useRef(effectiveUid);
+  uidRef.current = effectiveUid;
 
   const [profile, setProfile] = useState<UserProfile>(getDefaultProfile());
   const [workouts, setWorkouts] = useState<WorkoutSession[]>([]);
@@ -127,7 +132,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  useFitTrackSync(uid, {
+  useFitTrackSync(effectiveUid, {
     setProfile,
     setWorkouts,
     setPRs,
@@ -143,7 +148,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setSplitTodayPicks,
     setHydrated,
     setSyncing,
-  });
+  }, { migrateUid: isFitTrackPartner ? null : uid });
 
   const persistState = useCallback(
     async (patch: Partial<fittrackDb.FitTrackStateDoc>) => {
@@ -626,6 +631,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitTodayPicks,
       hydrated,
       syncing,
+      fittrackOwnerId: effectiveUid,
+      isFitTrackPartner,
       updateProfile,
       saveWorkout,
       startActiveWorkout,
@@ -673,6 +680,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitTodayPicks,
       hydrated,
       syncing,
+      effectiveUid,
+      isFitTrackPartner,
       updateProfile,
       saveWorkout,
       startActiveWorkout,
