@@ -10,7 +10,11 @@ export function useAuth() {
   );
 
   useEffect(() => {
-    if (firebaseUid) {
+    if (
+      firebaseUid &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted'
+    ) {
       requestFCMToken(firebaseUid).catch((err) =>
         console.warn('FCM background registration failed:', err)
       );

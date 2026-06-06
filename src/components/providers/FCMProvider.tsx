@@ -28,7 +28,11 @@ export function FCMProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!uid) return;
-    if (user?.notifyEnabled !== false) {
+    if (
+      user?.notifyEnabled !== false &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'granted'
+    ) {
       requestFCMToken(uid).catch((err) =>
         console.warn('FCM background registration failed:', err)
       );

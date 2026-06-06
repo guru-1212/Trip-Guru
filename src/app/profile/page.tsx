@@ -32,6 +32,7 @@ import {
   getPushSetupStatus,
   isPushConfigured,
   requestFCMToken,
+  requestNotificationPermissionOnGesture,
   type PushSetupStatus,
 } from '@/services/fcmService';
 import {
@@ -205,6 +206,15 @@ function ProfileContent() {
       }
 
       setNotifyEnabled(true);
+
+      // Must be first await in this handler — mobile Chrome requires an active user gesture.
+      const permissionResult = await requestNotificationPermissionOnGesture();
+      if (!permissionResult.granted) {
+        setNotifyEnabled(previousEnabled);
+        alert(permissionResult.message);
+        return;
+      }
+
       const result = await requestFCMToken(uid);
 
       if (!result.token) {
@@ -399,6 +409,11 @@ function ProfileContent() {
               <li>
                 Browser permission:{' '}
                 <span className="font-semibold capitalize">{pushStatus.permission}</span>
+                {pushStatus.permission === 'denied' && (
+                  <span className="block mt-1 text-amber-600 font-medium normal-case">
+                    Unblock in browser site settings, then toggle on again.
+                  </span>
+                )}
               </li>
               <li>
                 Device registered:{' '}

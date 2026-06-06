@@ -170,7 +170,98 @@ function formatFcmError(error: unknown): string {
   return String(error);
 }
 
+function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+function isIosDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+/** User-facing steps when the browser will not show the permission prompt again. */
+export function getBlockedNotificationMessage(): string {
+  if (isIosDevice()) {
+    return (
+      'Notifications are blocked for this site. On iPhone: Settings → Safari → Advanced → ' +
+      'Website Data → find this site → Notifications → Allow. Or add TripMate to your Home Screen (iOS 16.4+), open it from there, then enable notifications again.'
+    );
+  }
+  if (isMobileDevice()) {
+    return (
+      'Notifications are blocked for this site. In Chrome: tap the ⋮ menu → Settings → ' +
+      'Site settings → Notifications → find this site → Allow, then return here and toggle on again.'
+    );
+  }
+  return (
+    'Notifications are blocked for this site. Click the lock icon in the address bar → ' +
+    'Site settings → Notifications → Allow, then toggle on again.'
+  );
+}
+
+/**
+ * Must be the FIRST await inside a click/tap handler.
+ * Mobile Chrome rejects Notification.requestPermission() after other async work (user gesture expires).
+ */
+export async function requestNotificationPermissionOnGesture(): Promise<{
+  granted: boolean;
+  permission: NotificationPermission | 'unsupported';
+  message: string;
+}> {
+  if (typeof Notification === 'undefined') {
+    return {
+      granted: false,
+      permission: 'unsupported',
+      message: 'Notifications are not available in this browser.',
+    };
+  }
+
+  const current = Notification.permission;
+  if (current === 'granted') {
+    return { granted: true, permission: 'granted', message: '' };
+  }
+
+  if (current === 'denied') {
+    return {
+      granted: false,
+      permission: 'denied',
+      message: getBlockedNotificationMessage(),
+    };
+  }
+
+  const permission = await Notification.requestPermission();
+  if (permission === 'granted') {
+    return { granted: true, permission: 'granted', message: '' };
+  }
+
+  return {
+    granted: false,
+    permission,
+    message:
+      permission === 'denied'
+        ? getBlockedNotificationMessage()
+        : 'Notification permission was not granted. Tap Allow when the browser asks.',
+  };
+}
+
 export async function requestFCMToken(uid: string): Promise<FCMTokenResult> {
+  if (typeof Notification === 'undefined') {
+    return {
+      token: null,
+      error: 'not_supported',
+      message: 'Notifications are not available in this environment.',
+    };
+  }
+
+  if (Notification.permission !== 'granted') {
+    return {
+      token: null,
+      error: 'permission_denied',
+      message: getBlockedNotificationMessage(),
+    };
+  }
+
   const messaging = await getMessaging();
   if (!messaging) {
     const message =
@@ -188,25 +279,6 @@ export async function requestFCMToken(uid: string): Promise<FCMTokenResult> {
   }
 
   try {
-    if (typeof Notification === 'undefined') {
-      return {
-        token: null,
-        error: 'not_supported',
-        message: 'Notifications are not available in this environment.',
-      };
-    }
-
-    let permission = Notification.permission;
-    if (permission === 'default') {
-      permission = await Notification.requestPermission();
-    }
-    if (permission !== 'granted') {
-      const message =
-        permission === 'denied'
-          ? 'Notifications are blocked. Click the lock icon in the address bar and allow notifications for this site.'
-          : 'Notification permission was not granted. Please allow notifications when prompted.';
-      return { token: null, error: 'permission_denied', message };
-    }
 
     const registration = await getServiceWorkerRegistration();
     if (!registration) {
