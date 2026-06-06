@@ -452,3 +452,22 @@ export async function sendTripInviteNotification(
     return { sent: false };
   }
 }
+
+export async function sendRoomInviteNotification(
+  targetUserId: string,
+  roomId: string,
+  roomName: string
+): Promise<{ sent: boolean }> {
+  try {
+    const fn = httpsCallable<
+      { targetUserId: string; roomId: string; roomName: string },
+      { sent: boolean }
+    >(getFirebaseFunctions(), 'sendRoomInvite');
+
+    const result = await fn({ targetUserId, roomId, roomName });
+    return { sent: result.data.sent };
+  } catch (error) {
+    console.warn('Room invite notification failed (deploy Cloud Functions):', error);
+    return { sent: false };
+  }
+}

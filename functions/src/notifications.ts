@@ -69,6 +69,20 @@ export async function getUserDisplayName(uid: string): Promise<string> {
   return (snap.data()?.name as string) || 'Someone';
 }
 
+export async function collectUserTokens(uid: string): Promise<string[]> {
+  const snap = await db().doc(`users/${uid}`).get();
+  if (!snap.exists) return [];
+  return tokensFromUserData(snap.data());
+}
+
+export async function sendPushToUser(
+  targetUserId: string,
+  payload: PushPayload
+): Promise<number> {
+  const tokens = await collectUserTokens(targetUserId);
+  return sendMulticastPush(tokens, payload);
+}
+
 export function roomNotificationLink(
   action: string,
   roomId: string
@@ -90,6 +104,16 @@ export function roomNotificationTitle(action: string): string {
   if (action.startsWith('member.')) return 'Room member';
   if (action === 'cycle.closed') return 'Billing cycle';
   return 'Room update';
+}
+
+export function tripNotificationLink(
+  type: string,
+  tripId: string
+): string {
+  if (type.startsWith('settlement')) return `/trips/${tripId}/settlement`;
+  if (type.startsWith('expense')) return `/trips/${tripId}/expenses`;
+  if (type.startsWith('member')) return `/trips/${tripId}/members`;
+  return `/trips/${tripId}`;
 }
 
 export async function sendMulticastPush(

@@ -12,6 +12,7 @@ export function useAuth() {
   useEffect(() => {
     if (
       firebaseUid &&
+      user?.notifyEnabled !== false &&
       typeof Notification !== 'undefined' &&
       Notification.permission === 'granted'
     ) {
@@ -19,7 +20,7 @@ export function useAuth() {
         console.warn('FCM background registration failed:', err)
       );
     }
-  }, [firebaseUid]);
+  }, [firebaseUid, user?.notifyEnabled]);
 
   return {
     user,

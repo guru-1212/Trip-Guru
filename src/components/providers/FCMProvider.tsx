@@ -10,15 +10,24 @@ import {
 
 function getPayloadUrl(payload: unknown): string | null {
   const p = payload as {
-    data?: { url?: string; roomId?: string; tripId?: string; path?: string };
+    data?: {
+      url?: string;
+      roomId?: string;
+      tripId?: string;
+      path?: string;
+      type?: string;
+    };
     notification?: { title?: string; body?: string };
   };
   if (p.data?.url) return p.data.url;
+  if (p.data?.path) return p.data.path;
   if (p.data?.roomId) {
     return `/rooms/${p.data.roomId}${p.data.path ?? ''}`;
   }
   if (p.data?.tripId) {
-    return `/trips/${p.data.tripId}${p.data.path ?? '/expenses'}`;
+    const defaultPath =
+      p.data.type?.startsWith('settlement') ? '/settlement' : '/expenses';
+    return `/trips/${p.data.tripId}${p.data.path ?? defaultPath}`;
   }
   return null;
 }
@@ -46,9 +55,14 @@ export function FCMProvider({ children }: { children: React.ReactNode }) {
 
     onForegroundMessage((payload) => {
       const data = payload as {
+        data?: { type?: string };
         notification?: { title?: string; body?: string };
       };
       const targetUrl = getPayloadUrl(payload);
+
+      if (data.data?.type?.startsWith('gym.')) {
+        return;
+      }
 
       if (
         typeof window !== 'undefined' &&

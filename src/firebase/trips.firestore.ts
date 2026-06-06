@@ -218,7 +218,8 @@ export async function removeTripMember(memberId: string): Promise<void> {
 }
 
 export async function saveSettlements(
-  settlements: Settlement[]
+  settlements: Settlement[],
+  savedBy?: string
 ): Promise<void> {
   const batch = writeBatch(db());
   for (const s of settlements) {
@@ -230,15 +231,20 @@ export async function saveSettlements(
       amount: s.amount,
       status: s.status,
       paidAt: s.paidAt,
+      ...(savedBy ? { savedBy } : {}),
     });
   }
   await batch.commit();
 }
 
-export async function markSettlementPaid(settlementId: string): Promise<void> {
+export async function markSettlementPaid(
+  settlementId: string,
+  paidBy?: string
+): Promise<void> {
   await updateDoc(doc(db(), 'settlements', settlementId), {
     status: 'paid',
     paidAt: serverTimestamp(),
+    ...(paidBy ? { paidBy } : {}),
   });
 }
 

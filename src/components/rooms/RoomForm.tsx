@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { createRoomThunk } from '@/features/rooms/roomsThunks';
+import { findUserByEmailOrPhone } from '@/firebase/firestore';
+import { sendRoomInviteNotification } from '@/services/fcmService';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch } from '@/store';
 
@@ -71,6 +73,14 @@ export function RoomForm() {
           members,
         })
       ).unwrap();
+
+      for (const m of members) {
+        const matchedId = await findUserByEmailOrPhone(m.email, m.phone);
+        if (matchedId) {
+          await sendRoomInviteNotification(matchedId, room.roomId, data.name);
+        }
+      }
+
       router.push(`/rooms/${room.roomId}`);
     } catch (e) {
       setError((e as Error).message ?? 'Failed to create room');

@@ -13,16 +13,31 @@ import {
   roomNotificationLink,
   roomNotificationTitle,
   sendMulticastPush,
+  sendPushToUser,
+  tripNotificationLink,
 } from './notifications';
 
 setGlobalOptions({ region: 'us-central1' });
 
 admin.initializeApp();
 
-interface SendTripInviteRequest {
+interface InviteRequest {
   targetUserId: string;
-  tripId: string;
-  tripName: string;
+  tripId?: string;
+  tripName?: string;
+  roomId?: string;
+  roomName?: string;
+}
+
+async function sendInvitePush(
+  targetUserId: string,
+  payload: { title: string; body: string; link: string; data: Record<string, string> }
+): Promise<{ sent: boolean; reason?: string }> {
+  const sent = await sendPushToUser(targetUserId, payload);
+  if (sent === 0) {
+    return { sent: false, reason: 'no_tokens_or_disabled' };
+  }
+  return { sent: true };
 }
 
 export const sendTripInvite = onCall(async (request) => {
@@ -30,46 +45,45 @@ export const sendTripInvite = onCall(async (request) => {
     throw new HttpsError('unauthenticated', 'Must be signed in to send invites.');
   }
 
-  const { targetUserId, tripId, tripName } = request.data as SendTripInviteRequest;
+  const { targetUserId, tripId, tripName } = request.data as InviteRequest;
 
   if (!targetUserId || !tripId || !tripName) {
     throw new HttpsError('invalid-argument', 'targetUserId, tripId, and tripName are required.');
   }
 
-  const userSnap = await admin.firestore().doc(`users/${targetUserId}`).get();
-  if (!userSnap.exists) {
-    return { sent: false, reason: 'user_not_found' };
+  try {
+    const link = `/trips/${tripId}`;
+    return await sendInvitePush(targetUserId, {
+      title: 'New trip invite',
+      body: `You've been added to "${tripName}"`,
+      link,
+      data: { type: 'trip_invite', tripId, tripName },
+    });
+  } catch (error) {
+    console.error('FCM send failed:', error);
+    throw new HttpsError('internal', 'Failed to send notification.');
+  }
+});
+
+export const sendRoomInvite = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in to send invites.');
   }
 
-  const userData = userSnap.data();
-  if (userData?.notifyEnabled === false) {
-    return { sent: false, reason: 'notifications_disabled' };
-  }
+  const { targetUserId, roomId, roomName } = request.data as InviteRequest;
 
-  const fcmToken = userData?.fcmToken as string | undefined;
-  if (!fcmToken) {
-    return { sent: false, reason: 'no_fcm_token' };
+  if (!targetUserId || !roomId || !roomName) {
+    throw new HttpsError('invalid-argument', 'targetUserId, roomId, and roomName are required.');
   }
 
   try {
-    const link = `/trips/${tripId}`;
-    await admin.messaging().send({
-      token: fcmToken,
-      notification: {
-        title: 'New trip invite',
-        body: `You've been added to "${tripName}"`,
-      },
-      data: {
-        type: 'trip_invite',
-        tripId,
-        tripName,
-        url: link,
-      },
-      webpush: {
-        fcmOptions: { link },
-      },
+    const link = `/rooms/${roomId}`;
+    return await sendInvitePush(targetUserId, {
+      title: 'New room invite',
+      body: `You've been added to "${roomName}"`,
+      link,
+      data: { type: 'room_invite', roomId, roomName },
     });
-    return { sent: true };
   } catch (error) {
     console.error('FCM send failed:', error);
     throw new HttpsError('internal', 'Failed to send notification.');
@@ -190,6 +204,97 @@ export const onTripExpenseDeleted = onDocumentDeleted(
       body: formatTripExpenseBody(actorName, 'removed', expense),
       link: `/trips/${tripId}/expenses`,
       data: { type: 'expense.deleted', tripId },
+    });
+  }
+);
+
+export const onTripSettlementCreated = onDocumentCreated(
+  'settlements/{settlementId}',
+  async (event) => {
+    const settlement = event.data?.data();
+    if (!settlement?.tripId || !settlement.fromUid || !settlement.toUid) return;
+
+    const tripId = settlement.tripId as string;
+    const savedBy = settlement.savedBy as string | undefined;
+    const fromName = await getUserDisplayName(settlement.fromUid as string);
+    const toName = await getUserDisplayName(settlement.toUid as string);
+    const amount = settlement.amount != null ? String(settlement.amount) : '';
+    const tokens = await collectTripMemberTokens(tripId, savedBy);
+
+    await sendMulticastPush(tokens, {
+      title: 'Trip settlement',
+      body: `${fromName} owes ${toName}${amount ? ` — ${amount}` : ''}`,
+      link: tripNotificationLink('settlement.created', tripId),
+      data: { type: 'settlement.created', tripId },
+    });
+  }
+);
+
+export const onTripSettlementUpdated = onDocumentUpdated(
+  'settlements/{settlementId}',
+  async (event) => {
+    const before = event.data?.before.data();
+    const after = event.data?.after.data();
+    if (!after?.tripId || before?.status === after.status) return;
+    if (after.status !== 'paid') return;
+
+    const tripId = after.tripId as string;
+    const markedBy = after.paidBy as string | undefined;
+    const fromName = await getUserDisplayName(after.fromUid as string);
+    const toName = await getUserDisplayName(after.toUid as string);
+    const tokens = await collectTripMemberTokens(tripId, markedBy);
+
+    await sendMulticastPush(tokens, {
+      title: 'Settlement paid',
+      body: `${fromName} → ${toName} marked as paid`,
+      link: tripNotificationLink('settlement.paid', tripId),
+      data: { type: 'settlement.paid', tripId },
+    });
+  }
+);
+
+/** FitTrack workout saved — personal reminder to the workout owner. */
+export const onFitTrackWorkoutCreated = onDocumentCreated(
+  'users/{uid}/fittrackWorkouts/{workoutId}',
+  async (event) => {
+    const uid = event.params.uid;
+    const workout = event.data?.data();
+    if (!workout) return;
+
+    const split = (workout.splitId as string) || 'workout';
+    const exerciseCount = Array.isArray(workout.exercises) ? workout.exercises.length : 0;
+    const body =
+      exerciseCount > 0
+        ? `${exerciseCount} exercise${exerciseCount === 1 ? '' : 's'} logged (${split})`
+        : `Workout logged (${split})`;
+
+    await sendPushToUser(uid, {
+      title: 'Workout saved',
+      body,
+      link: '/fittrack/dashboard',
+      data: { type: 'gym.workout_saved', path: '/fittrack/dashboard' },
+    });
+  }
+);
+
+/** Legacy gym module workout log. */
+export const onGymWorkoutLogCreated = onDocumentCreated(
+  'users/{uid}/gymWorkoutLogs/{logId}',
+  async (event) => {
+    const uid = event.params.uid;
+    const log = event.data?.data();
+    if (!log) return;
+
+    const workoutType = (log.workoutType as string) || 'Workout';
+    const body = log.notes
+      ? `${workoutType} — ${String(log.notes).slice(0, 80)}`
+      : `${workoutType} logged`;
+
+    await sendPushToUser(uid, {
+      title: 'Gym workout saved',
+      body,
+      link: '/fittrack/dashboard',
+      data: { type: 'gym.workout_saved', path: '/fittrack/dashboard' },
     });
   }
 );

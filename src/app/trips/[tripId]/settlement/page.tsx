@@ -37,7 +37,7 @@ function SettlementContent({ tripId }: { tripId: string }) {
   const displaySettlements = computed.length > 0 ? computed : [];
 
   const handleSaveToFirestore = async () => {
-    await saveSettlements(computed);
+    await saveSettlements(computed, uid ?? undefined);
     recompute();
   };
 

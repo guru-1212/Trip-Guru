@@ -94,12 +94,15 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
-  let url = data.url || '/dashboard';
-  if (!data.url && data.roomId) {
+  let url = data.url || data.path || '/dashboard';
+  if (!data.url && !data.path && data.roomId) {
     url = '/rooms/' + data.roomId;
     if (data.path) url += data.path;
-  } else if (!data.url && data.tripId) {
-    url = '/trips/' + data.tripId + (data.path || '/expenses');
+  } else if (!data.url && !data.path && data.tripId) {
+    const tripPath = data.type && String(data.type).startsWith('settlement')
+      ? '/settlement'
+      : '/expenses';
+    url = '/trips/' + data.tripId + (data.path || tripPath);
   }
 
   event.waitUntil(

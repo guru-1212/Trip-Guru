@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Timer, X, Plus, Minus } from 'lucide-react';
-import { playBeep, notify } from '@/workout/utils';
+import { playBeep, showLocalNotification } from '@/workout/utils';
 import { REST_TIMER_OPTIONS } from '@/workout/constants';
 import { cn } from '@/lib/utils';
 
@@ -42,7 +42,7 @@ export function RestTimer({
       }
       if (left === 0 && remaining === 1) {
         if (soundEnabled) playBeep(880, 0.5);
-        notify('Rest Complete!', 'Time for your next set.');
+        void showLocalNotification('Rest Complete!', 'Time for your next set.');
         onComplete();
       }
     };

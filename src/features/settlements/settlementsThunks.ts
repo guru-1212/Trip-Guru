@@ -34,8 +34,12 @@ export const computeSettlementsThunk = createAsyncThunk(
 export const markPaidThunk = createAsyncThunk(
   'settlements/markPaid',
   async (settlementId: string, { dispatch, getState }) => {
-    await markSettlementPaid(settlementId);
-    const state = getState() as { settlements: { settlements: import('@/types/settlement').Settlement[] } };
+    const state = getState() as {
+      auth: { firebaseUid: string | null };
+      settlements: { settlements: import('@/types/settlement').Settlement[] };
+    };
+    const paidBy = state.auth.firebaseUid ?? undefined;
+    await markSettlementPaid(settlementId, paidBy);
     const existing = state.settlements.settlements.find((s) => s.id === settlementId);
     if (existing) {
       dispatch(

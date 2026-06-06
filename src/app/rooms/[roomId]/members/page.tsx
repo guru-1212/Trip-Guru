@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import { RoomPageShell } from '@/components/rooms/RoomPageShell';
 import { useAppSelector } from '@/store';
-import { addMemberToRoom } from '@/firebase/firestore';
+import { addMemberToRoom, findUserByEmailOrPhone } from '@/firebase/firestore';
 import { recordRoomAuditLog } from '@/services/roomAuditLogService';
+import { sendRoomInviteNotification } from '@/services/fcmService';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,6 +28,7 @@ export default function RoomMembersPage() {
 function MembersContent({ roomId }: { roomId: string }) {
   const { uid } = useAuth();
   const actorName = useAppSelector((s) => s.auth.user?.name ?? 'Someone');
+  const room = useAppSelector((s) => s.rooms.currentRoom);
   const members = useAppSelector((s) => s.rooms.members);
   const cycle = useAppSelector((s) => s.rooms.activeCycle);
   const [draft, setDraft] = useState({ name: '', email: '', phone: '' });
@@ -48,6 +50,12 @@ function MembersContent({ roomId }: { roomId: string }) {
         summary: `${actorName} invited ${draft.name} (${draft.email})`,
         metadata: { memberName: draft.name, email: draft.email },
       });
+
+      const matchedUserId = await findUserByEmailOrPhone(draft.email, draft.phone);
+      if (matchedUserId && room) {
+        await sendRoomInviteNotification(matchedUserId, roomId, room.name);
+      }
+
       setDraft({ name: '', email: '', phone: '' });
     } finally {
       setAdding(false);

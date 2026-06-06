@@ -16,7 +16,21 @@ Recipients: accepted `roomMembers` except `actorUid`. Respects `users.notifyEnab
 
 ## Trip notifications
 
-Triggers on `expenses` create / update / delete (actual expenses only).
+- `expenses` create / update / delete (actual expenses only)
+- `settlements` create (save to history) — notifies trip members except saver
+- `settlements` update to `paid` — notifies trip members except who marked paid
+- `sendTripInvite` callable — direct push when a matched user is added
+
+## Gym / FitTrack notifications
+
+- `users/{uid}/fittrackWorkouts/{id}` create — workout saved (personal push)
+- `users/{uid}/gymWorkoutLogs/{id}` create — legacy gym log (personal push)
+- Rest timer uses local/service-worker notification when the app is open or backgrounded
+
+## Room invites
+
+- `sendRoomInvite` callable — direct push when a matched user is added to a room
+- Other room activity still flows through `roomAuditLogs` → `onRoomAuditLogCreated`
 
 ## Client setup
 

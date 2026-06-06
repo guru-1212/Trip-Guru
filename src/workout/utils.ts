@@ -318,17 +318,33 @@ export function playBeep(frequency = 880, duration = 0.3) {
   }
 }
 
-export function notify(title: string, body: string) {
+export async function showLocalNotification(title: string, body: string) {
+  if (typeof window === 'undefined') return;
+
+  const options: NotificationOptions = {
+    body,
+    icon: '/logo.svg',
+    tag: 'tripmate-local',
+  };
+
+  if ('serviceWorker' in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      await registration.showNotification(title, options);
+      return;
+    } catch {
+      // fall through to Notification API
+    }
+  }
+
   if (!('Notification' in window)) return;
   if (Notification.permission === 'granted') {
-    new Notification(title, { body, icon: '/logo.svg' });
-  } else if (Notification.permission !== 'denied') {
-    Notification.requestPermission().then((permission) => {
-      if (permission === 'granted') {
-        new Notification(title, { body, icon: '/logo.svg' });
-      }
-    });
+    new Notification(title, options);
   }
+}
+
+export function notify(title: string, body: string) {
+  void showLocalNotification(title, body);
 }
 
 export function getMuscleFromSplit(splitId: SplitId): string[] {
