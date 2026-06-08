@@ -79,6 +79,7 @@ import {
   waitForShareCardPaint,
 } from '@/workout/shareCard';
 import { cn } from '@/lib/utils';
+import { requestWakeLock, releaseWakeLock } from '@/lib/wakeLock';
 
 const SPLIT_ICONS: Record<string, string> = {
   chest: '💪',
@@ -358,6 +359,7 @@ export default function WorkoutPage() {
       pickOrder,
     };
     startActiveWorkout(state);
+    requestWakeLock();
     setExpandedEx(pickOrder[0] ?? exercises[0]?.exerciseId ?? null);
   }, [
     selectedSplit,
@@ -487,6 +489,7 @@ export default function WorkoutPage() {
 
   const discardWorkout = () => {
     clearActiveWorkout();
+    releaseWakeLock();
     setShowCancelDialog(false);
     router.push('/fittrack/dashboard');
   };
@@ -504,6 +507,7 @@ export default function WorkoutPage() {
       totalVolume: calcWorkoutVolume(exercisesToSave),
     });
     clearActiveWorkout();
+    releaseWakeLock();
     setShowSummary(false);
     setFinishPin('');
     setPinError(false);

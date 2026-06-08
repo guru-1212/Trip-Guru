@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import Link from 'next/link';
 import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
 import {
   BarChart,
   Bar,
@@ -61,6 +62,7 @@ import {
 import { PageTransition } from '@/components/workout/PageTransition';
 import { FitTrackInvitations } from '@/components/workout/FitTrackInvitations';
 import { getWeeklyMuscleTrainingCounts } from '@/workout/analytics';
+import { MuscleRecoveryMap3D } from '@/components/fittrack/MuscleRecoveryMap3D';
 import { cn } from '@/lib/utils';
 
 export default function DashboardPage() {
@@ -77,6 +79,39 @@ export default function DashboardPage() {
 
   const todaySplit = getTodaysSplit(profile);
   const splitName = SPLIT_NAMES[todaySplit];
+
+  const recoveryData = useMemo(() => {
+    const data: Record<string, any> = {};
+    const muscles = [
+      'Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 
+      'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Abs', 'Forearms'
+    ];
+
+    muscles.forEach((m) => {
+      const lastSession = workouts
+        .filter((w) => getMuscleFromSplit(w.splitId).includes(m))
+        .sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf())[0];
+
+      if (!lastSession) {
+        data[m] = { name: m, status: 'recovered' };
+        return;
+      }
+
+      const diffHours = dayjs().diff(dayjs(lastSession.date), 'hour');
+      let status: 'fatigued' | 'recovering' | 'recovered' = 'recovered';
+      
+      if (diffHours < 24) status = 'fatigued';
+      else if (diffHours < 72) status = 'recovering';
+
+      data[m] = { 
+        name: m, 
+        status, 
+        lastTrained: dayjs(lastSession.date).fromNow() 
+      };
+    });
+
+    return data;
+  }, [workouts]);
 
   const metrics = useMemo(() => {
     const monthStart = dayjs().startOf('month');
@@ -389,6 +424,41 @@ export default function DashboardPage() {
         maxOffset={maxFeedWeekOffset}
         variants={item}
       />
+
+      {/* 3D Muscle Recovery Heatmap */}
+      <motion.div variants={item}>
+        <DashboardPanel
+          icon={Activity}
+          title="Muscle Recovery Heatmap"
+          description="3D visualization of muscle fatigue and readiness"
+          badge={
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-widest">3D Intel</span>
+            </div>
+          }
+        >
+          <MuscleRecoveryMap3D data={recoveryData} />
+          
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
+            <div className="p-4 rounded-2xl bg-muted/20 border border-border/50">
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Status Protocol</p>
+              <p className="text-xs font-medium leading-relaxed">Colors indicate current physiological readiness based on training load and time.</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-muted/20 border border-border/50">
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Recovery Window</p>
+              <p className="text-xs font-medium leading-relaxed">Most muscle groups require 48-72 hours for complete structural replenishment.</p>
+            </div>
+            <div className="p-4 rounded-2xl bg-muted/20 border border-border/50">
+              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Interactive Sync</p>
+              <p className="text-xs font-medium leading-relaxed">Rotate the 3D map to inspect symmetry and group-specific fatigue patterns.</p>
+            </div>
+          </div>
+        </DashboardPanel>
+      </motion.div>
 
       {/* Charts & Heatmap */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
