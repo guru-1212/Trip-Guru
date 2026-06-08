@@ -428,6 +428,7 @@ export default function DashboardPage() {
       {/* 3D Muscle Recovery Heatmap */}
       <motion.div variants={item}>
         <DashboardPanel
+          variants={item}
           icon={Activity}
           title="Muscle Recovery Heatmap"
           description="3D visualization of muscle fatigue and readiness"
