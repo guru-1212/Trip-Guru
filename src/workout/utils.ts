@@ -326,13 +326,15 @@ export function applyWorkoutExerciseFromPicks(
   };
 }
 
+export function isVariationFullyDone(ex: WorkoutExercise, variation: string): boolean {
+  const sets = getSetsForVariation(ex, variation);
+  return sets.length > 0 && sets.every((s) => s.done);
+}
+
 export function isExerciseFullyDone(ex: WorkoutExercise): boolean {
   const vars = getPickedVariations(ex);
   if (!vars.length) return false;
-  return vars.every((v) => {
-    const sets = getSetsForVariation(ex, v);
-    return sets.length > 0 && sets.every((s) => s.done);
-  });
+  return vars.every((v) => isVariationFullyDone(ex, v));
 }
 
 export function exerciseHasLoggedSets(ex: WorkoutExercise): boolean {
@@ -379,6 +381,21 @@ export function countPickedExercisesDone(exercises: WorkoutExercise[]): { done: 
     done: picked.filter(isExerciseFullyDone).length,
     total: picked.length,
   };
+}
+
+export function countVariationsInTodayPicks(picks: TodayExercisePick[]): number {
+  return picks.reduce((sum, pick) => sum + (pick.variations?.length ?? 1), 0);
+}
+
+export function countPickedVariationsDone(exercises: WorkoutExercise[]): { done: number; total: number } {
+  let done = 0;
+  let total = 0;
+  for (const ex of exercises.filter(isPickedToday)) {
+    const vars = getPickedVariations(ex);
+    total += vars.length;
+    done += vars.filter((v) => isVariationFullyDone(ex, v)).length;
+  }
+  return { done, total };
 }
 
 function stripSessionExerciseFields(ex: WorkoutExercise): WorkoutExercise {

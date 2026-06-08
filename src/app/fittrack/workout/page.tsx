@@ -60,7 +60,7 @@ import {
   variationImageKey,
   buildSplitExerciseLibrary,
   partitionExercisesByPick,
-  countPickedExercisesDone,
+  countPickedVariationsDone,
   getDefaultTodayPicks,
   filterExercisesForSave,
   isPickedToday,
@@ -670,7 +670,7 @@ export default function WorkoutPage() {
       pickedExercises.filter(isPickedToday).map((e) => e.exerciseId);
     const pickedSorted = sortExercisesByPickOrder(pickedExercises, pickOrder);
     const unpickedGroups = groupExercisesByMuscle(unpickedExercises, activeWorkout.splitId);
-    const { done: pickedDone, total: pickedTotal } = countPickedExercisesDone(activeWorkout.exercises);
+    const { done: pickedDone, total: pickedTotal } = countPickedVariationsDone(activeWorkout.exercises);
     const addedExerciseIds = activeWorkout.addedExerciseIds ?? [];
     const removeTarget = removeConfirmId
       ? activeWorkout.exercises.find((e) => e.exerciseId === removeConfirmId)
@@ -1007,7 +1007,7 @@ export default function WorkoutPage() {
                     </span>
                     {pickedTotal > 0 && (
                       <span className="text-muted-foreground text-xs">
-                        {pickedDone} of {pickedTotal} exercises done
+                        {pickedDone} of {pickedTotal} variations done
                       </span>
                     )}
                   </div>

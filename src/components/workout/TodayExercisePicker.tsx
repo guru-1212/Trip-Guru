@@ -14,7 +14,11 @@ import type {
   TodayExercisePick,
 } from '@/workout/types';
 import { MUSCLE_COLORS } from '@/workout/constants';
-import { groupLibraryExercisesByMuscle, toSubVariationLabel } from '@/workout/utils';
+import {
+  countVariationsInTodayPicks,
+  groupLibraryExercisesByMuscle,
+  toSubVariationLabel,
+} from '@/workout/utils';
 import { cn } from '@/lib/utils';
 
 interface TodayExercisePickerProps {
@@ -54,6 +58,15 @@ export function TodayExercisePicker({
 }: TodayExercisePickerProps) {
   const grouped = groupLibraryExercisesByMuscle(exercises, splitId);
   const exerciseById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
+  const pickedVariationCount = useMemo(() => countVariationsInTodayPicks(picks), [picks]);
+  const totalVariationCount = useMemo(
+    () =>
+      exercises.reduce(
+        (sum, ex) => sum + getVariationsForExercise(ex.id, ex.variations).length,
+        0
+      ),
+    [exercises, getVariationsForExercise]
+  );
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [search, setSearch] = useState('');
   const [rememberAdded, setRememberAdded] = useState(true);
@@ -548,7 +561,7 @@ export function TodayExercisePicker({
           </p>
         </div>
         <span className="text-sm font-semibold text-primary tabular-nums shrink-0">
-          {picks.length} of {exercises.length}
+          {pickedVariationCount} of {totalVariationCount} variations
         </span>
       </div>
 

@@ -97,6 +97,7 @@ export interface WeeklyGoals {
   volumeTarget: number;
   proteinGoal: number;
   sleepGoal: number;
+  targetWeight?: number;
   weekStart: string;
 }
 

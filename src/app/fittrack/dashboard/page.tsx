@@ -47,6 +47,7 @@ import { MUSCLE_COLORS, SPLIT_NAMES } from '@/workout/constants';
 import {
   calcStreak,
   displayWeight,
+  inputToKg,
   formatDuration,
   formatWeight,
   getMuscleFromSplit,
@@ -415,6 +416,16 @@ export default function DashboardPage() {
           />
         </div>
       </motion.div>
+
+      {/* Weight Tracking */}
+      <WeightTrackingCard
+        bodyStats={useWorkoutStore().bodyStats}
+        targetWeight={weeklyGoals.targetWeight ?? 75}
+        unit={profile.prefs.unit}
+        onAddStat={useWorkoutStore().addBodyStat}
+        onUpdateTarget={(weight) => useWorkoutStore().updateWeeklyGoals({ targetWeight: weight })}
+        variants={item}
+      />
 
       {/* Weekly body-part frequency */}
       <WeeklyMuscleFrequency
@@ -1334,5 +1345,270 @@ function MetricCard({
         </p>
       </div>
     </motion.div>
+  );
+}
+
+function WeightTrackingCard({
+  bodyStats,
+  targetWeight,
+  unit,
+  onAddStat,
+  onUpdateTarget,
+  variants,
+}: {
+  bodyStats: any[];
+  targetWeight: number;
+  unit: string;
+  onAddStat: (stat: any) => void;
+  onUpdateTarget: (weight: number) => void;
+  variants: any;
+}) {
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [isEditingTarget, setIsEditingTarget] = useState(false);
+  const [targetInput, setTargetInput] = useState('');
+  const [isAddingWeight, setIsAddingWeight] = useState(false);
+  const [weightInput, setWeightInput] = useState('');
+
+  const selectedWeekStart = useMemo(() => getTrackingWeekStart().subtract(weekOffset, 'week'), [weekOffset]);
+  const selectedWeekEnd = useMemo(() => selectedWeekStart.add(6, 'day').endOf('day'), [selectedWeekStart]);
+
+  const weekStats = useMemo(() => {
+    return bodyStats
+      .filter((s) => {
+        const d = dayjs(s.date);
+        return (
+          (d.isSame(selectedWeekStart) || d.isAfter(selectedWeekStart)) &&
+          (d.isSame(selectedWeekEnd) || d.isBefore(selectedWeekEnd))
+        );
+      })
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [bodyStats, selectedWeekStart, selectedWeekEnd]);
+
+  const currentWeight = weekStats[0]?.weight;
+  const targetDisp = displayWeight(targetWeight, unit as any);
+
+  const handleSaveTarget = () => {
+    const val = parseFloat(targetInput);
+    if (!isNaN(val) && val > 0) {
+      onUpdateTarget(inputToKg(val, unit as any));
+      setIsEditingTarget(false);
+    }
+  };
+
+  const handleAddWeight = () => {
+    const val = parseFloat(weightInput);
+    if (!isNaN(val) && val > 0) {
+      onAddStat({
+        date: selectedWeekStart.format('YYYY-MM-DD'),
+        weight: inputToKg(val, unit as any),
+      });
+      setIsAddingWeight(false);
+      setWeightInput('');
+      toast.success('Weekly weight logged');
+    }
+  };
+
+  const diff = currentWeight ? displayWeight(currentWeight, unit as any) - targetDisp : 0;
+  const absDiff = Math.abs(diff);
+
+  return (
+    <DashboardPanel
+      variants={variants}
+      icon={TrendingUp}
+      title="Weekly Weight Tracker"
+      description="Track your consistency and reach your target"
+      headerExtra={
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              setWeekOffset((o) => o + 1);
+              setIsAddingWeight(false);
+            }}
+            className="p-2 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <div className="px-3 py-1.5 rounded-xl border border-border bg-muted/20 min-w-[140px] text-center">
+            <p className="text-[10px] font-black uppercase tracking-widest text-primary">
+              {weekOffset === 0 ? 'This Week' : `Week ${getTrackingWeekNumber(selectedWeekStart)}`}
+            </p>
+            <p className="text-xs font-black">
+              {selectedWeekStart.format('MMM D')} - {selectedWeekEnd.format('MMM D')}
+            </p>
+          </div>
+          <button
+            disabled={weekOffset === 0}
+            onClick={() => {
+              setWeekOffset((o) => Math.max(0, o - 1));
+              setIsAddingWeight(false);
+            }}
+            className="p-2 rounded-xl border border-border bg-muted/30 hover:bg-muted/50 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <div className="p-6 rounded-2xl border border-border/60 bg-muted/10 relative overflow-hidden group min-h-[120px] flex flex-col justify-center">
+            <div className="relative z-10">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">
+                Target Weight
+              </p>
+              {isEditingTarget ? (
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    autoFocus
+                    type="number"
+                    step="0.1"
+                    className="ft-input h-10 w-24 text-lg font-black"
+                    value={targetInput}
+                    onChange={(e) => setTargetInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveTarget()}
+                  />
+                  <button
+                    onClick={handleSaveTarget}
+                    className="ft-btn ft-btn--primary py-2 px-4 text-[10px]"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setIsEditingTarget(false)}
+                    className="text-muted-foreground text-[10px] font-black uppercase hover:text-foreground transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-baseline gap-2">
+                  <span className="text-4xl font-black tracking-tighter">
+                    {targetDisp}
+                    <span className="text-lg ml-1 font-black opacity-40">{unit}</span>
+                  </span>
+                  <button
+                    onClick={() => {
+                      setTargetInput(String(targetDisp));
+                      setIsEditingTarget(true);
+                    }}
+                    className="text-primary text-[10px] font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity ml-2"
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="p-6 rounded-2xl border border-border/60 bg-muted/10 min-h-[120px] flex flex-col justify-center">
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">
+              {weekOffset === 0 ? "Current Week's Weight" : "Logged Weight"}
+            </p>
+            {currentWeight ? (
+              <div className="flex items-baseline gap-3">
+                <span className="text-4xl font-black tracking-tighter text-primary">
+                  {displayWeight(currentWeight, unit as any)}
+                  <span className="text-lg ml-1 font-black opacity-40">{unit}</span>
+                </span>
+                <span
+                  className={cn(
+                    'text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-lg',
+                    diff === 0 ? 'bg-muted text-muted-foreground' : 
+                    diff > 0 ? 'bg-orange-500/10 text-orange-500' : 'bg-emerald-500/10 text-emerald-500'
+                  )}
+                >
+                  {diff === 0 ? 'On Target' : `${absDiff.toFixed(1)} ${unit} ${diff > 0 ? 'Above' : 'Below'}`}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-bold text-muted-foreground">No entry for this week</p>
+                {!isAddingWeight && (
+                  <button
+                    onClick={() => setIsAddingWeight(true)}
+                    className="ft-btn ft-btn--primary py-2 px-6 text-[10px] font-black uppercase tracking-widest"
+                  >
+                    Log Weight
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="p-6 rounded-2xl border border-border/60 bg-muted/10 h-full flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-end mb-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                  Goal Progress
+                </p>
+                {currentWeight && (
+                  <p className="text-xs font-black text-primary">
+                    {absDiff === 0 ? 'Goal reached!' : `${absDiff.toFixed(1)} ${unit} to go`}
+                  </p>
+                )}
+              </div>
+              <div className="h-3 rounded-full bg-muted/60 overflow-hidden relative">
+                {currentWeight && (
+                  <motion.div
+                    className="h-full bg-primary"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.min(100, Math.max(5, (targetDisp / displayWeight(currentWeight, unit as any)) * 100))}%` }}
+                    transition={{ duration: 1, ease: 'easeOut' }}
+                  />
+                )}
+              </div>
+            </div>
+
+            <AnimatePresence>
+              {isAddingWeight && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="mt-6 p-5 rounded-xl border border-primary/30 bg-primary/5"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-widest text-primary mb-3">
+                    Log Weight for {selectedWeekStart.format('MMM D')}
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      autoFocus
+                      type="number"
+                      step="0.1"
+                      className="ft-input flex-1 h-11 text-lg font-black"
+                      placeholder={`Weight in ${unit}`}
+                      value={weightInput}
+                      onChange={(e) => setWeightInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleAddWeight()}
+                    />
+                    <button
+                      onClick={handleAddWeight}
+                      className="ft-btn ft-btn--primary h-11 px-6 font-black uppercase tracking-widest text-xs"
+                    >
+                      Log
+                    </button>
+                    <button
+                      onClick={() => setIsAddingWeight(false)}
+                      className="text-muted-foreground text-[10px] font-black uppercase p-2"
+                    >
+                      <ChevronRight className="h-4 w-4 rotate-90" />
+                    </button>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            {!currentWeight && !isAddingWeight && (
+               <div className="flex flex-col items-center justify-center py-4 opacity-40">
+                  <Activity className="h-12 w-12 text-muted-foreground mb-2" />
+                  <p className="text-[10px] font-black uppercase tracking-widest">Awaiting Data Point</p>
+               </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </DashboardPanel>
   );
 }

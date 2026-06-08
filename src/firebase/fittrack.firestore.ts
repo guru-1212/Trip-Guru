@@ -90,6 +90,7 @@ export function defaultStateDoc(): FitTrackStateDoc {
       volumeTarget: 50000,
       proteinGoal: 150,
       sleepGoal: 8,
+      targetWeight: 75,
       weekStart: getWeekStart(),
     },
     checklist: {
