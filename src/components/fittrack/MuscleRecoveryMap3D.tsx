@@ -194,6 +194,6 @@ export function MuscleRecoveryMap3D({ data }: { data: Record<string, MuscleData>
     </div>
   );
 }
-
 // Pre-load the model to avoid pop-in
 useGLTF.preload('/models/human_muscles.glb');
+

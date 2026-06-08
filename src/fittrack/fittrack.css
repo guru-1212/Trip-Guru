@@ -815,6 +815,36 @@
   z-index: 10;
 }
 
+.ft-sequence-row--locked {
+  cursor: default;
+  touch-action: auto;
+}
+
+.ft-sequence-lock-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--ft-radius);
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  box-shadow: var(--ft-shadow);
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.ft-sequence-lock-btn:hover {
+  background: hsl(var(--muted) / 0.5);
+  border-color: hsl(var(--primary) / 0.35);
+}
+
+.ft-sequence-lock-btn--active {
+  border-color: hsl(var(--primary) / 0.45);
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+}
+
 .ft-sequence-index {
   display: flex;
   align-items: center;
@@ -830,6 +860,12 @@
   flex-shrink: 0;
 }
 
+.ft-today-picker-locked .ft-today-picker-row--locked {
+  cursor: default;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
 .ft-today-variation-block {
   margin-left: 2rem;
   padding: 0.75rem;
@@ -839,6 +875,49 @@
   display: flex;
   flex-direction: column;
   gap: 0.625rem;
+}
+
+.ft-today-variation-block--locked {
+  pointer-events: auto;
+  opacity: 0.9;
+}
+
+.ft-variation-seq-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--ft-radius-md);
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  touch-action: none;
+  user-select: none;
+}
+
+.ft-variation-seq-row[data-dragging='true'] {
+  border-color: hsl(var(--primary) / 0.45);
+  box-shadow: var(--ft-shadow-md);
+  z-index: 10;
+}
+
+.ft-variation-seq-row--locked {
+  cursor: default;
+  touch-action: auto;
+}
+
+.ft-variation-seq-index {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.125rem;
+  height: 1.125rem;
+  border-radius: 9999px;
+  font-size: 0.5625rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  background: hsl(var(--primary) / 0.12);
+  color: hsl(var(--primary));
+  flex-shrink: 0;
 }
 
 .ft-today-variation-label {
