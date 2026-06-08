@@ -11,6 +11,10 @@ export type MuscleGroup =
   | 'Legs'
   | 'Core';
 
+export type BodyPartFilter = MuscleGroup | 'All';
+
+export type ImageUploadFilter = 'all' | 'missing';
+
 export type ExerciseCategory = MuscleGroup | 'Compound' | 'Isolation';
 
 export type Difficulty = 'Beginner' | 'Intermediate' | 'Advanced';

@@ -75,6 +75,13 @@ interface WorkoutContextValue {
   addChecklistItem: (label: string) => void;
   deleteChecklistItem: (id: string) => void;
   addVariation: (exerciseId: string, variation: string) => void;
+  removeVariation: (exerciseId: string, variation: string, baseVariations: string[]) => void;
+  renameVariation: (
+    exerciseId: string,
+    oldName: string,
+    newName: string,
+    baseVariations: string[]
+  ) => void;
   getVariationsForExercise: (exerciseId: string, baseVariations: string[]) => string[];
   setVariationImage: (exerciseId: string, variation: string, imageSrc: string) => void;
   uploadVariationImageFromFile: (exerciseId: string, variation: string, file: File) => Promise<void>;
@@ -483,6 +490,115 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     [syncVariationImagesToCloud]
   );
 
+  const removeVariation = useCallback(
+    (exerciseId: string, variation: string, _baseVariations: string[]) => {
+      const customEx = customExercises.find((e) => e.id === exerciseId);
+      if (customEx) {
+        if (customEx.variations.length <= 1) {
+          toast.error('Keep at least one variation');
+          return;
+        }
+        if (!customEx.variations.includes(variation)) return;
+        updateCustomExercise(exerciseId, {
+          variations: customEx.variations.filter((v) => v !== variation),
+        });
+        removeVariationImage(exerciseId, variation);
+        return;
+      }
+
+      const custom = customVariations[exerciseId] ?? [];
+      if (!custom.includes(variation)) {
+        toast.error('Cannot remove built-in variations');
+        return;
+      }
+
+      setCustomVariations((prev) => {
+        const nextList = (prev[exerciseId] ?? []).filter((v) => v !== variation);
+        const next = { ...prev };
+        if (nextList.length) next[exerciseId] = nextList;
+        else delete next[exerciseId];
+        persistState({ customVariations: next });
+        toast.success('Variation removed');
+        return next;
+      });
+      removeVariationImage(exerciseId, variation);
+    },
+    [customExercises, customVariations, persistState, removeVariationImage, updateCustomExercise]
+  );
+
+  const renameVariation = useCallback(
+    (exerciseId: string, oldName: string, newName: string, baseVariations: string[]) => {
+      const trimmed = newName.trim();
+      if (!trimmed) {
+        toast.error('Enter a variation name');
+        return;
+      }
+      if (trimmed === oldName) return;
+
+      const customEx = customExercises.find((e) => e.id === exerciseId);
+      const allCurrent = customEx
+        ? customEx.variations
+        : Array.from(new Set([...baseVariations, ...(customVariations[exerciseId] ?? [])]));
+
+      if (allCurrent.includes(trimmed)) {
+        toast.error('Variation already exists');
+        return;
+      }
+
+      if (customEx) {
+        if (!customEx.variations.includes(oldName)) return;
+        setCustomExercises((prev) => {
+          const next = prev.map((e) =>
+            e.id === exerciseId
+              ? { ...e, variations: e.variations.map((v) => (v === oldName ? trimmed : v)) }
+              : e
+          );
+          const updated = next.find((e) => e.id === exerciseId);
+          const currentUid = uidRef.current;
+          if (currentUid && updated) {
+            fittrackDb
+              .saveFitTrackCustomExercise(currentUid, updated)
+              .catch(() => toast.error('Failed to update exercise'));
+          }
+          return next;
+        });
+      } else {
+        const custom = customVariations[exerciseId] ?? [];
+        if (!custom.includes(oldName)) {
+          toast.error('Cannot rename built-in variations');
+          return;
+        }
+        setCustomVariations((prev) => {
+          const next = {
+            ...prev,
+            [exerciseId]: (prev[exerciseId] ?? []).map((v) => (v === oldName ? trimmed : v)),
+          };
+          persistState({ customVariations: next });
+          return next;
+        });
+      }
+
+      setVariationImages((prev) => {
+        const oldKey = variationImageKey(exerciseId, oldName);
+        const img = prev[oldKey];
+        if (!img) return prev;
+        const next = { ...prev, [variationImageKey(exerciseId, trimmed)]: img };
+        delete next[oldKey];
+        try {
+          localStorage.saveVariationImages(next);
+        } catch (err) {
+          console.error('[FitTrack] variation image rename failed:', err);
+          return prev;
+        }
+        void syncVariationImagesToCloud(next);
+        return next;
+      });
+
+      toast.success('Variation renamed');
+    },
+    [customExercises, customVariations, persistState, syncVariationImagesToCloud]
+  );
+
   const getVariationImage = useCallback(
     (exerciseId: string, variation: string) => {
       return variationImages[variationImageKey(exerciseId, variation)];
@@ -668,6 +784,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       addChecklistItem,
       deleteChecklistItem,
       addVariation,
+      removeVariation,
+      renameVariation,
       getVariationsForExercise,
       setVariationImage,
       uploadVariationImageFromFile,
@@ -719,6 +837,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       addChecklistItem,
       deleteChecklistItem,
       addVariation,
+      removeVariation,
+      renameVariation,
       getVariationsForExercise,
       setVariationImage,
       uploadVariationImageFromFile,

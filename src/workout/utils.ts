@@ -1010,6 +1010,104 @@ export function variationImageKey(exerciseId: string, variation: string): string
   return `${exerciseId}::${variation}`;
 }
 
+const LIBRARY_MUSCLE_ORDER: MuscleGroup[] = [
+  'Chest',
+  'Back',
+  'Shoulders',
+  'Triceps',
+  'Biceps',
+  'Legs',
+  'Core',
+];
+
+export function groupLibraryExercisesByMuscleAll(
+  exercises: LibraryExercise[]
+): { muscle: string; exercises: LibraryExercise[] }[] {
+  const groups = new Map<string, LibraryExercise[]>();
+  for (const ex of exercises) {
+    const list = groups.get(ex.muscle) ?? [];
+    list.push(ex);
+    groups.set(ex.muscle, list);
+  }
+
+  const result: { muscle: string; exercises: LibraryExercise[] }[] = [];
+  for (const muscle of LIBRARY_MUSCLE_ORDER) {
+    const list = groups.get(muscle);
+    if (list?.length) {
+      result.push({ muscle, exercises: [...list].sort((a, b) => a.name.localeCompare(b.name)) });
+      groups.delete(muscle);
+    }
+  }
+  Array.from(groups.entries()).forEach(([muscle, list]) => {
+    if (list.length) {
+      result.push({ muscle, exercises: [...list].sort((a, b) => a.name.localeCompare(b.name)) });
+    }
+  });
+  return result;
+}
+
+export function validateImageHttpUrl(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) return 'Enter an image URL';
+  try {
+    const parsed = new URL(trimmed);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return 'URL must start with http:// or https://';
+    }
+    return null;
+  } catch {
+    return 'Enter a valid URL';
+  }
+}
+
+export function isCustomAddedVariation(
+  exerciseId: string,
+  variation: string,
+  baseVariations: string[],
+  customVariations: Record<string, string[]>
+): boolean {
+  return (customVariations[exerciseId] ?? []).includes(variation);
+}
+
+export function canRemoveVariation(
+  isCustomExercise: boolean,
+  variation: string,
+  variations: string[],
+  exerciseId: string,
+  baseVariations: string[],
+  customVariations: Record<string, string[]>
+): boolean {
+  if (isCustomExercise) return variations.length > 1;
+  return isCustomAddedVariation(exerciseId, variation, baseVariations, customVariations);
+}
+
+export function canRenameVariation(
+  isCustomExercise: boolean,
+  variation: string,
+  exerciseId: string,
+  baseVariations: string[],
+  customVariations: Record<string, string[]>
+): boolean {
+  if (isCustomExercise) return true;
+  return isCustomAddedVariation(exerciseId, variation, baseVariations, customVariations);
+}
+
+export function getVariationsMissingUploadedImage(
+  exerciseId: string,
+  allVariations: string[],
+  getImage: (exerciseId: string, variation: string) => string | undefined
+): string[] {
+  return allVariations.filter((v) => !getImage(exerciseId, v));
+}
+
+export function exerciseHasMissingUploadedImage(
+  exerciseId: string,
+  allVariations: string[],
+  getImage: (exerciseId: string, variation: string) => string | undefined
+): boolean {
+  return getVariationsMissingUploadedImage(exerciseId, allVariations, getImage).length > 0;
+}
+
 export function defaultExerciseImageUrl(exerciseId: string): string {
   return `https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=800&exercise=${exerciseId}`;
 }

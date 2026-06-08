@@ -1,526 +1,125 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import dayjs from 'dayjs';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Search, Plus, Pencil, Trash2, X } from 'lucide-react';
+import { useState } from 'react';
+import { ImageOff, Search } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
-import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm';
+import { ExerciseLibraryManager } from '@/components/workout/ExerciseLibraryManager';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
-import { EXERCISE_LIBRARY } from '@/workout/exerciseLibrary';
-import { getExerciseSessionChart, getExerciseHistory } from '@/workout/analytics';
-import type { CustomExercise, ExerciseCategory, LibraryExercise, MuscleGroup } from '@/workout/types';
-import {
-  getLastExerciseSession,
-  formatWeight,
-  defaultExerciseImageUrl,
-  resolveExerciseImageUrl,
-} from '@/workout/utils';
+import { MUSCLE_COLORS } from '@/workout/constants';
+import type { BodyPartFilter, ImageUploadFilter, MuscleGroup } from '@/workout/types';
+import { cn } from '@/lib/utils';
 
-type FilterType = ExerciseCategory | 'All';
+const BODY_PART_FILTERS: { id: BodyPartFilter; label: string }[] = [
+  { id: 'All', label: 'All' },
+  { id: 'Chest', label: 'Chest' },
+  { id: 'Back', label: 'Back' },
+  { id: 'Shoulders', label: 'Shoulders' },
+  { id: 'Triceps', label: 'Triceps' },
+  { id: 'Biceps', label: 'Biceps' },
+  { id: 'Legs', label: 'Legs' },
+  { id: 'Core', label: 'Core' },
+];
 
-const FILTERS: FilterType[] = [
-  'All',
-  'Chest',
-  'Back',
-  'Shoulders',
-  'Triceps',
-  'Biceps',
-  'Legs',
-  'Core',
-  'Compound',
-  'Isolation',
+const IMAGE_FILTERS: { id: ImageUploadFilter; label: string; icon?: typeof ImageOff }[] = [
+  { id: 'all', label: 'All images' },
+  { id: 'missing', label: 'Not uploaded yet', icon: ImageOff },
 ];
 
 export default function ExercisesPage() {
-  const {
-    workouts,
-    prs,
-    customExercises,
-    profile,
-    hydrated,
-    addCustomExercise,
-    updateCustomExercise,
-    deleteCustomExercise,
-    getVariationImage,
-    getVariationsForExercise,
-  } = useWorkoutStore();
-
+  const { hydrated } = useWorkoutStore();
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<FilterType>('All');
-  const [selected, setSelected] = useState<LibraryExercise | CustomExercise | null>(null);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState<CustomExercise | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<CustomExercise | null>(null);
-  const [deletePin, setDeletePin] = useState('');
-  const [deletePinError, setDeletePinError] = useState(false);
-
-  const allExercises = useMemo(() => {
-    const custom: LibraryExercise[] = customExercises.map((c) => ({
-      id: c.id,
-      name: c.name,
-      muscle: c.muscle,
-      secondary: c.secondary,
-      equipment: c.equipment,
-      difficulty: c.difficulty,
-      variations: c.variations,
-      tips: c.notes ? [c.notes] : ['Focus on controlled movement', 'Maintain proper form'],
-      splitIds: [],
-      category: [c.muscle, 'Isolation'],
-    }));
-    return [...EXERCISE_LIBRARY, ...custom];
-  }, [customExercises]);
-
-  const filtered = useMemo(() => {
-    return allExercises.filter((ex) => {
-      const q = search.toLowerCase();
-      const matchSearch =
-        !q ||
-        ex.name.toLowerCase().includes(q) ||
-        ex.muscle.toLowerCase().includes(q) ||
-        (ex.secondary?.toLowerCase().includes(q) ?? false);
-      const matchFilter =
-        filter === 'All' ||
-        ex.muscle === filter ||
-        ex.category.includes(filter);
-      return matchSearch && matchFilter;
-    });
-  }, [allExercises, search, filter]);
-
-  const isCustom = (id: string) => customExercises.some((c) => c.id === id);
+  const [bodyPart, setBodyPart] = useState<BodyPartFilter>('All');
+  const [imageFilter, setImageFilter] = useState<ImageUploadFilter>('all');
 
   if (!hydrated) return <div className="text-muted-foreground">Loading...</div>;
 
   return (
     <PageTransition>
       <div className="space-y-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+        <header>
           <h1 className="ft-title text-2xl font-bold">Exercise Library</h1>
-          <button type="button" onClick={() => { setShowForm(true); setEditing(null); }} className="ft-btn ft-btn--primary flex items-center gap-2 text-sm">
-            <Plus className="h-4 w-4" /> Add Custom Exercise
-          </button>
-        </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage exercises, variations, and images in one place. Changes sync everywhere automatically.
+          </p>
+        </header>
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             className="ft-input pl-10"
-            placeholder="Search exercises or muscle groups..."
+            placeholder="Search exercises, muscles, or variations..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {FILTERS.map((f) => (
-            <button
-              key={f}
-              type="button"
-              onClick={() => setFilter(f)}
-              className={`text-xs px-3 py-1.5 rounded-full border font-medium ${
-                filter === f
-                  ? 'bg-primary border-primary text-white'
-                  : 'border-border text-muted-foreground'
-              }`}
-            >
-              {f}
-            </button>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((ex) => {
-            const last = getLastExerciseSession(workouts, ex.id);
-            const pr = prs[ex.id];
-            const variations = getVariationsForExercise(ex.id, ex.variations);
-            const imageUrl = resolveExerciseImageUrl(ex.id, variations, getVariationImage);
-            return (
-              <button
-                key={ex.id}
-                type="button"
-                onClick={() => setSelected(ex)}
-                className="ft-card text-left hover:border-primary transition-colors overflow-hidden p-0"
-              >
-                <div className="aspect-[16/10] w-full overflow-hidden bg-muted/20">
-                  <img
-                    src={imageUrl}
-                    alt={ex.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = defaultExerciseImageUrl(ex.id);
-                    }}
-                  />
-                </div>
-                <div className="ft-card-padded pt-3">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-semibold">{ex.name}</h3>
-                  {isCustom(ex.id) && (
-                    <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const c = customExercises.find((x) => x.id === ex.id);
-                          if (c) { setEditing(c); setShowForm(true); }
-                        }}
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const c = customExercises.find((x) => x.id === ex.id);
-                          if (c) {
-                            setDeleteConfirm(c);
-                            setDeletePin('');
-                            setDeletePinError(false);
-                          }
-                        }}
-                        className="text-red-500 hover:text-red-400"
-                        aria-label={`Delete ${ex.name}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  <span className="ft-badge ft-badge--primary">{ex.muscle}</span>
-                  <span className="ft-badge ft-badge--primary">{ex.equipment}</span>
-                  <span className={`ft-badge ft-badge--primary ${
-                    ex.difficulty === 'Beginner' ? 'ft-badge ft-badge--primary-accent' :
-                    ex.difficulty === 'Intermediate' ? 'ft-badge ft-badge--primary-warning' : 'ft-badge ft-badge--primary-danger'
-                  }`}>{ex.difficulty}</span>
-                </div>
-                {last && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Last: {dayjs(last.date).format('MMM D')} — {formatWeight(last.bestSet.weight, profile.prefs.unit)} × {last.bestSet.reps}
-                  </p>
-                )}
-                {pr && !last && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    PR: {formatWeight(pr.weight, profile.prefs.unit)} × {pr.reps}
-                  </p>
-                )}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {selected && (
-          <ExerciseDetailModal
-            exercise={selected}
-            workouts={workouts}
-            prs={prs}
-            unit={profile.prefs.unit}
-            getVariationImage={getVariationImage}
-            getVariationsForExercise={getVariationsForExercise}
-            onClose={() => setSelected(null)}
-          />
-        )}
-
-        {deleteConfirm && (
-          <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={() => setDeleteConfirm(null)}>
-            <div className="ft-card ft-card-padded max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
-              <div className="text-center">
-                <div className="w-12 h-12 rounded-xl bg-red-500/10 flex items-center justify-center text-red-500 mx-auto mb-4">
-                  <Trash2 className="h-6 w-6" />
-                </div>
-                <h2 className="ft-title text-lg font-bold">Delete exercise?</h2>
-                <p className="text-sm text-muted-foreground mt-2">
-                  <strong>{deleteConfirm.name}</strong> will be permanently removed from your library.
-                </p>
-              </div>
-              <PinConfirm
-                value={deletePin}
-                onChange={(v) => {
-                  setDeletePin(v);
-                  setDeletePinError(false);
-                }}
-                error={deletePinError}
-                label="Enter password to delete"
-              />
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  className="ft-btn ft-btn--secondary flex-1"
-                  onClick={() => {
-                    setDeleteConfirm(null);
-                    setDeletePin('');
-                    setDeletePinError(false);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="ft-btn ft-btn--danger flex-1"
-                  onClick={() => {
-                    if (deletePin !== FINISH_WORKOUT_PIN) {
-                      setDeletePinError(true);
-                      return;
-                    }
-                    deleteCustomExercise(deleteConfirm.id);
-                    if (selected?.id === deleteConfirm.id) setSelected(null);
-                    setDeleteConfirm(null);
-                    setDeletePin('');
-                    setDeletePinError(false);
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showForm && (
-          <CustomExerciseForm
-            initial={editing}
-            onClose={() => { setShowForm(false); setEditing(null); }}
-            onSave={(data) => {
-              if (editing) updateCustomExercise(editing.id, data);
-              else addCustomExercise(data);
-              setShowForm(false);
-              setEditing(null);
-            }}
-          />
-        )}
-      </div>
-    </PageTransition>
-  );
-}
-
-function ExerciseDetailModal({
-  exercise,
-  workouts,
-  prs,
-  unit,
-  getVariationImage,
-  getVariationsForExercise,
-  onClose,
-}: {
-  exercise: LibraryExercise | CustomExercise;
-  workouts: ReturnType<typeof useWorkoutStore>['workouts'];
-  prs: ReturnType<typeof useWorkoutStore>['prs'];
-  unit: 'kg' | 'lbs';
-  getVariationImage: ReturnType<typeof useWorkoutStore>['getVariationImage'];
-  getVariationsForExercise: ReturnType<typeof useWorkoutStore>['getVariationsForExercise'];
-  onClose: () => void;
-}) {
-  const variations = getVariationsForExercise(exercise.id, exercise.variations);
-  const [previewVariation, setPreviewVariation] = useState(
-    variations.find((v) => getVariationImage(exercise.id, v)) ?? variations[0] ?? 'Standard'
-  );
-  const heroImage = resolveExerciseImageUrl(
-    exercise.id,
-    variations,
-    getVariationImage,
-    previewVariation
-  );
-  const chartData = getExerciseSessionChart(workouts, exercise.id, 6);
-  const pr = prs[exercise.id];
-  const tips = 'tips' in exercise ? exercise.tips : (exercise.notes ? [exercise.notes] : []);
-
-  return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="ft-card max-w-lg w-full max-h-[90vh] overflow-y-auto p-0" onClick={(e) => e.stopPropagation()}>
-        <div className="relative aspect-[16/10] w-full overflow-hidden bg-muted/20">
-          <img
-            src={heroImage}
-            alt={`${exercise.name} — ${previewVariation}`}
-            className="w-full h-full object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = defaultExerciseImageUrl(exercise.id);
-            }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent pointer-events-none" />
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-3 right-3 p-2 rounded-xl bg-black/50 hover:bg-black/70 text-white transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-          <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
-            <h2 className="ft-title text-xl font-bold text-white">{exercise.name}</h2>
-            <p className="text-xs text-white/80 mt-0.5">{previewVariation}</p>
-            <span className="ft-badge ft-badge--primary mt-2">{exercise.muscle}</span>
-          </div>
-        </div>
-
-        <div className="ft-card-padded space-y-4">
+        <div className="space-y-3">
           <div>
-            <h4 className="text-xs text-muted-foreground font-medium mb-2">Variations</h4>
-            <div className="flex flex-wrap gap-1.5">
-              {variations.map((v) => {
-                const thumb = getVariationImage(exercise.id, v);
-                const isActive = previewVariation === v;
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
+              Body part
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {BODY_PART_FILTERS.map(({ id, label }) => {
+                const active = bodyPart === id;
+                const color = id !== 'All' ? MUSCLE_COLORS[id] : undefined;
                 return (
                   <button
-                    key={v}
+                    key={id}
                     type="button"
-                    onClick={() => setPreviewVariation(v)}
-                    className={`flex items-center gap-2 text-xs px-2 py-1.5 rounded-lg border transition-colors ${
-                      isActive
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-border bg-muted/30 text-foreground'
-                    }`}
-                  >
-                    {thumb && (
-                      <img
-                        src={thumb}
-                        alt={v}
-                        className="w-6 h-6 rounded object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
+                    onClick={() => setBodyPart(id)}
+                    className={cn(
+                      'text-xs px-3 py-1.5 rounded-full border font-semibold transition-colors',
+                      active
+                        ? 'border-transparent text-white shadow-sm'
+                        : 'border-border text-muted-foreground hover:border-primary/30 hover:text-foreground'
                     )}
-                    {v}
+                    style={
+                      active && color
+                        ? { backgroundColor: color, borderColor: color }
+                        : active
+                          ? { backgroundColor: 'hsl(var(--primary))', borderColor: 'hsl(var(--primary))' }
+                          : undefined
+                    }
+                  >
+                    {label}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {pr && (
-            <div className="p-3 rounded-lg bg-[rgba(29,158,117,0.1)] border border-primary">
-              <p className="text-sm font-semibold">🏆 Best Set Ever</p>
-              <p className="text-lg font-bold">{formatWeight(pr.weight, unit)} × {pr.reps}</p>
-              <p className="text-xs text-muted-foreground">{dayjs(pr.date).format('MMM D, YYYY')} · {pr.variation}</p>
-            </div>
-          )}
-
-          {chartData.length > 0 && (
-            <div>
-              <h4 className="text-xs text-muted-foreground font-medium mb-2">Last 6 Sessions</h4>
-              <ResponsiveContainer width="100%" height={160}>
-                <LineChart data={chartData}>
-                  <XAxis dataKey="date" tick={{ fill: '#888', fontSize: 10 }} />
-                  <YAxis tick={{ fill: '#888', fontSize: 10 }} />
-                  <Tooltip contentStyle={{ background: '#222', border: '1px solid #333' }} />
-                  <Line type="monotone" dataKey="weight" stroke="#1D9E75" strokeWidth={2} dot={{ r: 3 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
           <div>
-            <h4 className="text-xs text-muted-foreground font-medium mb-2">Form Tips</h4>
-            <ul className="space-y-1">
-              {tips.map((t, i) => (
-                <li key={i} className="text-sm text-muted-foreground">• {t}</li>
-              ))}
-            </ul>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">
+              Images
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {IMAGE_FILTERS.map(({ id, label, icon: Icon }) => {
+                const active = imageFilter === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setImageFilter(id)}
+                    className={cn(
+                      'text-xs px-3 py-1.5 rounded-full border font-semibold inline-flex items-center gap-1.5 transition-colors',
+                      active
+                        ? id === 'missing'
+                          ? 'bg-amber-500 border-amber-500 text-white'
+                          : 'bg-primary border-primary text-white'
+                        : 'border-border text-muted-foreground hover:border-primary/30 hover:text-foreground'
+                    )}
+                  >
+                    {Icon && <Icon className="h-3.5 w-3.5" />}
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
+
+        <ExerciseLibraryManager search={search} bodyPart={bodyPart} imageFilter={imageFilter} />
       </div>
-    </div>
-  );
-}
-
-function CustomExerciseForm({
-  initial,
-  onClose,
-  onSave,
-}: {
-  initial: CustomExercise | null;
-  onClose: () => void;
-  onSave: (data: Omit<CustomExercise, 'id'>) => void;
-}) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [muscle, setMuscle] = useState<MuscleGroup>(initial?.muscle ?? 'Chest');
-  const [secondary, setSecondary] = useState<MuscleGroup | ''>(initial?.secondary ?? '');
-  const [equipment, setEquipment] = useState(initial?.equipment ?? 'Dumbbell');
-  const [difficulty, setDifficulty] = useState(initial?.difficulty ?? 'Beginner');
-  const [variations, setVariations] = useState<string[]>(initial?.variations ?? ['Standard']);
-  const [newVar, setNewVar] = useState('');
-  const [notes, setNotes] = useState(initial?.notes ?? '');
-
-  const muscles: MuscleGroup[] = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core'];
-
-  return (
-    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="ft-card ft-card-padded max-w-md w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <h2 className="ft-title text-xl font-bold mb-4">{initial ? 'Edit' : 'Add'} Custom Exercise</h2>
-        <div className="space-y-3">
-          <div>
-            <label className="text-xs text-muted-foreground">Name</label>
-            <input className="ft-input mt-1" value={name} onChange={(e) => setName(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Primary Muscle</label>
-              <select className="ft-input mt-1" value={muscle} onChange={(e) => setMuscle(e.target.value as MuscleGroup)}>
-                {muscles.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Secondary Muscle</label>
-              <select className="ft-input mt-1" value={secondary} onChange={(e) => setSecondary(e.target.value as MuscleGroup | '')}>
-                <option value="">None</option>
-                {muscles.map((m) => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground">Equipment</label>
-              <input className="ft-input mt-1" value={equipment} onChange={(e) => setEquipment(e.target.value)} />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground">Difficulty</label>
-              <select className="ft-input mt-1" value={difficulty} onChange={(e) => setDifficulty(e.target.value as typeof difficulty)}>
-                <option>Beginner</option>
-                <option>Intermediate</option>
-                <option>Advanced</option>
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Variations</label>
-            <div className="flex flex-wrap gap-1 mt-1">
-              {variations.map((v, i) => (
-                <span key={i} className="text-xs px-2 py-1 rounded bg-muted/30 flex items-center gap-1">
-                  {v}
-                  <button type="button" onClick={() => setVariations(variations.filter((_, j) => j !== i))}><X className="h-3 w-3" /></button>
-                </span>
-              ))}
-            </div>
-            <div className="flex gap-2 mt-2">
-              <input className="ft-input flex-1" placeholder="Add variation" value={newVar} onChange={(e) => setNewVar(e.target.value)} />
-              <button type="button" className="ft-btn ft-btn--secondary text-sm" onClick={() => { if (newVar.trim()) { setVariations([...variations, newVar.trim()]); setNewVar(''); } }}>Add</button>
-            </div>
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Notes</label>
-            <textarea className="ft-input mt-1 min-h-[60px]" value={notes} onChange={(e) => setNotes(e.target.value)} />
-          </div>
-        </div>
-        <div className="flex gap-3 mt-6">
-          <button type="button" className="ft-btn ft-btn--secondary flex-1" onClick={onClose}>Cancel</button>
-          <button
-            type="button"
-            className="ft-btn ft-btn--primary flex-1"
-            onClick={() => {
-              if (!name.trim()) return;
-              onSave({
-                name: name.trim(),
-                muscle,
-                secondary: secondary || undefined,
-                equipment,
-                difficulty,
-                variations: variations.length ? variations : ['Standard'],
-                notes,
-              });
-            }}
-          >
-            Save
-          </button>
-        </div>
-      </div>
-    </div>
+    </PageTransition>
   );
 }
