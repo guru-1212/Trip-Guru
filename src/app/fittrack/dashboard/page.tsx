@@ -62,7 +62,7 @@ import {
 import { PageTransition } from '@/components/workout/PageTransition';
 import { FitTrackInvitations } from '@/components/workout/FitTrackInvitations';
 import { getWeeklyMuscleTrainingCounts } from '@/workout/analytics';
-import { MuscleRecoveryMap3D } from '@/components/fittrack/MuscleRecoveryMap3D';
+import { MuscleRecoveryMap } from '@/components/fittrack/MuscleRecoveryMap';
 import { cn } from '@/lib/utils';
 
 dayjs.extend(relativeTime);
@@ -427,39 +427,15 @@ export default function DashboardPage() {
         variants={item}
       />
 
-      {/* 3D Muscle Recovery Heatmap */}
+      {/* Muscle Recovery Map */}
       <motion.div variants={item}>
         <DashboardPanel
           variants={item}
           icon={Activity}
-          title="Muscle Recovery Heatmap"
-          description="3D visualization of muscle fatigue and readiness"
-          badge={
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-              </span>
-              <span className="text-[10px] font-black uppercase tracking-widest">3D Intel</span>
-            </div>
-          }
+          title="Muscle Recovery"
+          description="Tap a muscle group to see fatigue and readiness"
         >
-          <MuscleRecoveryMap3D data={recoveryData} />
-          
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
-            <div className="p-4 rounded-2xl bg-muted/20 border border-border/50">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Status Protocol</p>
-              <p className="text-xs font-medium leading-relaxed">Colors indicate current physiological readiness based on training load and time.</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-muted/20 border border-border/50">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Recovery Window</p>
-              <p className="text-xs font-medium leading-relaxed">Most muscle groups require 48-72 hours for complete structural replenishment.</p>
-            </div>
-            <div className="p-4 rounded-2xl bg-muted/20 border border-border/50">
-              <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Interactive Sync</p>
-              <p className="text-xs font-medium leading-relaxed">Rotate the 3D map to inspect symmetry and group-specific fatigue patterns.</p>
-            </div>
-          </div>
+          <MuscleRecoveryMap data={recoveryData} />
         </DashboardPanel>
       </motion.div>
 
