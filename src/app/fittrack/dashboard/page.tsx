@@ -31,7 +31,7 @@ import {
   Share2,
   Activity,
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { WorkoutShareCard } from '@/components/workout/WorkoutShareCard';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
@@ -66,6 +66,9 @@ import { cn } from '@/lib/utils';
 export default function DashboardPage() {
   const { profile, workouts, weeklyGoals, hydrated, prs, updateWorkoutDate } = useWorkoutStore();
   const [feedWeekOffset, setFeedWeekOffset] = useState(0);
+  const [weeklyFrequencyOffset, setWeeklyFrequencyOffset] = useState(0);
+  const [targetProfileMode, setTargetProfileMode] = useState<'month' | 'week'>('month');
+  const [activeWeekIndex, setActiveWeekIndex] = useState(0);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<Record<string, string>>({});
   const [sharingId, setSharingId] = useState<string | null>(null);
@@ -113,7 +116,7 @@ export default function DashboardPage() {
     }
   };
 
-  const { muscleData, weeklyData } = useMemo(() => {
+  const { muscleData, weeklyData, weeklyMuscleSplit } = useMemo(() => {
     const last8Weeks = Array.from({ length: 8 })
       .map((_, i) => getTrackingWeekStart().subtract(i, 'week'))
       .reverse();
@@ -141,19 +144,56 @@ export default function DashboardPage() {
 
     const mData = Object.entries(mCounts).map(([muscle, count]) => ({ muscle, count }));
 
-    return { weeklyData: wData, muscleData: mData };
+    // Weekly Muscle Split for carousel (Last 8 weeks)
+    const wMuscleSplit = Array.from({ length: 8 }).map((_, i) => {
+      const start = getTrackingWeekStart().subtract(i, 'week');
+      const end = start.add(6, 'day').endOf('day');
+      const counts: Record<string, number> = {};
+      
+      workouts
+        .filter((w) => {
+          const d = dayjs(w.date);
+          return (d.isSame(start) || d.isAfter(start)) && (d.isSame(end) || d.isBefore(end));
+        })
+        .forEach((w) => {
+          const muscles = getMuscleFromSplit(w.splitId);
+          muscles.forEach((m) => {
+            counts[m] = (counts[m] || 0) + 1;
+          });
+        });
+
+      return {
+        label: `${start.format('MMM D')} – ${end.format('MMM D')}`,
+        data: Object.entries(counts).map(([muscle, count]) => ({ muscle, count })),
+      };
+    });
+
+    return { weeklyData: wData, muscleData: mData, weeklyMuscleSplit: wMuscleSplit };
   }, [workouts, profile.prefs.unit]);
 
+  const freqWeek = useMemo(() => {
+    return getTrackingWeekStart().subtract(weeklyFrequencyOffset, 'week');
+  }, [weeklyFrequencyOffset]);
+
   const weeklyMuscleCounts = useMemo(
-    () => getWeeklyMuscleTrainingCounts(workouts),
-    [workouts]
+    () => getWeeklyMuscleTrainingCounts(workouts, freqWeek),
+    [workouts, freqWeek]
   );
+
+  const freqWeekRangeLabel = useMemo(() => getTrackingWeekRangeLabel(freqWeek), [freqWeek]);
+  const freqWeekNumber = useMemo(() => getTrackingWeekNumber(freqWeek), [freqWeek]);
 
   const weekRangeLabel = useMemo(() => getTrackingWeekRangeLabel(), []);
 
   const calendarDays = useMemo(() => {
-    const start = dayjs().startOf('month').startOf('week');
-    const end = dayjs().endOf('month').endOf('week');
+    const monthStart = dayjs().startOf('month');
+    const startOffset = (monthStart.day() + 6) % 7;
+    const start = monthStart.subtract(startOffset, 'day');
+    
+    const monthEnd = dayjs().endOf('month');
+    const endOffset = (7 - monthEnd.day()) % 7;
+    const end = monthEnd.add(endOffset, 'day');
+
     const days = [];
     const workoutDates = new Set(workouts.map((w) => w.date));
 
@@ -161,6 +201,7 @@ export default function DashboardPage() {
       days.push({
         date: d.format('YYYY-MM-DD'),
         day: d.date(),
+        isCurrentMonth: d.month() === monthStart.month(),
         hasWorkout: workoutDates.has(d.format('YYYY-MM-DD')),
         isToday: d.isSame(dayjs(), 'day'),
       });
@@ -341,8 +382,11 @@ export default function DashboardPage() {
       {/* Weekly body-part frequency */}
       <WeeklyMuscleFrequency
         counts={weeklyMuscleCounts}
-        weekLabel={weekRangeLabel}
-        weekNumber={getTrackingWeekNumber()}
+        weekLabel={freqWeekRangeLabel}
+        weekNumber={freqWeekNumber}
+        offset={weeklyFrequencyOffset}
+        onOffsetChange={setWeeklyFrequencyOffset}
+        maxOffset={maxFeedWeekOffset}
         variants={item}
       />
 
@@ -384,54 +428,185 @@ export default function DashboardPage() {
           variants={item}
           icon={Target}
           title="Target Profile"
-          description={`Muscle split · ${dayjs().format('MMMM')}`}
-        >
-          {muscleData.length > 0 ? (
-            <div className="space-y-6">
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={muscleData}
-                    dataKey="count"
-                    nameKey="muscle"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={5}
-                  >
-                    {muscleData.map((entry) => (
-                      <Cell key={entry.muscle} fill={MUSCLE_COLORS[entry.muscle] ?? 'hsl(var(--primary))'} stroke="none" />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="grid grid-cols-2 gap-2">
-                {[...muscleData]
-                  .sort((a, b) => b.count - a.count)
-                  .map((entry) => (
-                    <div
-                      key={entry.muscle}
-                      className="flex items-center gap-2 min-w-0 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/40"
-                    >
-                      <span
-                        className="w-2.5 h-2.5 rounded-full shrink-0"
-                        style={{ backgroundColor: MUSCLE_COLORS[entry.muscle] ?? 'hsl(var(--primary))' }}
-                      />
-                      <span className="text-[11px] font-black tracking-tight truncate">{entry.muscle}</span>
-                      <span className="text-xs font-black text-primary tabular-nums ml-auto">{entry.count}</span>
-                    </div>
-                  ))}
-              </div>
+          description={
+            targetProfileMode === 'month' 
+              ? `Muscle split · ${dayjs().format('MMMM')}`
+              : `Muscle split · ${weeklyMuscleSplit[activeWeekIndex].label}`
+          }
+          headerExtra={
+            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/30 border border-border/50">
+              <button
+                onClick={() => setTargetProfileMode('month')}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all',
+                  targetProfileMode === 'month' 
+                    ? 'bg-background text-primary shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Month
+              </button>
+              <button
+                onClick={() => setTargetProfileMode('week')}
+                className={cn(
+                  'px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all',
+                  targetProfileMode === 'week' 
+                    ? 'bg-background text-primary shadow-sm' 
+                    : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                Week
+              </button>
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-12 text-center rounded-2xl border border-dashed border-border/60 bg-muted/20">
-              <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
-                <Target className="h-6 w-6 text-muted-foreground" />
+          }
+        >
+          {targetProfileMode === 'month' ? (
+            muscleData.length > 0 ? (
+              <div className="space-y-6">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={muscleData}
+                      dataKey="count"
+                      nameKey="muscle"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={90}
+                      paddingAngle={5}
+                    >
+                      {muscleData.map((entry) => (
+                        <Cell key={entry.muscle} fill={MUSCLE_COLORS[entry.muscle] ?? 'hsl(var(--primary))'} stroke="none" />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="grid grid-cols-2 gap-2">
+                  {[...muscleData]
+                    .sort((a, b) => b.count - a.count)
+                    .map((entry) => (
+                      <div
+                        key={entry.muscle}
+                        className="flex items-center gap-2 min-w-0 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/40"
+                      >
+                        <span
+                          className="w-2.5 h-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: MUSCLE_COLORS[entry.muscle] ?? 'hsl(var(--primary))' }}
+                        />
+                        <span className="text-[11px] font-black tracking-tight truncate">{entry.muscle}</span>
+                        <span className="text-xs font-black text-primary tabular-nums ml-auto">{entry.count}</span>
+                      </div>
+                    ))}
+                </div>
               </div>
-              <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">
-                No data for {dayjs().format('MMMM')}
-              </p>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center rounded-2xl border border-dashed border-border/60 bg-muted/20">
+                <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                  <Target className="h-6 w-6 text-muted-foreground" />
+                </div>
+                <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">
+                  No data for {dayjs().format('MMMM')}
+                </p>
+              </div>
+            )
+          ) : (
+            <div className="space-y-6">
+              <div className="relative group/carousel">
+                <motion.div
+                  key={activeWeekIndex}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="space-y-6"
+                >
+                  {weeklyMuscleSplit[activeWeekIndex].data.length > 0 ? (
+                    <>
+                      <ResponsiveContainer width="100%" height={220}>
+                        <PieChart>
+                          <Pie
+                            data={weeklyMuscleSplit[activeWeekIndex].data}
+                            dataKey="count"
+                            nameKey="muscle"
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={90}
+                            paddingAngle={5}
+                          >
+                            {weeklyMuscleSplit[activeWeekIndex].data.map((entry) => (
+                              <Cell key={entry.muscle} fill={MUSCLE_COLORS[entry.muscle] ?? 'hsl(var(--primary))'} stroke="none" />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="grid grid-cols-2 gap-2">
+                        {[...weeklyMuscleSplit[activeWeekIndex].data]
+                          .sort((a, b) => b.count - a.count)
+                          .map((entry) => (
+                            <div
+                              key={entry.muscle}
+                              className="flex items-center gap-2 min-w-0 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 transition-colors hover:bg-muted/40"
+                            >
+                              <span
+                                className="w-2.5 h-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: MUSCLE_COLORS[entry.muscle] ?? 'hsl(var(--primary))' }}
+                              />
+                              <span className="text-[11px] font-black tracking-tight truncate">{entry.muscle}</span>
+                              <span className="text-xs font-black text-primary tabular-nums ml-auto">{entry.count}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-12 text-center rounded-2xl border border-dashed border-border/60 bg-muted/20">
+                      <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
+                        <Calendar className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <p className="text-muted-foreground text-xs font-bold uppercase tracking-widest">
+                        No data for this week
+                      </p>
+                    </div>
+                  )}
+                </motion.div>
+
+                {/* Carousel Controls */}
+                <div className="absolute top-1/2 -translate-y-1/2 -left-3 -right-3 flex justify-between pointer-events-none opacity-0 group-hover/carousel:opacity-100 transition-opacity">
+                  <button
+                    onClick={() => setActiveWeekIndex((prev) => Math.max(0, prev - 1))}
+                    disabled={activeWeekIndex === 0}
+                    className={cn(
+                      'p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-lg pointer-events-auto transition-all',
+                      activeWeekIndex === 0 ? 'opacity-0 scale-90' : 'hover:scale-110 active:scale-95'
+                    )}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setActiveWeekIndex((prev) => Math.min(weeklyMuscleSplit.length - 1, prev + 1))}
+                    disabled={activeWeekIndex === weeklyMuscleSplit.length - 1}
+                    className={cn(
+                      'p-2 rounded-full bg-background/80 backdrop-blur-sm border border-border shadow-lg pointer-events-auto transition-all',
+                      activeWeekIndex === weeklyMuscleSplit.length - 1 ? 'opacity-0 scale-90' : 'hover:scale-110 active:scale-95'
+                    )}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Pagination Dots */}
+              <div className="flex justify-center gap-1.5 pt-2">
+                {weeklyMuscleSplit.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setActiveWeekIndex(i)}
+                    className={cn(
+                      'w-1.5 h-1.5 rounded-full transition-all duration-300',
+                      activeWeekIndex === i ? 'w-4 bg-primary' : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                    )}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </DashboardPanel>
@@ -469,6 +644,7 @@ export default function DashboardPage() {
                   d.hasWorkout
                     ? 'bg-primary text-white shadow-md shadow-primary/25 scale-[1.02]'
                     : 'bg-muted/50 text-muted-foreground/40 border border-transparent',
+                  !d.isCurrentMonth && 'opacity-20',
                   d.isToday &&
                     !d.hasWorkout &&
                     'ring-2 ring-primary/60 ring-offset-2 ring-offset-background border-primary/20',
@@ -665,11 +841,17 @@ function WeeklyMuscleFrequency({
   counts,
   weekLabel,
   weekNumber,
+  offset,
+  onOffsetChange,
+  maxOffset,
   variants,
 }: {
   counts: { muscle: string; count: number }[];
   weekLabel: string;
   weekNumber: number;
+  offset: number;
+  onOffsetChange: (offset: number) => void;
+  maxOffset: number;
   variants: { hidden: { opacity: number; y: number }; show: { opacity: number; y: number } };
 }) {
   const maxCount = Math.max(...counts.map((c) => c.count), 1);
@@ -701,9 +883,43 @@ function WeeklyMuscleFrequency({
               </div>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 self-start">
-            <span className="ft-badge ft-badge--primary">Week {weekNumber}</span>
-            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-3 py-1.5 rounded-full border border-border bg-muted/40">
+          <div className="flex flex-wrap items-center gap-3 self-start">
+            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-muted/30 border border-border/50">
+              <button
+                type="button"
+                aria-label="Previous week"
+                disabled={offset >= maxOffset}
+                onClick={() => onOffsetChange(offset + 1)}
+                className={cn(
+                  'p-1.5 rounded-lg transition-all',
+                  offset >= maxOffset
+                    ? 'opacity-30 cursor-not-allowed'
+                    : 'hover:bg-background text-foreground hover:shadow-sm'
+                )}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div className="px-2 min-w-[100px] text-center">
+                <p className="text-[10px] font-black uppercase tracking-widest text-primary">
+                  {offset === 0 ? 'This Week' : `Week ${weekNumber}`}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Next week"
+                disabled={offset === 0}
+                onClick={() => onOffsetChange(Math.max(0, offset - 1))}
+                className={cn(
+                  'p-1.5 rounded-lg transition-all',
+                  offset === 0
+                    ? 'opacity-30 cursor-not-allowed'
+                    : 'hover:bg-background text-foreground hover:shadow-sm'
+                )}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-3 py-2 rounded-xl border border-border bg-muted/40">
               {weekLabel}
             </span>
           </div>
@@ -784,7 +1000,7 @@ function WeeklyMuscleFrequency({
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border/60">
           <p className="text-xs font-bold text-muted-foreground">
             <span className="text-foreground font-black">{trainedGroups}</span> of{' '}
-            {counts.length} muscle groups trained this week
+            {counts.length} muscle groups trained {offset === 0 ? 'this week' : 'that week'}
           </p>
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
             {totalSessions} total muscle sessions

@@ -146,9 +146,12 @@ export function getRepRangeDistribution(workouts: WorkoutSession[], start: strin
 
 export const TRACKED_MUSCLES = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core'] as const;
 
-/** Sessions per muscle group in the current tracking week (Sun–Sat). */
-export function getWeeklyMuscleTrainingCounts(workouts: WorkoutSession[]): { muscle: string; count: number }[] {
-  const weekWorkouts = filterWorkoutsInTrackingWeek(workouts);
+/** Sessions per muscle group in the tracking week (Mon–Sun). */
+export function getWeeklyMuscleTrainingCounts(
+  workouts: WorkoutSession[],
+  refDate: dayjs.ConfigType = dayjs()
+): { muscle: string; count: number }[] {
+  const weekWorkouts = filterWorkoutsInTrackingWeek(workouts, refDate);
 
   return TRACKED_MUSCLES.map((muscle) => ({
     muscle,

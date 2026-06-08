@@ -103,10 +103,12 @@ export function formatCountdownHMS(totalSeconds: number): string {
   return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
 }
 
-/** Training week runs Sun–Sat; resets at midnight each Sunday. */
+/** Training week runs Mon–Sun; resets at midnight each Monday. */
 export function getTrackingWeekStart(date: dayjs.ConfigType = dayjs()): dayjs.Dayjs {
   const d = dayjs(date);
-  return d.subtract(d.day(), 'day').startOf('day');
+  // (d.day() + 6) % 7: Mon=0, Tue=1, ..., Sat=5, Sun=6
+  const daysSinceMonday = (d.day() + 6) % 7;
+  return d.subtract(daysSinceMonday, 'day').startOf('day');
 }
 
 export function getTrackingWeekEnd(date: dayjs.ConfigType = dayjs()): dayjs.Dayjs {
