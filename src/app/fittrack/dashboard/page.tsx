@@ -65,6 +65,8 @@ import { getWeeklyMuscleTrainingCounts } from '@/workout/analytics';
 import { MuscleRecoveryMap3D } from '@/components/fittrack/MuscleRecoveryMap3D';
 import { cn } from '@/lib/utils';
 
+dayjs.extend(relativeTime);
+
 export default function DashboardPage() {
   const { profile, workouts, weeklyGoals, hydrated, prs, updateWorkoutDate } = useWorkoutStore();
   const [feedWeekOffset, setFeedWeekOffset] = useState(0);

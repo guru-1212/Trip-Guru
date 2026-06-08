@@ -167,6 +167,8 @@ export default function WorkoutPage() {
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+  const [showSharePicks, setShowSharePicks] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [finishPin, setFinishPin] = useState('');
   const [pinError, setPinError] = useState(false);
   const [workoutDate, setWorkoutDate] = useState(dayjs().format('YYYY-MM-DD'));
@@ -198,6 +200,30 @@ export default function WorkoutPage() {
       toast.error('Could not process image. Try a smaller file or use an image URL.');
     }
   };
+
+  const shareText = useMemo(() => {
+    if (!selectedSplit) return '';
+    const split = SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit);
+    if (!split) return '';
+
+    let text = `${split.name} Workout Protocol\n`;
+    text += `--------------------------------\n`;
+
+    const pickOrder = pickOrderFromPicks(todayPicks);
+    pickOrder.forEach((exId, idx) => {
+      const info = resolveExerciseInfo(exId, customExercises);
+      if (info) {
+        text += `${idx + 1}. ${info.name}\n`;
+        const pick = todayPicks.find((p) => p.exerciseId === exId);
+        if (pick?.variations?.length) {
+          text += `   Focus: ${pick.variations.join(', ')}\n`;
+        }
+      }
+    });
+
+    text += `\nShared via Athlete OS`;
+    return text;
+  }, [selectedSplit, todayPicks, customExercises]);
 
   const handleVariationImageUrl = (exerciseId: string, variation: string) => {
     const key = variationImageKey(exerciseId, variation);
@@ -1545,15 +1571,26 @@ export default function WorkoutPage() {
                   </p>
                 </button>
                 {selected && (
-                  <button
-                    type="button"
-                    onClick={beginWorkout}
-                    disabled={todayPicks.length === 0}
-                    className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg mt-4"
-                  >
-                    {startButtonLabel}
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => setShowSharePicks(true)}
+                      disabled={todayPicks.length === 0}
+                      className="ft-btn ft-btn--secondary !px-4"
+                      title="Share Protocol"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={beginWorkout}
+                      disabled={todayPicks.length === 0}
+                      className="ft-btn ft-btn--primary flex-1 ft-btn--lg"
+                    >
+                      {startButtonLabel}
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
                 )}
               </div>
             );
@@ -1561,7 +1598,16 @@ export default function WorkoutPage() {
         </div>
 
         {selectedSplit && (
-          <div className="ft-action-bar">
+          <div className="ft-action-bar flex gap-3">
+            <button
+              type="button"
+              onClick={() => setShowSharePicks(true)}
+              disabled={todayPicks.length === 0}
+              className="ft-btn ft-btn--secondary ft-btn--lg !px-5"
+              title="Share Protocol"
+            >
+              <Share2 className="h-4 w-4" />
+            </button>
             <button
               type="button"
               onClick={beginWorkout}
@@ -1573,6 +1619,78 @@ export default function WorkoutPage() {
             </button>
           </div>
         )}
+
+        <AnimatePresence>
+          {showSharePicks && (
+            <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+              <motion.div
+                initial={{ y: 100, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 100, opacity: 0 }}
+                className="w-full max-w-lg bg-background rounded-t-[2rem] sm:rounded-[2rem] border border-border shadow-2xl overflow-hidden"
+              >
+                <div className="p-6 md:p-8">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                        <Share2 className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-black tracking-tight">Share Protocol</h3>
+                        <p className="text-xs text-muted-foreground font-medium">Verification text for your trainer</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setShowSharePicks(false);
+                        setCopied(false);
+                      }}
+                      className="p-2 rounded-full hover:bg-muted transition-colors"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="relative">
+                    <textarea
+                      readOnly
+                      value={shareText}
+                      className="w-full h-48 p-4 rounded-2xl bg-muted/30 border border-border/50 text-sm font-medium font-mono leading-relaxed resize-none focus:outline-none"
+                    />
+                    <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-background/10 to-transparent pointer-events-none" />
+                  </div>
+
+                  <div className="flex gap-3 mt-6">
+                    <button
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(shareText);
+                        setCopied(true);
+                        toast.success('Protocol copied to clipboard');
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                      className={cn(
+                        "ft-btn ft-btn--primary flex-1 h-14 rounded-2xl transition-all duration-300",
+                        copied && "bg-emerald-600 hover:bg-emerald-600"
+                      )}
+                    >
+                      {copied ? (
+                        <>
+                          <Check className="h-5 w-5" />
+                          <span>Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Link2 className="h-5 w-5" />
+                          <span>Copy Protocol</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     </PageTransition>
   );
