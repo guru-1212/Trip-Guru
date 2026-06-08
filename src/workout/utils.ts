@@ -294,12 +294,21 @@ export function switchActiveVariation(
   };
 }
 
+export function toSubVariationLabel(index: number): string {
+  const labels = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
+  return labels[index] ?? String(index + 1);
+}
+
 export function applyWorkoutExerciseFromPicks(
   ex: WorkoutExercise,
   pickedVariations: string[],
   defaultSets: number
 ): WorkoutExercise {
-  const uniqueVariations = Array.from(new Set(pickedVariations.filter(Boolean)));
+  const uniqueVariations: string[] = [];
+  for (const v of pickedVariations) {
+    if (!v || uniqueVariations.includes(v)) continue;
+    uniqueVariations.push(v);
+  }
   if (!uniqueVariations.length) return ex;
 
   const setsByVariation = Object.fromEntries(

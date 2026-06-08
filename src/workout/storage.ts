@@ -151,6 +151,21 @@ export function saveSplitTodayPicks(
   write(STORAGE_KEYS.splitTodayPicks, picks);
 }
 
+export function loadSplitSequenceLocked(): Partial<Record<SplitId, boolean>> {
+  const current = read(STORAGE_KEYS.splitSequenceLocked, {});
+  if (Object.keys(current).length > 0) return current;
+  const legacy = read<Partial<Record<SplitId, boolean>>>('wk_today_sequence_locked', {});
+  if (Object.keys(legacy).length > 0) {
+    saveSplitSequenceLocked(legacy);
+    return legacy;
+  }
+  return {};
+}
+
+export function saveSplitSequenceLocked(locked: Partial<Record<SplitId, boolean>>): void {
+  write(STORAGE_KEYS.splitSequenceLocked, locked);
+}
+
 export function exportAllData(): string {
   const data = {
     profile: loadProfile(),
@@ -165,6 +180,7 @@ export function exportAllData(): string {
     variationImages: loadVariationImages(),
     splitExtras: loadSplitExtras(),
     splitTodayPicks: loadSplitTodayPicks(),
+    splitSequenceLocked: loadSplitSequenceLocked(),
     exportedAt: new Date().toISOString(),
   };
   return JSON.stringify(data, null, 2);
@@ -185,6 +201,7 @@ export function importAllData(json: string): boolean {
     if (data.variationImages) saveVariationImages(data.variationImages);
     if (data.splitExtras) saveSplitExtras(data.splitExtras);
     if (data.splitTodayPicks) saveSplitTodayPicks(data.splitTodayPicks);
+    if (data.splitSequenceLocked) saveSplitSequenceLocked(data.splitSequenceLocked);
     return true;
   } catch {
     return false;

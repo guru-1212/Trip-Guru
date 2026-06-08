@@ -53,6 +53,7 @@ interface WorkoutContextValue {
   variationImages: VariationImageMap;
   splitExtras: Partial<Record<SplitId, string[]>>;
   splitTodayPicks: Partial<Record<SplitId, TodayExercisePick[]>>;
+  splitSequenceLocked: Partial<Record<SplitId, boolean>>;
   hydrated: boolean;
   syncing: boolean;
   fittrackOwnerId: string | null;
@@ -87,6 +88,7 @@ interface WorkoutContextValue {
   deleteWorkout: (id: string) => void;
   rememberSplitExercise: (splitId: SplitId, exerciseId: string) => void;
   rememberTodayPicks: (splitId: SplitId, picks: TodayExercisePick[]) => void;
+  rememberSequenceLocked: (splitId: SplitId, locked: boolean) => void;
 }
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
@@ -111,6 +113,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [variationImages, setVariationImages] = useState<VariationImageMap>({});
   const [splitExtras, setSplitExtras] = useState<Partial<Record<SplitId, string[]>>>({});
   const [splitTodayPicks, setSplitTodayPicks] = useState<Partial<Record<SplitId, TodayExercisePick[]>>>({});
+  const [splitSequenceLocked, setSplitSequenceLocked] = useState<Partial<Record<SplitId, boolean>>>({});
   const [hydrated, setHydrated] = useState(false);
   const [syncing, setSyncing] = useState(true);
 
@@ -146,6 +149,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setVariationImages,
     setSplitExtras,
     setSplitTodayPicks,
+    setSplitSequenceLocked,
     setHydrated,
     setSyncing,
   }, { migrateUid: isFitTrackPartner ? null : uid });
@@ -500,6 +504,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       variationImages,
       splitExtras,
       splitTodayPicks,
+      splitSequenceLocked,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -510,7 +515,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Data exported');
-  }, [profile, workouts, prs, customExercises, bodyStats, habits, weeklyGoals, checklist, customVariations, variationImages, splitExtras, splitTodayPicks]);
+  }, [profile, workouts, prs, customExercises, bodyStats, habits, weeklyGoals, checklist, customVariations, variationImages, splitExtras, splitTodayPicks, splitSequenceLocked]);
 
   const importData = useCallback((json: string) => {
     const currentUid = uidRef.current;
@@ -598,6 +603,17 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     });
   }, [persistState]);
 
+  const rememberSequenceLocked = useCallback((splitId: SplitId, locked: boolean) => {
+    setSplitSequenceLocked((prev) => {
+      const next = { ...prev };
+      if (locked) next[splitId] = true;
+      else delete next[splitId];
+      persistState({ splitSequenceLocked: next });
+      localStorage.saveSplitSequenceLocked(next);
+      return next;
+    });
+  }, [persistState]);
+
   const deleteWorkout = useCallback((id: string) => {
     setWorkouts((prev) => {
       const next = prev.filter((w) => w.id !== id);
@@ -630,6 +646,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       variationImages,
       splitExtras,
       splitTodayPicks,
+      splitSequenceLocked,
       hydrated,
       syncing,
       fittrackOwnerId: effectiveUid,
@@ -664,6 +681,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       deleteWorkout,
       rememberSplitExercise,
       rememberTodayPicks,
+      rememberSequenceLocked,
     }),
     [
       profile,
@@ -679,6 +697,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       variationImages,
       splitExtras,
       splitTodayPicks,
+      splitSequenceLocked,
       hydrated,
       syncing,
       effectiveUid,
@@ -713,6 +732,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       deleteWorkout,
       rememberSplitExercise,
       rememberTodayPicks,
+      rememberSequenceLocked,
     ]
   );
 

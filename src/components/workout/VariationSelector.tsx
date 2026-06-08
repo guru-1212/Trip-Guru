@@ -12,6 +12,8 @@ interface VariationSelectorProps {
   onAddVariation: (v: string) => void;
   /** Optional set progress label per variation, e.g. "2/3". */
   variationProgress?: Record<string, string>;
+  /** Show i, ii, iii… prefix when variations follow a planned order. */
+  showOrderLabels?: boolean;
 }
 
 export function VariationSelector({
@@ -20,7 +22,9 @@ export function VariationSelector({
   onChange,
   onAddVariation,
   variationProgress,
+  showOrderLabels = false,
 }: VariationSelectorProps) {
+  const orderLabels = ['i', 'ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
   const [newVar, setNewVar] = useState('');
   const [showAdd, setShowAdd] = useState(false);
 
@@ -74,13 +78,18 @@ export function VariationSelector({
             animate={{ opacity: 1 }}
             className="flex flex-wrap gap-2"
           >
-            {variations.map((v) => (
+            {variations.map((v, idx) => (
               <button
                 key={v}
                 type="button"
                 onClick={() => onChange(v)}
                 className={cn('ft-chip', value === v && 'ft-chip--active')}
               >
+                {showOrderLabels && variations.length > 1 && (
+                  <span className="mr-1 text-[10px] font-bold italic opacity-70">
+                    {orderLabels[idx] ?? idx + 1})
+                  </span>
+                )}
                 <span>{v}</span>
                 {variationProgress?.[v] && (
                   <span className="ml-1.5 text-[10px] font-bold opacity-80 tabular-nums">

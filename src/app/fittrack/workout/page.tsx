@@ -67,6 +67,7 @@ import {
   buildWorkoutExercisesInPickOrder,
   pickOrderFromPicks,
   sortExercisesByPickOrder,
+  toSubVariationLabel,
   switchActiveVariation,
   patchExerciseSets,
   getPickedVariations,
@@ -149,8 +150,10 @@ export default function WorkoutPage() {
     getVariationsForExercise,
     splitExtras,
     splitTodayPicks,
+    splitSequenceLocked,
     rememberSplitExercise,
     rememberTodayPicks,
+    rememberSequenceLocked,
     addCustomExercise,
     updateProfile,
     removeExerciseFromActiveWorkout,
@@ -164,6 +167,8 @@ export default function WorkoutPage() {
   const [todayPicks, setTodayPicks] = useState<TodayExercisePick[]>([]);
   const [pickerExercises, setPickerExercises] = useState<LibraryExercise[]>([]);
   const pickInitSplitRef = useRef<SplitId | null>(null);
+  const todayPicksRef = useRef<TodayExercisePick[]>([]);
+  const picksPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
@@ -213,11 +218,11 @@ export default function WorkoutPage() {
     pickOrder.forEach((exId, idx) => {
       const info = resolveExerciseInfo(exId, customExercises);
       if (info) {
-        text += `${idx + 1}. ${info.name}\n`;
+        text += `${idx + 1}) ${info.name}\n`;
         const pick = todayPicks.find((p) => p.exerciseId === exId);
-        if (pick?.variations?.length) {
-          text += `   Focus: ${pick.variations.join(', ')}\n`;
-        }
+        pick?.variations?.forEach((v, vIdx) => {
+          text += `   ${toSubVariationLabel(vIdx)}) ${v}\n`;
+        });
       }
     });
 
@@ -301,6 +306,55 @@ export default function WorkoutPage() {
 
   const showOvertraining = lastTrained && isYesterday(lastTrained);
 
+  const sequenceLocked = selectedSplit ? !!splitSequenceLocked[selectedSplit] : false;
+
+  todayPicksRef.current = todayPicks;
+
+  const flushTodayPicks = useCallback(
+    (splitId: SplitId, picks: TodayExercisePick[]) => {
+      rememberTodayPicks(splitId, picks);
+    },
+    [rememberTodayPicks]
+  );
+
+  const handlePicksChange = useCallback(
+    (picks: TodayExercisePick[]) => {
+      setTodayPicks(picks);
+      if (!selectedSplit) return;
+      if (picksPersistTimerRef.current) clearTimeout(picksPersistTimerRef.current);
+      picksPersistTimerRef.current = setTimeout(() => {
+        flushTodayPicks(selectedSplit, picks);
+      }, 400);
+    },
+    [selectedSplit, flushTodayPicks]
+  );
+
+  const handleSequenceLockedChange = useCallback(
+    (locked: boolean) => {
+      if (!selectedSplit) return;
+      if (picksPersistTimerRef.current) {
+        clearTimeout(picksPersistTimerRef.current);
+        picksPersistTimerRef.current = null;
+      }
+      flushTodayPicks(selectedSplit, todayPicksRef.current);
+      rememberSequenceLocked(selectedSplit, locked);
+    },
+    [selectedSplit, flushTodayPicks, rememberSequenceLocked]
+  );
+
+  useEffect(() => {
+    return () => {
+      if (picksPersistTimerRef.current) clearTimeout(picksPersistTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!selectedSplit) return;
+    const remote = splitTodayPicks[selectedSplit];
+    if (!sequenceLocked || !remote?.length) return;
+    setTodayPicks((local) => (JSON.stringify(local) === JSON.stringify(remote) ? local : remote));
+  }, [selectedSplit, splitTodayPicks, sequenceLocked]);
+
   const splitExerciseLibrary = useMemo(() => {
     if (!selectedSplit) return [];
     return buildSplitExerciseLibrary(selectedSplit, customExercises, splitExtras);
@@ -372,7 +426,7 @@ export default function WorkoutPage() {
       allExercises,
       todayPicks,
       profile.prefs.defaultSets
-    );
+    ).filter(isPickedToday);
     rememberTodayPicks(selectedSplit, todayPicks);
     const state = {
       splitId: selectedSplit,
@@ -626,8 +680,8 @@ export default function WorkoutPage() {
       const lib = getExerciseById(ex.exerciseId);
       const pickedVariations = getPickedVariations(ex);
       const workoutVariations =
-        ex.pickedVariations?.length && ex.pickedVariations.length > 0
-          ? ex.pickedVariations
+        pickedVariations.length > 0
+          ? pickedVariations
           : getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
       const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
       const isExpanded = expandedEx === ex.exerciseId;
@@ -733,7 +787,9 @@ export default function WorkoutPage() {
                       ? multiVariation
                         ? 'All variations completed'
                         : 'All sets completed'
-                      : `${ex.variation} · ${setsCompleted} of ${activeSets.length} sets done`}
+                      : multiVariation
+                        ? `${toSubVariationLabel(pickedVariations.indexOf(ex.variation))}) ${ex.variation} · ${setsCompleted}/${activeSets.length} sets`
+                        : `${ex.variation} · ${setsCompleted} of ${activeSets.length} sets done`}
                   </p>
                   {lastSession && (
                     <p className="ft-last-session-preview mt-1 truncate">
@@ -792,6 +848,7 @@ export default function WorkoutPage() {
                       )
                     }
                     onAddVariation={(v) => addVariation(ex.exerciseId, v)}
+                    showOrderLabels={multiVariation}
                     variationProgress={
                       multiVariation
                         ? Object.fromEntries(
@@ -1514,7 +1571,7 @@ export default function WorkoutPage() {
             splitId={selectedSplit}
             exercises={pickerExercises}
             picks={todayPicks}
-            onPicksChange={setTodayPicks}
+            onPicksChange={handlePicksChange}
             onExercisesChange={setPickerExercises}
             getVariationsForExercise={getVariationsForExercise}
             onAddVariation={addVariation}
@@ -1524,6 +1581,8 @@ export default function WorkoutPage() {
               selectedSplit ? (id) => rememberSplitExercise(selectedSplit, id) : undefined
             }
             getVariationImage={getVariationImage}
+            sequenceLocked={sequenceLocked}
+            onSequenceLockedChange={handleSequenceLockedChange}
           />
         )}
 

@@ -23,7 +23,14 @@ import type {
   WorkoutSession,
 } from '@/workout/types';
 import { getDefaultProfile, mergeVariationImages, normalizeProfile } from '@/workout/utils';
-import { loadVariationImages } from '@/workout/storage';
+import {
+  loadSplitSequenceLocked,
+  loadSplitTodayPicks,
+  loadVariationImages,
+  saveSplitSequenceLocked,
+  saveSplitTodayPicks,
+} from '@/workout/storage';
+import { saveFitTrackState } from '@/firebase/fittrack.firestore';
 
 export interface FitTrackSyncCallbacks {
   setProfile: (p: UserProfile) => void;
@@ -39,6 +46,7 @@ export interface FitTrackSyncCallbacks {
   setVariationImages: (v: Record<string, string>) => void;
   setSplitExtras: (e: Partial<Record<SplitId, string[]>>) => void;
   setSplitTodayPicks: (p: Partial<Record<SplitId, TodayExercisePick[]>>) => void;
+  setSplitSequenceLocked: (l: Partial<Record<SplitId, boolean>>) => void;
   setHydrated: (h: boolean) => void;
   setSyncing: (s: boolean) => void;
 }
@@ -55,8 +63,10 @@ export function useFitTrackSync(
 ) {
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
+  const migratedLocalPlanRef = useRef({ picks: false, locks: false });
 
   useEffect(() => {
+    migratedLocalPlanRef.current = { picks: false, locks: false };
     const cb = () => callbacksRef.current;
 
     if (!uid) {
@@ -115,7 +125,36 @@ export function useFitTrackSync(
             mergeVariationImages(loadVariationImages(), data.variationImages ?? {})
           );
           cb().setSplitExtras(data.splitExtras ?? {});
-          cb().setSplitTodayPicks(data.splitTodayPicks ?? {});
+          const cloudPicks = data.splitTodayPicks ?? {};
+          const cloudLocks = data.splitSequenceLocked ?? {};
+          cb().setSplitTodayPicks(cloudPicks);
+          saveSplitTodayPicks(cloudPicks);
+          cb().setSplitSequenceLocked(cloudLocks);
+          saveSplitSequenceLocked(cloudLocks);
+
+          if (!migratedLocalPlanRef.current.locks) {
+            const localLocks = loadSplitSequenceLocked();
+            const cloudLocksEmpty = Object.keys(cloudLocks).length === 0;
+            const localLocksPresent = Object.keys(localLocks).length > 0;
+            if (cloudLocksEmpty && localLocksPresent) {
+              migratedLocalPlanRef.current.locks = true;
+              saveFitTrackState(uid, { splitSequenceLocked: localLocks }).catch((err) =>
+                console.error('[FitTrack] lock migration failed:', err)
+              );
+            }
+          }
+
+          if (!migratedLocalPlanRef.current.picks) {
+            const localPicks = loadSplitTodayPicks();
+            const cloudPicksEmpty = Object.keys(cloudPicks).length === 0;
+            const localPicksPresent = Object.keys(localPicks).length > 0;
+            if (cloudPicksEmpty && localPicksPresent) {
+              migratedLocalPlanRef.current.picks = true;
+              saveFitTrackState(uid, { splitTodayPicks: localPicks }).catch((err) =>
+                console.error('[FitTrack] picks migration failed:', err)
+              );
+            }
+          }
         },
         (err) => console.error('[FitTrack] state listener:', err)
       )

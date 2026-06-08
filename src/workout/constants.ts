@@ -14,6 +14,7 @@ export const STORAGE_KEYS = {
   variationImages: 'wk_variation_images',
   splitExtras: 'wk_split_extras',
   splitTodayPicks: 'wk_split_today_picks',
+  splitSequenceLocked: 'wk_split_sequence_locked',
 } as const;
 
 export const SPLIT_DEFINITIONS: SplitDefinition[] = [

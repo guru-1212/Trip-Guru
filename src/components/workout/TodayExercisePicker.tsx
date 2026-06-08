@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { AnimatePresence, Reorder, motion } from 'framer-motion';
 import { Check, Eye, GripVertical, ListOrdered, Lock, LockOpen, Plus, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -14,7 +14,7 @@ import type {
   TodayExercisePick,
 } from '@/workout/types';
 import { MUSCLE_COLORS } from '@/workout/constants';
-import { groupLibraryExercisesByMuscle } from '@/workout/utils';
+import { groupLibraryExercisesByMuscle, toSubVariationLabel } from '@/workout/utils';
 import { cn } from '@/lib/utils';
 
 interface TodayExercisePickerProps {
@@ -29,37 +29,12 @@ interface TodayExercisePickerProps {
   onCreateCustomExercise: (data: Omit<CustomExercise, 'id'>, remember: boolean) => CustomExercise;
   onRememberSplitExercise?: (exerciseId: string) => void;
   getVariationImage: (exerciseId: string, variation: string) => string | undefined;
+  sequenceLocked: boolean;
+  onSequenceLockedChange: (locked: boolean) => void;
 }
-
-const SEQUENCE_LOCK_STORAGE_KEY = 'wk_today_sequence_locked';
 
 function findPickIndex(picks: TodayExercisePick[], exerciseId: string): number {
   return picks.findIndex((p) => p.exerciseId === exerciseId);
-}
-
-function readSequenceLocked(splitId: SplitId): boolean {
-  if (typeof window === 'undefined') return false;
-  try {
-    const raw = localStorage.getItem(SEQUENCE_LOCK_STORAGE_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw) as Partial<Record<SplitId, boolean>>;
-    return !!parsed[splitId];
-  } catch {
-    return false;
-  }
-}
-
-function writeSequenceLocked(splitId: SplitId, locked: boolean) {
-  if (typeof window === 'undefined') return;
-  try {
-    const raw = localStorage.getItem(SEQUENCE_LOCK_STORAGE_KEY);
-    const parsed: Partial<Record<SplitId, boolean>> = raw ? JSON.parse(raw) : {};
-    if (locked) parsed[splitId] = true;
-    else delete parsed[splitId];
-    localStorage.setItem(SEQUENCE_LOCK_STORAGE_KEY, JSON.stringify(parsed));
-  } catch {
-    // ignore storage errors
-  }
 }
 
 export function TodayExercisePicker({
@@ -74,6 +49,8 @@ export function TodayExercisePicker({
   onCreateCustomExercise,
   onRememberSplitExercise,
   getVariationImage,
+  sequenceLocked,
+  onSequenceLockedChange,
 }: TodayExercisePickerProps) {
   const grouped = groupLibraryExercisesByMuscle(exercises, splitId);
   const exerciseById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
@@ -88,17 +65,9 @@ export function TodayExercisePicker({
   const [pendingVariations, setPendingVariations] = useState<string[]>(['Standard']);
   const [newVarInputs, setNewVarInputs] = useState<Record<string, string>>({});
   const [fullImagePreview, setFullImagePreview] = useState<{ src: string; alt: string } | null>(null);
-  const [sequenceLocked, setSequenceLocked] = useState(false);
   const [showUnlockDialog, setShowUnlockDialog] = useState(false);
   const [unlockPin, setUnlockPin] = useState('');
   const [unlockPinError, setUnlockPinError] = useState(false);
-
-  useEffect(() => {
-    setSequenceLocked(readSequenceLocked(splitId));
-    setShowUnlockDialog(false);
-    setUnlockPin('');
-    setUnlockPinError(false);
-  }, [splitId]);
 
   const pickerIds = new Set(exercises.map((e) => e.id));
 
@@ -297,10 +266,9 @@ export function TodayExercisePicker({
   };
 
   const lockSequence = () => {
-    setSequenceLocked(true);
     setShowAddPanel(false);
-    writeSequenceLocked(splitId, true);
-    toast.success('Today\'s picks locked');
+    onSequenceLockedChange(true);
+    toast.success('Plan locked and saved to your account');
   };
 
   const openUnlockDialog = () => {
@@ -320,10 +288,9 @@ export function TodayExercisePicker({
       setUnlockPinError(true);
       return;
     }
-    setSequenceLocked(false);
-    writeSequenceLocked(splitId, false);
+    onSequenceLockedChange(false);
     closeUnlockDialog();
-    toast.success('Today\'s picks unlocked');
+    toast.success('Plan unlocked');
   };
 
   const handleLockToggle = () => {
@@ -331,14 +298,75 @@ export function TodayExercisePicker({
     else lockSequence();
   };
 
-  const renderSequenceRow = (pick: TodayExercisePick, index: number, draggable: boolean) => {
+  const renderSequenceVariationRow = (
+    ex: LibraryExercise,
+    variation: string,
+    varIndex: number,
+    draggable: boolean,
+    onRemove?: (variation: string) => void
+  ) => {
+    const storedImage = getVariationImage(ex.id, variation);
+    const row = (
+      <>
+        <span className="ft-sequence-sub-index">{toSubVariationLabel(varIndex)})</span>
+        {draggable ? (
+          <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing" />
+        ) : (
+          <Lock className="h-3 w-3 text-primary/60 shrink-0" aria-hidden />
+        )}
+        {storedImage && (
+          <img src={storedImage} alt="" className="ft-today-variation-thumb shrink-0 !w-7 !h-7" />
+        )}
+        <span className="text-sm text-foreground/90 flex-1 min-w-0 truncate">{variation}</span>
+        {storedImage && (
+          <button
+            type="button"
+            className="ft-today-variation-view shrink-0 !px-2"
+            onClick={() => openVariationPreview(storedImage, `${ex.name} — ${variation}`)}
+            aria-label={`View image for ${variation}`}
+            title="View variation image"
+          >
+            <Eye className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {draggable && onRemove && (
+          <button
+            type="button"
+            onClick={() => onRemove(variation)}
+            className="p-1 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors shrink-0"
+            aria-label={`Remove ${variation}`}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </>
+    );
+
+    if (draggable) {
+      return (
+        <Reorder.Item key={variation} value={variation} className="ft-sequence-variation-row">
+          {row}
+        </Reorder.Item>
+      );
+    }
+
+    return (
+      <li key={variation} className="ft-sequence-variation-row ft-sequence-variation-row--locked">
+        {row}
+      </li>
+    );
+  };
+
+  const renderSequenceExerciseBlock = (pick: TodayExercisePick, exIndex: number, draggable: boolean) => {
     const ex = exerciseById.get(pick.exerciseId);
     const name = ex?.name ?? pick.exerciseId;
     const muscle = ex?.muscle;
+    const variations = pick.variations ?? [];
+    const canReorderVariations = draggable && variations.length > 1;
 
-    const rowContent = (
-      <>
-        <span className="ft-sequence-index">{index + 1}</span>
+    const exerciseHeader = (
+      <div className="ft-sequence-row ft-sequence-row--exercise">
+        <span className="ft-sequence-index">{exIndex + 1}</span>
         {draggable ? (
           <GripVertical className="h-4 w-4 text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing" />
         ) : (
@@ -346,9 +374,6 @@ export function TodayExercisePicker({
         )}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold truncate">{name}</p>
-          <p className="text-[10px] text-muted-foreground truncate">
-            {(pick.variations ?? []).join(', ')}
-          </p>
         </div>
         {muscle && (
           <span
@@ -371,69 +396,61 @@ export function TodayExercisePicker({
             <X className="h-3.5 w-3.5" />
           </button>
         )}
-      </>
+      </div>
+    );
+
+    const variationList =
+      variations.length > 0 ? (
+        <div className="ft-sequence-variations">
+          {canReorderVariations && ex ? (
+            <Reorder.Group
+              axis="y"
+              values={variations}
+              onReorder={(next) => reorderVariations(pick.exerciseId, next)}
+              className="ft-sequence-variation-list"
+            >
+              {variations.map((v, varIndex) =>
+                renderSequenceVariationRow(ex, v, varIndex, true, (varName) =>
+                  toggleVariation(pick.exerciseId, varName)
+                )
+              )}
+            </Reorder.Group>
+          ) : (
+            <ul className="ft-sequence-variation-list">
+              {variations.map((v, varIndex) =>
+                ex ? (
+                  renderSequenceVariationRow(ex, v, varIndex, false)
+                ) : (
+                  <li key={v} className="ft-sequence-variation-row ft-sequence-variation-row--locked">
+                    <span className="ft-sequence-sub-index">{toSubVariationLabel(varIndex)})</span>
+                    <span className="text-sm truncate">{v}</span>
+                  </li>
+                )
+              )}
+            </ul>
+          )}
+        </div>
+      ) : null;
+
+    const block = (
+      <div className="ft-sequence-exercise-block">
+        {exerciseHeader}
+        {variationList}
+      </div>
     );
 
     if (draggable) {
       return (
-        <Reorder.Item key={pick.exerciseId} value={pick} className="ft-sequence-row">
-          {rowContent}
+        <Reorder.Item key={pick.exerciseId} value={pick} className="ft-sequence-exercise-item">
+          {block}
         </Reorder.Item>
       );
     }
 
     return (
-      <div key={pick.exerciseId} className="ft-sequence-row ft-sequence-row--locked">
-        {rowContent}
+      <div key={pick.exerciseId} className="ft-sequence-exercise-item ft-sequence-exercise-item--locked">
+        {block}
       </div>
-    );
-  };
-
-  const renderVariationRowContent = (
-    ex: LibraryExercise,
-    v: string,
-    index: number,
-    options: {
-      draggable: boolean;
-      showRemove: boolean;
-      onToggle: (variation: string) => void;
-    }
-  ) => {
-    const storedImage = getVariationImage(ex.id, v);
-    return (
-      <>
-        <span className="ft-variation-seq-index">{index + 1}</span>
-        {options.draggable ? (
-          <GripVertical className="h-3.5 w-3.5 text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing" />
-        ) : (
-          <Lock className="h-3.5 w-3.5 text-primary/70 shrink-0" aria-hidden />
-        )}
-        {storedImage && (
-          <img src={storedImage} alt="" className="ft-today-variation-thumb shrink-0" />
-        )}
-        <span className="ft-today-variation-name flex-1 min-w-0 truncate">{v}</span>
-        {storedImage && (
-          <button
-            type="button"
-            className="ft-today-variation-view shrink-0"
-            onClick={() => openVariationPreview(storedImage, `${ex.name} — ${v}`)}
-            aria-label={`View image for ${v}`}
-            title="View variation image"
-          >
-            <Eye className="h-4 w-4" />
-          </button>
-        )}
-        {options.showRemove && (
-          <button
-            type="button"
-            onClick={() => options.onToggle(v)}
-            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-500/10 transition-colors shrink-0"
-            aria-label={`Remove ${v}`}
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </>
     );
   };
 
@@ -445,52 +462,13 @@ export function TodayExercisePicker({
   ) => {
     const allVariations = getVariationsForExercise(ex.id, ex.variations);
     const unselectedVariations = allVariations.filter((v) => !selectedVariations.includes(v));
-    const canReorderVariations = !sequenceLocked && selectedVariations.length > 1;
 
     return (
       <div className={cn('ft-today-variation-block', sequenceLocked && 'ft-today-variation-block--locked')}>
-        {selectedVariations.length > 0 && (
-          <div className="space-y-2">
-            <p className="ft-today-variation-label">
-              {sequenceLocked ? 'Variation order (locked)' : 'Variation order — drag to reorder'}
-            </p>
-            {canReorderVariations ? (
-              <Reorder.Group
-                axis="y"
-                values={selectedVariations}
-                onReorder={(next) => reorderVariations(ex.id, next)}
-                className="ft-today-variation-list"
-              >
-                {selectedVariations.map((v, index) => (
-                  <Reorder.Item key={v} value={v} className="ft-variation-seq-row">
-                    {renderVariationRowContent(ex, v, index, {
-                      draggable: true,
-                      showRemove: true,
-                      onToggle,
-                    })}
-                  </Reorder.Item>
-                ))}
-              </Reorder.Group>
-            ) : (
-              <ul className="ft-today-variation-list">
-                {selectedVariations.map((v, index) => (
-                  <li
-                    key={v}
-                    className={cn(
-                      'ft-variation-seq-row',
-                      sequenceLocked && 'ft-variation-seq-row--locked'
-                    )}
-                  >
-                    {renderVariationRowContent(ex, v, index, {
-                      draggable: false,
-                      showRemove: !sequenceLocked,
-                      onToggle,
-                    })}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+        {selectedVariations.length > 0 && sequenceLocked && (
+          <p className="text-[10px] text-muted-foreground">
+            Order shown in workout sequence above
+          </p>
         )}
 
         {!sequenceLocked && (
@@ -569,27 +547,9 @@ export function TodayExercisePicker({
             Choose exercises and variations for today
           </p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={handleLockToggle}
-            className={cn(
-              'ft-sequence-lock-btn',
-              sequenceLocked && 'ft-sequence-lock-btn--active'
-            )}
-            aria-label={sequenceLocked ? 'Unlock workout sequence' : 'Lock workout sequence'}
-            title={sequenceLocked ? 'Unlock picks (PIN: 0000)' : 'Lock exercises & variations'}
-          >
-            {sequenceLocked ? (
-              <Lock className="h-5 w-5" aria-hidden />
-            ) : (
-              <LockOpen className="h-5 w-5" aria-hidden />
-            )}
-          </button>
-          <span className="text-sm font-semibold text-primary tabular-nums">
-            {picks.length} of {exercises.length}
-          </span>
-        </div>
+        <span className="text-sm font-semibold text-primary tabular-nums shrink-0">
+          {picks.length} of {exercises.length}
+        </span>
       </div>
 
       <div className="flex gap-2">
@@ -621,25 +581,47 @@ export function TodayExercisePicker({
               <h3 className="text-sm font-black tracking-tight">Workout sequence</h3>
               <p className="text-xs text-muted-foreground">
                 {sequenceLocked
-                  ? 'Locked — unlock to change order'
-                  : 'Drag to set exercise order'}
+                  ? 'Your training order for today'
+                  : 'Drag exercises and variations into your training order'}
               </p>
             </div>
           </div>
           {sequenceLocked ? (
-            <div className="space-y-2">
-              {picks.map((pick, index) => renderSequenceRow(pick, index, false))}
+            <div className="ft-sequence-list space-y-2">
+              {picks.map((pick, index) => renderSequenceExerciseBlock(pick, index, false))}
             </div>
           ) : (
             <Reorder.Group
               axis="y"
               values={picks}
               onReorder={onPicksChange}
-              className="space-y-2"
+              className="ft-sequence-list space-y-2"
             >
-              {picks.map((pick, index) => renderSequenceRow(pick, index, true))}
+              {picks.map((pick, index) => renderSequenceExerciseBlock(pick, index, true))}
             </Reorder.Group>
           )}
+          <div className="pt-3 mt-1 border-t border-primary/15 flex flex-col sm:flex-row sm:items-center gap-3">
+            <button
+              type="button"
+              onClick={handleLockToggle}
+              className={cn(
+                'ft-btn ft-btn--sm shrink-0',
+                sequenceLocked ? 'ft-btn--secondary' : 'ft-btn--primary'
+              )}
+            >
+              {sequenceLocked ? (
+                <Lock className="h-4 w-4" />
+              ) : (
+                <LockOpen className="h-4 w-4" />
+              )}
+              {sequenceLocked ? 'Unlock plan' : 'Lock this plan'}
+            </button>
+            <p className="text-xs text-muted-foreground">
+              {sequenceLocked
+                ? 'Synced to your account — enter PIN 0000 to unlock and edit'
+                : 'Lock to save this plan to your account on all devices'}
+            </p>
+          </div>
         </div>
       )}
 
