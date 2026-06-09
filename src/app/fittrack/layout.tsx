@@ -10,6 +10,7 @@ import { GlobalRestTimer } from '@/components/workout/GlobalRestTimer';
 import { GlobalWorkoutTimer } from '@/components/workout/GlobalWorkoutTimer';
 import { Navbar } from '@/components/layout/Navbar';
 import { FitTrackSharedBanner } from '@/components/workout/FitTrackSharedBanner';
+import { FitTrackCelebrationProvider } from '@/components/fittrack/FitTrackCelebrationProvider';
 import '@/fittrack/fittrack.css';
 
 function FitTrackShell({ children }: { children: React.ReactNode }) {
@@ -46,14 +47,16 @@ export default function FitTrackLayout({ children }: { children: React.ReactNode
   return (
     <ProtectedRoute>
       <WorkoutProvider>
-        <FitTrackShell>{children}</FitTrackShell>
-        <Toaster
-          position="top-center"
-          toastOptions={{
-            className: 'bg-background text-foreground border border-border shadow-2xl rounded-2xl font-bold text-sm',
-            success: { iconTheme: { primary: 'hsl(var(--primary))', secondary: 'white' } },
-          }}
-        />
+        <FitTrackCelebrationProvider>
+          <FitTrackShell>{children}</FitTrackShell>
+          <Toaster
+            position="top-center"
+            toastOptions={{
+              className: 'bg-background text-foreground border border-border shadow-2xl rounded-2xl font-bold text-sm',
+              success: { iconTheme: { primary: 'hsl(var(--primary))', secondary: 'white' } },
+            }}
+          />
+        </FitTrackCelebrationProvider>
       </WorkoutProvider>
     </ProtectedRoute>
   );
