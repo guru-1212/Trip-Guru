@@ -535,15 +535,24 @@ export function mapToTodayPicks(picksMap: Map<string, string[]>): TodayExerciseP
 }
 
 export function pickOrderFromPicks(picks: TodayExercisePick[]): string[] {
-  return picks.map((p) => p.id);
+  return picks.map((p) => `${p.exerciseId}::${p.variation}`);
 }
 
 export function sortExercisesByPickOrder(
   exercises: WorkoutExercise[],
-  pickOrderIds: string[]
+  pickOrderKeys: string[]
 ): WorkoutExercise[] {
-  // We'll fallback to name if the ID is missing (e.g. added mid-session)
-  return [...exercises].sort((a, b) => a.name.localeCompare(b.name));
+  const orderIndex = new Map(pickOrderKeys.map((key, i) => [key, i]));
+  return [...exercises].sort((a, b) => {
+    const aKey = `${a.exerciseId}::${a.variation}`;
+    const bKey = `${b.exerciseId}::${b.variation}`;
+    const aIdx = orderIndex.get(aKey);
+    const bIdx = orderIndex.get(bKey);
+    const aOrder = aIdx === undefined ? Number.MAX_SAFE_INTEGER : aIdx;
+    const bOrder = bIdx === undefined ? Number.MAX_SAFE_INTEGER : bIdx;
+    if (aOrder !== bOrder) return aOrder - bOrder;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 export function buildWorkoutExercisesInPickOrder(

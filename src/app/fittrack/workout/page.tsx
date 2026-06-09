@@ -686,7 +686,7 @@ export default function WorkoutPage() {
     );
     const pickOrder =
       activeWorkout.pickOrder ??
-      pickedExercises.filter(isPickedToday).map((e) => e.exerciseId);
+      pickedExercises.filter(isPickedToday).map((e) => `${e.exerciseId}::${e.variation}`);
     const pickedSorted = sortExercisesByPickOrder(pickedExercises, pickOrder);
     const unpickedGroups = groupExercisesByMuscle(unpickedExercises, activeWorkout.splitId);
     const { done: pickedDone, total: pickedTotal } = countPickedVariationsDone(activeWorkout.exercises);
