@@ -173,6 +173,7 @@ export default function WorkoutPage() {
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
   const [showSharePicks, setShowSharePicks] = useState(false);
+  const [shareMode, setShareMode] = useState<'today' | 'overall'>('today');
   const [copied, setCopied] = useState(false);
   const [finishPin, setFinishPin] = useState('');
   const [pinError, setPinError] = useState(false);
@@ -206,12 +207,12 @@ export default function WorkoutPage() {
     }
   };
 
-  const shareText = useMemo(() => {
+  const todayShareText = useMemo(() => {
     if (!selectedSplit) return '';
     const split = SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit);
     if (!split) return '';
 
-    let text = `${split.name} Workout Protocol\n`;
+    let text = `${split.name} - Today's Picks\n`;
     text += `--------------------------------\n`;
 
     const pickOrder = pickOrderFromPicks(todayPicks);
@@ -229,6 +230,27 @@ export default function WorkoutPage() {
     text += `\nShared via Athlete OS`;
     return text;
   }, [selectedSplit, todayPicks, customExercises]);
+
+  const overallShareText = useMemo(() => {
+    if (!selectedSplit) return '';
+    const split = SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit);
+    if (!split) return '';
+
+    let text = `${split.name} - Full Protocol\n`;
+    text += `--------------------------------\n`;
+
+    pickerExercises.forEach((ex, idx) => {
+      text += `${idx + 1}) ${ex.name}\n`;
+      ex.variations.forEach((v, vIdx) => {
+        text += `   ${toSubVariationLabel(vIdx)}) ${v}\n`;
+      });
+    });
+
+    text += `\nShared via Athlete OS`;
+    return text;
+  }, [selectedSplit, pickerExercises]);
+
+  const shareText = shareMode === 'today' ? todayShareText : overallShareText;
 
   const handleVariationImageUrl = (exerciseId: string, variation: string) => {
     const key = variationImageKey(exerciseId, variation);
@@ -1633,8 +1655,10 @@ export default function WorkoutPage() {
                   <div className="flex gap-2 mt-4">
                     <button
                       type="button"
-                      onClick={() => setShowSharePicks(true)}
-                      disabled={todayPicks.length === 0}
+                      onClick={() => {
+                        setShareMode(todayPicks.length > 0 ? 'today' : 'overall');
+                        setShowSharePicks(true);
+                      }}
                       className="ft-btn ft-btn--secondary !px-4"
                       title="Share Protocol"
                     >
@@ -1660,8 +1684,10 @@ export default function WorkoutPage() {
           <div className="ft-action-bar flex gap-3">
             <button
               type="button"
-              onClick={() => setShowSharePicks(true)}
-              disabled={todayPicks.length === 0}
+              onClick={() => {
+                setShareMode(todayPicks.length > 0 ? 'today' : 'overall');
+                setShowSharePicks(true);
+              }}
               className="ft-btn ft-btn--secondary ft-btn--lg !px-5"
               title="Share Protocol"
             >
@@ -1707,6 +1733,39 @@ export default function WorkoutPage() {
                       className="p-2 rounded-full hover:bg-muted transition-colors"
                     >
                       <X className="h-5 w-5" />
+                    </button>
+                  </div>
+
+                  <div className="flex p-1 bg-muted/50 rounded-xl mb-6">
+                    <button
+                      onClick={() => {
+                        setShareMode('today');
+                        setCopied(false);
+                      }}
+                      disabled={todayPicks.length === 0}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                        shareMode === 'today' 
+                          ? "bg-background shadow-sm text-primary" 
+                          : "text-muted-foreground hover:text-foreground",
+                        todayPicks.length === 0 && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      Today's Picks
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShareMode('overall');
+                        setCopied(false);
+                      }}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-bold rounded-lg transition-all",
+                        shareMode === 'overall' 
+                          ? "bg-background shadow-sm text-primary" 
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      Overall Workout
                     </button>
                   </div>
 
