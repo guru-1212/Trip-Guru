@@ -20,6 +20,7 @@ export function WaterDashboardWidget({ className }: WaterDashboardWidgetProps) {
     paceStatus,
     loading,
     actionLoading,
+    ready,
     addIntake,
     isGymDay,
   } = useWaterTracker();
@@ -28,8 +29,8 @@ export function WaterDashboardWidget({ className }: WaterDashboardWidgetProps) {
     try {
       await addIntake(amount);
       toast.success(`Added ${amount} ml`);
-    } catch {
-      toast.error('Could not log intake');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not log intake');
     }
   };
 
@@ -68,7 +69,7 @@ export function WaterDashboardWidget({ className }: WaterDashboardWidgetProps) {
         <WaterProgressRing totalMl={totalMl} goalMl={goalMl} size={140} />
         <div className="flex-1 w-full space-y-3">
           <WaterPaceIndicator status={paceStatus} />
-          <WaterQuickAdd onAdd={handleAdd} disabled={actionLoading} compact />
+          <WaterQuickAdd onAdd={handleAdd} disabled={!ready || actionLoading} compact />
         </div>
       </div>
     </section>

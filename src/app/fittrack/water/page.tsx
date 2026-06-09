@@ -28,6 +28,7 @@ export default function WaterPage() {
     timezone,
     loading,
     actionLoading,
+    ready,
     error,
     completed,
     addIntake,
@@ -38,8 +39,8 @@ export default function WaterPage() {
     try {
       await addIntake(amount);
       toast.success(`Added ${formatMl(amount)}`);
-    } catch {
-      toast.error('Could not log intake');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not log intake');
     }
   };
 
@@ -104,7 +105,7 @@ export default function WaterPage() {
         <div className="ft-card ft-card-padded flex flex-col items-center gap-4">
           <WaterProgressRing totalMl={totalMl} goalMl={goalMl} />
           <WaterPaceIndicator status={paceStatus} />
-          <WaterQuickAdd onAdd={handleAdd} disabled={actionLoading} className="w-full max-w-md" />
+          <WaterQuickAdd onAdd={handleAdd} disabled={!ready || actionLoading} className="w-full max-w-md" />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

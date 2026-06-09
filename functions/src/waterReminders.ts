@@ -20,6 +20,16 @@ const WATER_URL = '/fittrack/water';
 const DEFAULT_TIMEZONE = 'Asia/Kolkata';
 const STREAK_MILESTONES = [3, 7, 14, 30];
 
+const DEFAULT_WEEK_SCHEDULE: Record<DayKey, SplitId> = {
+  Mon: 'ct',
+  Tue: 'bb',
+  Wed: 'sh',
+  Thu: 'core',
+  Fri: 'ctbb',
+  Sat: 'legs',
+  Sun: 'coresh',
+};
+
 interface WaterScheduleSlot {
   time: string;
   amountGym: number;
@@ -125,7 +135,7 @@ export async function rescheduleWaterReminders(
   uid: string,
   settingsInput?: WaterSettings | null,
   profileInput?: FitTrackProfile | null
-): Promise<void> {
+): Promise<number> {
   const settingsSnap = settingsInput
     ? null
     : await settingsDoc(uid).get();
@@ -133,15 +143,14 @@ export async function rescheduleWaterReminders(
 
   if (!settings?.notificationsEnabled) {
     await cancelPendingWaterReminders(uid, ['scheduled', 'behind_pace', 'post_gym']);
-    return;
+    return 0;
   }
 
   const profileSnap = profileInput
     ? null
     : await db().doc(`users/${uid}/fittrack/profile`).get();
   const profile = profileInput ?? (profileSnap?.data() as FitTrackProfile | undefined);
-  const weekSchedule = profile?.weekSchedule;
-  if (!weekSchedule) return;
+  const weekSchedule = profile?.weekSchedule ?? DEFAULT_WEEK_SCHEDULE;
 
   const timeZone = settings.timezone || profile?.timezone || DEFAULT_TIMEZONE;
   const schedule = settings.schedule?.length ? settings.schedule : getDefaultSchedule();
@@ -234,6 +243,7 @@ export async function rescheduleWaterReminders(
   }
 
   if (writes > 0) await batch.commit();
+  return writes;
 }
 
 async function shouldSendBehindPace(uid: string, localDate: string): Promise<boolean> {

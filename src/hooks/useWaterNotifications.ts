@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { getFitTrackOwnerId } from '@/firebase/fittrackPartners.firestore';
 import { saveWaterSettings, getWaterSettings } from '@/firebase/water.firestore';
 import { resolveWaterNotificationsEnabled } from '@/lib/water/waterUtils';
 import {
@@ -12,10 +11,11 @@ import {
   watchNotificationPermission,
   type NotificationPermissionResult,
 } from '@/services/fcmService';
+import { syncWaterReminderSchedule } from '@/services/waterNotificationService';
 
 export function useWaterNotifications() {
   const { uid, user } = useAuth();
-  const effectiveUid = uid ? getFitTrackOwnerId(uid, user) : null;
+  const waterUid = uid;
   const globalNotifyEnabled = user?.notifyEnabled !== false;
 
   const [enabled, setEnabled] = useState(() => globalNotifyEnabled);
@@ -43,40 +43,45 @@ export function useWaterNotifications() {
   }, [uid]);
 
   useEffect(() => {
-    if (!effectiveUid) return;
+    if (!waterUid) return;
 
     const isGranted =
       typeof Notification !== 'undefined' && Notification.permission === 'granted';
 
-    void getWaterSettings(effectiveUid)
+    void getWaterSettings(waterUid)
       .then(async (settings) => {
         const resolved = resolveWaterNotificationsEnabled(settings, globalNotifyEnabled);
 
-        // Sync profile opt-in to water settings when user hasn't explicitly opted out
         if (globalNotifyEnabled && isGranted && resolved && !settings.notificationsEnabled) {
-          await saveWaterSettings(effectiveUid, {
+          await saveWaterSettings(waterUid, {
             notificationsEnabled: true,
             waterRemindersOptOut: false,
           });
+          await syncWaterReminderSchedule();
           setEnabled(true);
           return;
+        }
+
+        if (resolved && isGranted && settings.notificationsEnabled) {
+          await syncWaterReminderSchedule();
         }
 
         setEnabled(resolved);
       })
       .catch(() => setEnabled(globalNotifyEnabled && isGranted));
-  }, [effectiveUid, globalNotifyEnabled]);
+  }, [waterUid, globalNotifyEnabled]);
 
   const completeEnable = useCallback(async () => {
-    if (!uid || !effectiveUid) return;
+    if (!uid || !waterUid) return;
     setLoading(true);
     setError(null);
     try {
       await requestFCMToken(uid);
-      await saveWaterSettings(effectiveUid, {
+      await saveWaterSettings(waterUid, {
         notificationsEnabled: true,
         waterRemindersOptOut: false,
       });
+      await syncWaterReminderSchedule();
       setEnabled(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to enable notifications');
@@ -84,10 +89,10 @@ export function useWaterNotifications() {
     } finally {
       setLoading(false);
     }
-  }, [uid, effectiveUid]);
+  }, [uid, waterUid]);
 
   const promptEnable = useCallback(async () => {
-    if (!uid || !effectiveUid || loading) return;
+    if (!uid || !waterUid || loading) return;
 
     const permissionResult = permissionRequestRef.current
       ? await permissionRequestRef.current
@@ -106,18 +111,18 @@ export function useWaterNotifications() {
     }
 
     await completeEnable();
-  }, [uid, effectiveUid, loading, completeEnable]);
+  }, [uid, waterUid, loading, completeEnable]);
 
   const startPermissionOnPointerDown = useCallback(() => {
     permissionRequestRef.current = requestNotificationPermissionOnGesture();
   }, []);
 
   const disableNotifications = useCallback(async () => {
-    if (!effectiveUid) return;
+    if (!waterUid) return;
     setLoading(true);
     setError(null);
     try {
-      await saveWaterSettings(effectiveUid, {
+      await saveWaterSettings(waterUid, {
         notificationsEnabled: false,
         waterRemindersOptOut: true,
       });
@@ -127,7 +132,7 @@ export function useWaterNotifications() {
     } finally {
       setLoading(false);
     }
-  }, [effectiveUid]);
+  }, [waterUid]);
 
   const isBlocked = permission === 'denied';
   const isGranted = permission === 'granted';

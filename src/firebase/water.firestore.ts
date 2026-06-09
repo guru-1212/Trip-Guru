@@ -5,7 +5,6 @@ import {
   getDocs,
   onSnapshot,
   query,
-  runTransaction,
   serverTimestamp,
   setDoc,
   where,
@@ -36,9 +35,20 @@ export class WaterFirestoreError extends Error {
     message: string,
     public readonly cause?: unknown
   ) {
-    super(message);
+    const detail = formatFirestoreCause(cause);
+    super(detail ? `${message}: ${detail}` : message);
     this.name = 'WaterFirestoreError';
   }
+}
+
+function formatFirestoreCause(err: unknown): string | null {
+  if (!err) return null;
+  if (err instanceof Error && 'code' in err) {
+    const fb = err as Error & { code?: string };
+    return fb.code ? `${fb.code} — ${fb.message}` : fb.message;
+  }
+  if (err instanceof Error) return err.message;
+  return String(err);
 }
 
 export async function getWaterSettings(uid: string): Promise<WaterSettings> {
@@ -57,7 +67,11 @@ export async function saveWaterSettings(
   partial: Partial<WaterSettings>
 ): Promise<void> {
   try {
-    await setDoc(settingsDoc(uid), { ...partial, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(
+      settingsDoc(uid),
+      { ...stripUndefined(partial as Record<string, unknown>), updatedAt: serverTimestamp() },
+      { merge: true }
+    );
   } catch (err) {
     throw new WaterFirestoreError('Failed to save water settings', err);
   }
@@ -75,7 +89,13 @@ export async function ensureWaterSettings(
       return { ...getDefaultWaterSettings(data.timezone, profileNotificationsEnabled), ...data };
     }
     const defaults = getDefaultWaterSettings(timezone, profileNotificationsEnabled);
-    await setDoc(settingsDoc(uid), { ...defaults, updatedAt: serverTimestamp() });
+    await setDoc(
+      settingsDoc(uid),
+      {
+        ...stripUndefined(defaults as unknown as Record<string, unknown>),
+        updatedAt: serverTimestamp(),
+      }
+    );
     return defaults;
   } catch (err) {
     throw new WaterFirestoreError('Failed to initialize water settings', err);
@@ -136,36 +156,67 @@ function generateIntakeId(): string {
   return `wi_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Firestore rejects undefined — omit optional fields instead. */
+function buildIntakeEntry(amount: number, note?: string): WaterIntakeEntry {
+  const entry: WaterIntakeEntry = {
+    id: generateIntakeId(),
+    time: new Date().toISOString(),
+    amount,
+  };
+  if (note !== undefined && note !== '') {
+    entry.note = note;
+  }
+  return entry;
+}
+
+function sanitizeIntakesForFirestore(intakes: WaterIntakeEntry[]): WaterIntakeEntry[] {
+  return intakes.map((intake) => {
+    const clean: WaterIntakeEntry = {
+      id: intake.id,
+      time: intake.time,
+      amount: intake.amount,
+    };
+    if (intake.note !== undefined && intake.note !== '') {
+      clean.note = intake.note;
+    }
+    return clean;
+  });
+}
+
+function stripUndefined<T extends Record<string, unknown>>(data: T): Partial<T> {
+  const out: Partial<T> = {};
+  for (const key of Object.keys(data) as Array<keyof T>) {
+    if (data[key] !== undefined) {
+      out[key] = data[key];
+    }
+  }
+  return out;
+}
+
 export async function addWaterIntake(
   uid: string,
   dateKey: string,
   amount: number,
+  goalMl: number,
   note?: string
 ): Promise<WaterIntakeEntry> {
-  try {
-    const ref = waterLogDoc(uid, dateKey);
-    const entry: WaterIntakeEntry = {
-      id: generateIntakeId(),
-      time: new Date().toISOString(),
-      amount,
-      note,
-    };
+  const ref = waterLogDoc(uid, dateKey);
+  const entry = buildIntakeEntry(amount, note);
 
-    await runTransaction(db(), async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) {
-        throw new WaterFirestoreError('Water log not found for today');
-      }
-      const data = snap.data() as WaterLogDoc;
-      const intakes = [...data.intakes, entry];
-      const totalMl = intakes.reduce((sum, i) => sum + i.amount, 0);
-      const completed = totalMl >= data.goalMl;
-      tx.update(ref, {
-        intakes,
-        totalMl,
-        completed,
-        updatedAt: serverTimestamp(),
-      });
+  try {
+    await ensureWaterLog(uid, dateKey, goalMl);
+    const snap = await getDoc(ref);
+    const existing = snap.data() as WaterLogDoc | undefined;
+    const resolvedGoal = existing?.goalMl ?? goalMl;
+    const intakes = sanitizeIntakesForFirestore([...(existing?.intakes ?? []), entry]);
+    const totalMl = intakes.reduce((sum, i) => sum + i.amount, 0);
+
+    await setDoc(ref, {
+      intakes,
+      totalMl,
+      goalMl: resolvedGoal,
+      completed: totalMl >= resolvedGoal,
+      updatedAt: serverTimestamp(),
     });
 
     return entry;
@@ -182,20 +233,22 @@ export async function removeWaterIntake(
 ): Promise<void> {
   try {
     const ref = waterLogDoc(uid, dateKey);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) return;
 
-    await runTransaction(db(), async (tx) => {
-      const snap = await tx.get(ref);
-      if (!snap.exists()) return;
-      const data = snap.data() as WaterLogDoc;
-      const intakes = data.intakes.filter((i) => i.id !== intakeId);
-      const totalMl = intakes.reduce((sum, i) => sum + i.amount, 0);
-      const completed = totalMl >= data.goalMl;
-      tx.update(ref, {
-        intakes,
-        totalMl,
-        completed,
-        updatedAt: serverTimestamp(),
-      });
+    const data = snap.data() as WaterLogDoc;
+    const intakes = sanitizeIntakesForFirestore(
+      (data.intakes ?? []).filter((i) => i.id !== intakeId)
+    );
+    const totalMl = intakes.reduce((sum, i) => sum + i.amount, 0);
+    const completed = totalMl >= data.goalMl;
+
+    await setDoc(ref, {
+      intakes,
+      totalMl,
+      goalMl: data.goalMl,
+      completed,
+      updatedAt: serverTimestamp(),
     });
   } catch (err) {
     throw new WaterFirestoreError('Failed to remove water intake', err);

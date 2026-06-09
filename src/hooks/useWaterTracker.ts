@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { getFitTrackOwnerId } from '@/firebase/fittrackPartners.firestore';
 import {
   ensureWaterLog,
   ensureWaterSettings,
@@ -13,6 +12,7 @@ import {
 } from '@/firebase/water.firestore';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import type { WaterLogDoc, WaterSettings } from '@/types/water';
+import { syncWaterReminderSchedule } from '@/services/waterNotificationService';
 import {
   getTodayDateKey,
   getDayKeyInTimezone,
@@ -29,7 +29,9 @@ export function useWaterTracker() {
   const { uid, user } = useAuth();
   const { profile, hydrated: profileHydrated } = useWorkoutStore();
 
-  const effectiveUid = uid ? getFitTrackOwnerId(uid, user) : null;
+  // Water logs are stored under the signed-in user's uid (not FitTrack owner).
+  // Partner-linked accounts write to their own path to avoid permission errors.
+  const waterUid = uid;
 
   const timezone = profile?.timezone || DEFAULT_TIMEZONE;
   const weekSchedule = profile?.weekSchedule;
@@ -75,6 +77,10 @@ export function useWaterTracker() {
   }, [schedule, now, timezone, gymDay]);
 
   useEffect(() => {
+    setDateKey(getTodayDateKey(timezone));
+  }, [timezone]);
+
+  useEffect(() => {
     const interval = setInterval(() => {
       const today = getTodayDateKey(timezone);
       setDateKey((prev) => (prev !== today ? today : prev));
@@ -83,18 +89,29 @@ export function useWaterTracker() {
   }, [timezone]);
 
   useEffect(() => {
-    if (!effectiveUid || !profileHydrated) return;
+    if (!waterUid || !profileHydrated) return;
 
     let cancelled = false;
 
     async function init() {
       setLoading(true);
       setError(null);
+      const ownerId = waterUid;
+      if (!ownerId) return;
       try {
         const profileNotificationsEnabled = user?.notifyEnabled !== false;
-        const s = await ensureWaterSettings(effectiveUid!, timezone, profileNotificationsEnabled);
+        const s = await ensureWaterSettings(ownerId, timezone, profileNotificationsEnabled);
         if (cancelled) return;
         setSettings(s);
+
+        if (
+          s.notificationsEnabled &&
+          profileNotificationsEnabled &&
+          typeof Notification !== 'undefined' &&
+          Notification.permission === 'granted'
+        ) {
+          await syncWaterReminderSchedule();
+        }
 
         const todayGoal = weekSchedule
           ? getDailyGoal(weekSchedule, dayKey, s)
@@ -102,9 +119,9 @@ export function useWaterTracker() {
             ? s.dailyGoalGym
             : s.dailyGoalRest;
 
-        await ensureWaterLog(effectiveUid!, dateKey, todayGoal);
+        await ensureWaterLog(ownerId, dateKey, todayGoal);
 
-        const completedDates = await getRecentWaterLogsForStreak(effectiveUid!, 35);
+        const completedDates = await getRecentWaterLogsForStreak(ownerId, 35);
         if (!cancelled) {
           setStreak(computeStreakFromDateKeys(completedDates, dateKey));
         }
@@ -121,52 +138,53 @@ export function useWaterTracker() {
     return () => {
       cancelled = true;
     };
-  }, [effectiveUid, profileHydrated, timezone, dateKey, dayKey, weekSchedule, gymDay, user?.notifyEnabled]);
+  }, [waterUid, profileHydrated, timezone, dateKey, dayKey, weekSchedule, gymDay, user?.notifyEnabled]);
 
   useEffect(() => {
-    if (!effectiveUid) return;
+    if (!waterUid) return;
 
     const unsub = subscribeWaterLog(
-      effectiveUid,
+      waterUid,
       dateKey,
       (data) => setLog(data),
       (err) => setError(err.message)
     );
     return unsub;
-  }, [effectiveUid, dateKey]);
+  }, [waterUid, dateKey]);
 
   useEffect(() => {
-    if (!effectiveUid) return;
+    if (!waterUid) return;
 
-    void getRecentWaterLogsForStreak(effectiveUid, 35).then((dates) => {
+    void getRecentWaterLogsForStreak(waterUid, 35).then((dates) => {
       setStreak(computeStreakFromDateKeys(dates, dateKey));
     });
-  }, [effectiveUid, dateKey, log?.completed]);
+  }, [waterUid, dateKey, log?.completed]);
 
   const addIntake = useCallback(
     async (amount: number, note?: string) => {
-      if (!effectiveUid) return;
+      if (!waterUid) return;
       setActionLoading(true);
       setError(null);
       try {
-        await addWaterIntake(effectiveUid, dateKey, amount, note);
+        await addWaterIntake(waterUid, dateKey, amount, goalMl, note);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to add intake');
+        const message = err instanceof Error ? err.message : 'Failed to add intake';
+        setError(message);
         throw err;
       } finally {
         setActionLoading(false);
       }
     },
-    [effectiveUid, dateKey]
+    [waterUid, dateKey, goalMl]
   );
 
   const removeIntake = useCallback(
     async (intakeId: string) => {
-      if (!effectiveUid) return;
+      if (!waterUid) return;
       setActionLoading(true);
       setError(null);
       try {
-        await removeWaterIntake(effectiveUid, dateKey, intakeId);
+        await removeWaterIntake(waterUid, dateKey, intakeId);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to remove intake');
         throw err;
@@ -174,7 +192,7 @@ export function useWaterTracker() {
         setActionLoading(false);
       }
     },
-    [effectiveUid, dateKey]
+    [waterUid, dateKey]
   );
 
   return {
@@ -196,6 +214,7 @@ export function useWaterTracker() {
     error,
     addIntake,
     removeIntake,
-    effectiveUid,
+    waterUid,
+    ready: !loading && profileHydrated && !!waterUid,
   };
 }

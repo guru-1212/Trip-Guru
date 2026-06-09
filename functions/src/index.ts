@@ -401,3 +401,13 @@ export const onRoomActivityNotify = onCall(async (request) => {
     }),
   };
 });
+
+/** Client-triggered reschedule for water hydration reminders. */
+export const rescheduleWaterRemindersCallable = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'Must be signed in.');
+  }
+  const uid = request.auth.uid;
+  const scheduled = await rescheduleWaterReminders(uid);
+  return { ok: true, scheduled };
+});
