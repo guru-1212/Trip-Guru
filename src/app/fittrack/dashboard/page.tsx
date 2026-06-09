@@ -62,6 +62,7 @@ import {
 } from '@/workout/utils';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { FitTrackInvitations } from '@/components/workout/FitTrackInvitations';
+import { WaterDashboardWidget } from '@/components/water/WaterDashboardWidget';
 import { getWeeklyMuscleTrainingCounts } from '@/workout/analytics';
 import { MuscleRecoveryMap } from '@/components/fittrack/MuscleRecoveryMap';
 import { cn } from '@/lib/utils';
@@ -327,6 +328,10 @@ export default function DashboardPage() {
           </Link>
         </motion.div>
       </header>
+
+      <motion.div variants={item}>
+        <WaterDashboardWidget />
+      </motion.div>
 
       {/* Daily Status Card */}
       <motion.div variants={item}>

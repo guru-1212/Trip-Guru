@@ -24,6 +24,12 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 239 84% 67%;
     --radius: 1rem;
+    --water: 199 89% 48%;
+    --water-muted: 199 60% 90%;
+    --water-track: 214 32% 91%;
+    --pace-ahead: 142 71% 45%;
+    --pace-on-track: 199 89% 48%;
+    --pace-behind: 0 84% 60%;
   }
 
   .dark {
@@ -46,6 +52,11 @@
     --border: 223 47% 11%;
     --input: 223 47% 11%;
     --ring: 239 84% 67%;
+    --water-muted: 199 40% 20%;
+    --water-track: 223 47% 15%;
+    --pace-ahead: 142 71% 45%;
+    --pace-on-track: 199 89% 48%;
+    --pace-behind: 0 62% 50%;
   }
 }
 

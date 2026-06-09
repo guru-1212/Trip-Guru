@@ -23,6 +23,11 @@ import {
   reschedulePreGymReminders,
   scheduleProteinReminderForUser,
 } from './fittrackReminders';
+import {
+  dispatchDueWaterReminders,
+  rescheduleWaterReminders,
+  handleWaterLogGoalAndStreak,
+} from './waterReminders';
 
 setGlobalOptions({ region: 'us-central1' });
 
@@ -261,13 +266,38 @@ export const onFitTrackProfileWritten = onDocumentWritten(
     const after = event.data?.after.data();
     if (!after) return;
     await reschedulePreGymReminders(uid, after);
+    await rescheduleWaterReminders(uid, undefined, after);
+  }
+);
+
+/** Reschedule water reminders when settings change. */
+export const onWaterSettingsWritten = onDocumentWritten(
+  'users/{uid}/waterSettings/settings',
+  async (event) => {
+    const uid = event.params.uid;
+    const after = event.data?.after.data();
+    if (!after) return;
+    await rescheduleWaterReminders(uid, after);
+  }
+);
+
+/** Goal complete + streak milestone notifications. */
+export const onWaterLogWritten = onDocumentWritten(
+  'users/{uid}/waterLogs/{dateKey}',
+  async (event) => {
+    const uid = event.params.uid;
+    const dateKey = event.params.dateKey;
+    const before = event.data?.before.data() as { totalMl?: number; goalMl?: number; completed?: boolean } | undefined;
+    const after = event.data?.after.data() as { totalMl?: number; goalMl?: number; completed?: boolean } | undefined;
+    await handleWaterLogGoalAndStreak(uid, before, after, dateKey);
   }
 );
 
 /** Dispatch due FitTrack reminders every 5 minutes. */
 export const dispatchFitTrackReminders = onSchedule('every 5 minutes', async () => {
-  const sent = await dispatchDueFitTrackReminders();
-  console.info(`[FitTrack] Dispatched ${sent} gym reminder(s)`);
+  const gymSent = await dispatchDueFitTrackReminders();
+  const waterSent = await dispatchDueWaterReminders();
+  console.info(`[FitTrack] Dispatched ${gymSent} gym reminder(s), ${waterSent} water reminder(s)`);
 });
 
 /** Legacy gym module workout log. */

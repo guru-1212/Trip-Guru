@@ -1590,3 +1590,64 @@
   color: hsl(var(--muted-foreground));
   font-size: 0.875rem;
 }
+
+/* ── Water tracker ── */
+.ft-water-ring {
+  color: hsl(var(--water));
+}
+
+.ft-water-track {
+  stroke: hsl(var(--water-track));
+}
+
+.ft-water-fill {
+  stroke: hsl(var(--water));
+}
+
+.ft-pace-ahead {
+  color: hsl(var(--pace-ahead));
+  background: hsl(var(--pace-ahead) / 0.12);
+}
+
+.ft-pace-on-track {
+  color: hsl(var(--pace-on-track));
+  background: hsl(var(--pace-on-track) / 0.12);
+}
+
+.ft-pace-behind {
+  color: hsl(var(--pace-behind));
+  background: hsl(var(--pace-behind) / 0.12);
+}
+
+.ft-water-quick-btn {
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--foreground));
+  border-radius: var(--ft-radius);
+  padding: 0.625rem 1rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.ft-water-quick-btn:hover {
+  background: hsl(var(--water) / 0.1);
+  border-color: hsl(var(--water) / 0.4);
+}
+
+.ft-water-quick-btn:active {
+  transform: scale(0.98);
+}
+
+.ft-schedule-done {
+  opacity: 0.55;
+}
+
+.ft-schedule-next {
+  border-left: 3px solid hsl(var(--water));
+  background: hsl(var(--water) / 0.08);
+}
+
+.ft-schedule-upcoming {
+  opacity: 0.85;
+}

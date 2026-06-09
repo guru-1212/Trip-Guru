@@ -153,3 +153,17 @@ export {
   upsertChecklist,
   toggleChecklistItem,
 } from '@/firebase/gym.firestore';
+
+export {
+  getWaterSettings,
+  saveWaterSettings,
+  ensureWaterSettings,
+  getWaterLog,
+  subscribeWaterLog,
+  ensureWaterLog,
+  addWaterIntake,
+  removeWaterIntake,
+  getRecentCompletedWaterLogs,
+  getRecentWaterLogsForStreak,
+  WaterFirestoreError,
+} from '@/firebase/water.firestore';
