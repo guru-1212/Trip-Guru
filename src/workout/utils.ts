@@ -1137,7 +1137,7 @@ export function isRemoteImageUrl(src: string): boolean {
 export function cloudSafeVariationImages(images: VariationImageMap): VariationImageMap {
   const out: VariationImageMap = {};
   for (const [key, value] of Object.entries(images)) {
-    if (isRemoteImageUrl(value)) out[key] = value;
+    if (value === '' || isRemoteImageUrl(value)) out[key] = value;
   }
   return out;
 }

@@ -479,8 +479,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       const key = variationImageKey(exerciseId, variation);
       setVariationImages((prev) => {
         if (!prev[key]) return prev;
-        const next = { ...prev };
-        delete next[key];
+        const next = { ...prev, [key]: '' };
         localStorage.saveVariationImages(next);
         void syncVariationImagesToCloud(next);
         toast.success('Image removed');
@@ -515,8 +514,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       setCustomVariations((prev) => {
         const nextList = (prev[exerciseId] ?? []).filter((v) => v !== variation);
         const next = { ...prev };
-        if (nextList.length) next[exerciseId] = nextList;
-        else delete next[exerciseId];
+        next[exerciseId] = nextList;
         persistState({ customVariations: next });
         toast.success('Variation removed');
         return next;
@@ -582,8 +580,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         const oldKey = variationImageKey(exerciseId, oldName);
         const img = prev[oldKey];
         if (!img) return prev;
-        const next = { ...prev, [variationImageKey(exerciseId, trimmed)]: img };
-        delete next[oldKey];
+        const next = { ...prev, [variationImageKey(exerciseId, trimmed)]: img, [oldKey]: '' };
         try {
           localStorage.saveVariationImages(next);
         } catch (err) {
@@ -722,8 +719,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const rememberSequenceLocked = useCallback((splitId: SplitId, locked: boolean) => {
     setSplitSequenceLocked((prev) => {
       const next = { ...prev };
-      if (locked) next[splitId] = true;
-      else delete next[splitId];
+      next[splitId] = locked;
       persistState({ splitSequenceLocked: next });
       localStorage.saveSplitSequenceLocked(next);
       return next;
