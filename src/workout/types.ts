@@ -188,8 +188,10 @@ export interface SplitDefinition {
 
 /** Exercise + variation(s) selected for a split's daily workout plan. */
 export interface TodayExercisePick {
+  /** Unique ID for this specific pick entry (important for drag-and-drop uniqueness). */
+  id: string;
   exerciseId: string;
-  variations: string[];
+  variation: string;
 }
 
 export interface ActiveWorkoutState {

@@ -64,7 +64,7 @@ interface WorkoutContextValue {
   updateActiveWorkout: (state: ActiveWorkoutState) => void;
   patchActiveWorkout: (patcher: (prev: ActiveWorkoutState) => ActiveWorkoutState) => void;
   clearActiveWorkout: () => void;
-  removeExerciseFromActiveWorkout: (exerciseId: string) => void;
+  removeExerciseFromActiveWorkout: (exerciseId: string, variation: string) => void;
   addCustomExercise: (ex: Omit<CustomExercise, 'id'>) => CustomExercise;
   updateCustomExercise: (id: string, ex: Partial<CustomExercise>) => void;
   deleteCustomExercise: (id: string) => void;
@@ -284,15 +284,16 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     persistState({ activeWorkout: null });
   }, [persistState]);
 
-  const removeExerciseFromActiveWorkout = useCallback((exerciseId: string) => {
+  const removeExerciseFromActiveWorkout = useCallback((exerciseId: string, variation: string) => {
     setActiveWorkout((prev) => {
       if (!prev) return prev;
-      if (!(prev.addedExerciseIds ?? []).includes(exerciseId)) return prev;
+      const key = `${exerciseId}::${variation}`;
+      if (!(prev.addedExerciseIds ?? []).includes(key)) return prev;
       const next: ActiveWorkoutState = {
         ...prev,
-        exercises: prev.exercises.filter((e) => e.exerciseId !== exerciseId),
-        addedExerciseIds: (prev.addedExerciseIds ?? []).filter((id) => id !== exerciseId),
-        pickOrder: (prev.pickOrder ?? []).filter((id) => id !== exerciseId),
+        exercises: prev.exercises.filter((e) => !(e.exerciseId === exerciseId && e.variation === variation)),
+        addedExerciseIds: (prev.addedExerciseIds ?? []).filter((id) => id !== key),
+        pickOrder: (prev.pickOrder ?? []).filter((id) => id !== key), // Assuming pickOrder stores IDs/keys
       };
       persistState({ activeWorkout: next });
       return next;

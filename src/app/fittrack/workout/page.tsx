@@ -215,15 +215,11 @@ export default function WorkoutPage() {
     let text = `${split.name} - Today's Picks\n`;
     text += `--------------------------------\n`;
 
-    const pickOrder = pickOrderFromPicks(todayPicks);
-    pickOrder.forEach((exId, idx) => {
-      const info = resolveExerciseInfo(exId, customExercises);
+    todayPicks.forEach((pick, idx) => {
+      const info = resolveExerciseInfo(pick.exerciseId, customExercises);
       if (info) {
         text += `${idx + 1}) ${info.name}\n`;
-        const pick = todayPicks.find((p) => p.exerciseId === exId);
-        pick?.variations?.forEach((v, vIdx) => {
-          text += `   ${toSubVariationLabel(vIdx)}) ${v}\n`;
-        });
+        text += `   ${toSubVariationLabel(0)}) ${pick.variation}\n`;
       }
     });
 
@@ -515,20 +511,20 @@ export default function WorkoutPage() {
     [addCustomExercise, addExerciseToWorkout]
   );
 
-  const updateExercise = (exerciseId: string, updater: (ex: WorkoutExercise) => WorkoutExercise) => {
+  const updateExercise = (exerciseId: string, variation: string, updater: (ex: WorkoutExercise) => WorkoutExercise) => {
     patchActiveWorkout((prev) => ({
       ...prev,
       exercises: prev.exercises.map((ex) =>
-        ex.exerciseId === exerciseId ? updater(ex) : ex
+        ex.exerciseId === exerciseId && ex.variation === variation ? updater(ex) : ex
       ),
     }));
   };
 
-  const togglePickedToday = (exerciseId: string) => {
+  const togglePickedToday = (exerciseId: string, variation: string) => {
     patchActiveWorkout((prev) => ({
       ...prev,
       exercises: prev.exercises.map((ex) =>
-        ex.exerciseId === exerciseId ? { ...ex, pickedToday: !isPickedToday(ex) } : ex
+        ex.exerciseId === exerciseId && ex.variation === variation ? { ...ex, pickedToday: !isPickedToday(ex) } : ex
       ),
     }));
   };
@@ -540,11 +536,11 @@ export default function WorkoutPage() {
     }));
   };
 
-  const toggleSetDone = (exerciseId: string, setIdx: number) => {
+  const toggleSetDone = (exerciseId: string, variation: string, setIdx: number) => {
     patchActiveWorkout((prev) => {
       let startedRest = false;
       const exercises = prev.exercises.map((ex) => {
-        if (ex.exerciseId !== exerciseId) return ex;
+        if (ex.exerciseId !== exerciseId || ex.variation !== variation) return ex;
         const sets = [...ex.sets];
         const wasDone = sets[setIdx].done;
         sets[setIdx] = { ...sets[setIdx], done: !wasDone };
@@ -559,8 +555,8 @@ export default function WorkoutPage() {
     });
   };
 
-  const updateSet = (exerciseId: string, setIdx: number, field: keyof WorkoutSet, value: number | boolean) => {
-    updateExercise(exerciseId, (ex) => {
+  const updateSet = (exerciseId: string, variation: string, setIdx: number, field: keyof WorkoutSet, value: number | boolean) => {
+    updateExercise(exerciseId, variation, (ex) => {
       const sets = [...ex.sets];
       if (field === 'weight') {
         sets[setIdx] = { ...sets[setIdx], weight: inputToKg(value as number, profile.prefs.unit) };
@@ -571,16 +567,16 @@ export default function WorkoutPage() {
     });
   };
 
-  const addSet = (exerciseId: string) => {
-    updateExercise(exerciseId, (ex) => {
+  const addSet = (exerciseId: string, variation: string) => {
+    updateExercise(exerciseId, variation, (ex) => {
       const last = ex.sets[ex.sets.length - 1];
       const sets = [...ex.sets, { weight: last?.weight ?? 0, reps: last?.reps ?? 0, done: false }];
       return patchExerciseSets(ex, sets);
     });
   };
 
-  const removeSet = (exerciseId: string, setIdx: number) => {
-    updateExercise(exerciseId, (ex) => patchExerciseSets(ex, ex.sets.filter((_, i) => i !== setIdx)));
+  const removeSet = (exerciseId: string, variation: string, setIdx: number) => {
+    updateExercise(exerciseId, variation, (ex) => patchExerciseSets(ex, ex.sets.filter((_, i) => i !== setIdx)));
   };
 
   const finishWorkout = () => {
@@ -624,13 +620,14 @@ export default function WorkoutPage() {
     confirmFinish();
   };
 
-  const handleRemoveExercise = (exerciseId: string) => {
+  const handleRemoveExercise = (cardKey: string) => {
     if (removePin !== FINISH_WORKOUT_PIN) {
       setRemovePinError(true);
       return;
     }
-    removeExerciseFromActiveWorkout(exerciseId);
-    if (expandedEx === exerciseId) setExpandedEx(null);
+    const [exerciseId, variation] = cardKey.split('::');
+    removeExerciseFromActiveWorkout(exerciseId, variation);
+    if (expandedEx === cardKey) setExpandedEx(null);
     setRemoveConfirmId(null);
     setRemovePin('');
     setRemovePinError(false);
@@ -699,26 +696,20 @@ export default function WorkoutPage() {
       : null;
 
     const renderExerciseCard = (ex: WorkoutExercise, sequenceIndex?: number) => {
-      const lib = getExerciseById(ex.exerciseId);
-      const pickedVariations = getPickedVariations(ex);
-      const workoutVariations =
-        pickedVariations.length > 0
-          ? pickedVariations
-          : getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
-      const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
-      const isExpanded = expandedEx === ex.exerciseId;
+      const cardKey = `${ex.exerciseId}::${ex.variation}`;
+      const isExpanded = expandedEx === cardKey;
       const isFullyDone = isExerciseFullyDone(ex);
       const picked = isPickedToday(ex);
       const activeSets = ex.sets;
       const hasPR = activeSets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
       const setsCompleted = activeSets.filter((s) => s.done).length;
       const progress = (setsCompleted / Math.max(activeSets.length, 1)) * 100;
-      const multiVariation = pickedVariations.length > 1;
       const isRemovable = addedExerciseIds.includes(ex.exerciseId);
+      const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
 
       return (
         <motion.div
-          key={ex.exerciseId}
+          key={cardKey}
           layout
           transition={{ type: 'spring', stiffness: 400, damping: 32 }}
         >
@@ -746,7 +737,7 @@ export default function WorkoutPage() {
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  togglePickedToday(ex.exerciseId);
+                  togglePickedToday(ex.exerciseId, ex.variation);
                 }}
                 className={cn('ft-pick-toggle shrink-0', picked && 'ft-pick-toggle--on')}
                 aria-label={picked ? `Remove ${ex.name} from today` : `Add ${ex.name} to today`}
@@ -758,7 +749,7 @@ export default function WorkoutPage() {
               <button
                 type="button"
                 className="flex flex-1 items-center gap-3 min-w-0 text-left bg-transparent border-0 cursor-pointer p-0"
-                onClick={() => setExpandedEx(isExpanded ? null : ex.exerciseId)}
+                onClick={() => setExpandedEx(isExpanded ? null : cardKey)}
               >
                 <div
                   className={cn(
@@ -806,16 +797,12 @@ export default function WorkoutPage() {
                     )}
                   >
                     {isFullyDone
-                      ? multiVariation
-                        ? 'All variations completed'
-                        : 'All sets completed'
-                      : multiVariation
-                        ? `${toSubVariationLabel(pickedVariations.indexOf(ex.variation))}) ${ex.variation} · ${setsCompleted}/${activeSets.length} sets`
-                        : `${ex.variation} · ${setsCompleted} of ${activeSets.length} sets done`}
+                      ? 'All sets completed'
+                      : `${ex.variation} · ${setsCompleted} of ${activeSets.length} sets done`}
                   </p>
                   {lastSession && (
                     <p className="ft-last-session-preview mt-1 truncate">
-                      Last · {lastSession.variation} · {dayjs(lastSession.date).format('MMM D')} ·{' '}
+                      Last · {dayjs(lastSession.date).format('MMM D')} ·{' '}
                       {formatLastSessionPreview(lastSession, profile.prefs.unit)}
                     </p>
                   )}
@@ -861,31 +848,6 @@ export default function WorkoutPage() {
                   exit={{ height: 0, opacity: 0 }}
                   className="ft-exercise-body space-y-5 pt-5"
                 >
-                  <VariationSelector
-                    value={ex.variation}
-                    variations={workoutVariations}
-                    onChange={(v) =>
-                      updateExercise(ex.exerciseId, (current) =>
-                        switchActiveVariation(current, v, profile.prefs.defaultSets)
-                      )
-                    }
-                    onAddVariation={(v) => addVariation(ex.exerciseId, v)}
-                    showOrderLabels={multiVariation}
-                    variationProgress={
-                      multiVariation
-                        ? Object.fromEntries(
-                            pickedVariations.map((v) => {
-                              const sets = getSetsForVariation(ex, v);
-                              return [
-                                v,
-                                `${sets.filter((s) => s.done).length}/${sets.length}`,
-                              ];
-                            })
-                          )
-                        : undefined
-                    }
-                  />
-
                   {lastSession ? (
                     <div className="space-y-3">
                       <div>
@@ -947,10 +909,10 @@ export default function WorkoutPage() {
                             set={set}
                             unit={profile.prefs.unit}
                             isPR={set.done && isPR(ex.exerciseId, set.weight, prs)}
-                            onWeightChange={(v) => updateSet(ex.exerciseId, idx, 'weight', v)}
-                            onRepsChange={(v) => updateSet(ex.exerciseId, idx, 'reps', v)}
-                            onToggleDone={() => toggleSetDone(ex.exerciseId, idx)}
-                            onRemove={() => removeSet(ex.exerciseId, idx)}
+                            onWeightChange={(v) => updateSet(ex.exerciseId, ex.variation, idx, 'weight', v)}
+                            onRepsChange={(v) => updateSet(ex.exerciseId, ex.variation, idx, 'reps', v)}
+                            onToggleDone={() => toggleSetDone(ex.exerciseId, ex.variation, idx)}
+                            onRemove={() => removeSet(ex.exerciseId, ex.variation, idx)}
                             onUnitChange={handleWeightUnitChange}
                           />
                         </motion.div>
@@ -961,7 +923,7 @@ export default function WorkoutPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => addSet(ex.exerciseId)}
+                      onClick={() => addSet(ex.exerciseId, ex.variation)}
                       className="ft-btn ft-btn--ghost ft-btn--block"
                     >
                       <Plus className="h-4 w-4" />
@@ -981,7 +943,7 @@ export default function WorkoutPage() {
                       className="ft-textarea resize-none"
                       value={ex.notes ?? ''}
                       onChange={(e) =>
-                        updateExercise(ex.exerciseId, (exer) => ({ ...exer, notes: e.target.value }))
+                        updateExercise(ex.exerciseId, ex.variation, (exer) => ({ ...exer, notes: e.target.value }))
                       }
                       placeholder="RPE, form cues, how it felt..."
                     />
@@ -993,6 +955,7 @@ export default function WorkoutPage() {
         </motion.div>
       );
     };
+
 
     const renderMuscleGroups = (
       groups: { muscle: string; exercises: WorkoutExercise[] }[],

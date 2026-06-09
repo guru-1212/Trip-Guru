@@ -384,7 +384,7 @@ export function countPickedExercisesDone(exercises: WorkoutExercise[]): { done: 
 }
 
 export function countVariationsInTodayPicks(picks: TodayExercisePick[]): number {
-  return picks.reduce((sum, pick) => sum + (pick.variations?.length ?? 1), 0);
+  return picks.length;
 }
 
 export function countPickedVariationsDone(exercises: WorkoutExercise[]): { done: number; total: number } {
@@ -469,21 +469,27 @@ export function normalizeSavedTodayPicks(
 ): TodayExercisePick[] {
   if (!saved?.length) return [];
 
+  // 1. Check if already in new flat format
+  if (typeof saved[0] === 'object' && 'id' in saved[0] && 'variation' in saved[0]) {
+    return (saved as TodayExercisePick[]).filter((p) => validExerciseIds.has(p.exerciseId));
+  }
+
+  // 2. Backward compatibility: Handle old string array format [id, id, ...]
   if (typeof saved[0] === 'string') {
     const result: TodayExercisePick[] = [];
     for (const exerciseId of saved as string[]) {
       if (!validExerciseIds.has(exerciseId)) continue;
       result.push({
+        id: generateId(),
         exerciseId,
-        variations: [defaultVariationForExercise(exerciseId, exercisesById)],
+        variation: defaultVariationForExercise(exerciseId, exercisesById),
       });
     }
     return result;
   }
 
+  // 3. Backward compatibility: Handle old LegacyTodayExercisePick format
   const result: TodayExercisePick[] = [];
-  const indexById = new Map<string, number>();
-
   for (const raw of saved as LegacyTodayExercisePick[]) {
     if (!validExerciseIds.has(raw.exerciseId)) continue;
     const variations = raw.variations?.length
@@ -492,15 +498,13 @@ export function normalizeSavedTodayPicks(
           raw.variation ||
             defaultVariationForExercise(raw.exerciseId, exercisesById),
         ];
-    const existingIdx = indexById.get(raw.exerciseId);
-    if (existingIdx !== undefined) {
-      const merged = new Set([...result[existingIdx].variations, ...variations.filter(Boolean)]);
-      result[existingIdx].variations = Array.from(merged);
-    } else {
-      indexById.set(raw.exerciseId, result.length);
+    
+    for (const v of variations) {
+      if (!v) continue;
       result.push({
+        id: generateId(),
         exerciseId: raw.exerciseId,
-        variations: Array.from(new Set(variations.filter(Boolean))),
+        variation: v,
       });
     }
   }
@@ -509,33 +513,37 @@ export function normalizeSavedTodayPicks(
 }
 
 export function todayPicksToMap(picks: TodayExercisePick[]): Map<string, string[]> {
-  return new Map(picks.map((p) => [p.exerciseId, p.variations]));
+  const map = new Map<string, string[]>();
+  for (const pick of picks) {
+    const vars = map.get(pick.exerciseId) ?? [];
+    if (!vars.includes(pick.variation)) {
+      vars.push(pick.variation);
+    }
+    map.set(pick.exerciseId, vars);
+  }
+  return map;
 }
 
-export function mapToTodayPicks(picks: Map<string, string[]>): TodayExercisePick[] {
-  return Array.from(picks.entries()).map(([exerciseId, variations]) => ({
-    exerciseId,
-    variations,
-  }));
+export function mapToTodayPicks(picksMap: Map<string, string[]>): TodayExercisePick[] {
+  const result: TodayExercisePick[] = [];
+  for (const [exerciseId, variations] of Array.from(picksMap.entries())) {
+    for (const variation of variations) {
+      result.push({ id: generateId(), exerciseId, variation });
+    }
+  }
+  return result;
 }
 
 export function pickOrderFromPicks(picks: TodayExercisePick[]): string[] {
-  return picks.map((p) => p.exerciseId);
+  return picks.map((p) => p.id);
 }
 
 export function sortExercisesByPickOrder(
   exercises: WorkoutExercise[],
   pickOrderIds: string[]
 ): WorkoutExercise[] {
-  const orderIndex = new Map(pickOrderIds.map((id, i) => [id, i]));
-  return [...exercises].sort((a, b) => {
-    const aIdx = orderIndex.get(a.exerciseId);
-    const bIdx = orderIndex.get(b.exerciseId);
-    const aOrder = aIdx === undefined ? Number.MAX_SAFE_INTEGER : aIdx;
-    const bOrder = bIdx === undefined ? Number.MAX_SAFE_INTEGER : bIdx;
-    if (aOrder !== bOrder) return aOrder - bOrder;
-    return a.name.localeCompare(b.name);
-  });
+  // We'll fallback to name if the ID is missing (e.g. added mid-session)
+  return [...exercises].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export function buildWorkoutExercisesInPickOrder(
@@ -543,26 +551,32 @@ export function buildWorkoutExercisesInPickOrder(
   picks: TodayExercisePick[],
   defaultSets: number
 ): WorkoutExercise[] {
-  const picksMap = todayPicksToMap(picks);
-  const pickOrder = pickOrderFromPicks(picks);
   const byId = new Map(allExercises.map((e) => [e.id, e]));
 
   const picked: WorkoutExercise[] = [];
-  for (const id of pickOrder) {
-    const lib = byId.get(id);
-    if (!lib || !picksMap.has(id)) continue;
-    const variations = picksMap.get(id)!;
+  for (const pick of picks) {
+    const lib = byId.get(pick.exerciseId);
+    if (!lib) continue;
+    
+    // Create a standalone WorkoutExercise for this specific variation
     let ex = libraryItemToWorkoutExercise(lib, defaultSets);
-    ex =
-      variations.length > 0
-        ? applyWorkoutExerciseFromPicks(ex, variations, defaultSets)
-        : { ...ex, pickedToday: true };
+    ex = {
+      ...ex,
+      variation: pick.variation,
+      pickedToday: true,
+      pickedVariations: [pick.variation],
+      setsByVariation: {
+        [pick.variation]: Array.from({ length: defaultSets }, () => ({ weight: 0, reps: 0, done: false })),
+      }
+    };
     picked.push(ex);
   }
 
+  // Also include unpicked exercises for the "Not doing today" section
+  const pickedIds = new Set(picks.map(p => p.exerciseId));
   const unpicked: WorkoutExercise[] = [];
   for (const lib of allExercises) {
-    if (picksMap.has(lib.id)) continue;
+    if (pickedIds.has(lib.id)) continue;
     unpicked.push({ ...libraryItemToWorkoutExercise(lib, defaultSets), pickedToday: false });
   }
 
@@ -583,23 +597,22 @@ export function getDefaultTodayPicks(
 
   const lastSession = workouts.find((w) => w.splitId === splitId);
   if (lastSession) {
-    const byExercise = new Map<string, Set<string>>();
-    const order: string[] = [];
+    const fromLast: TodayExercisePick[] = [];
     for (const e of lastSession.exercises) {
       if (!allExerciseIds.has(e.exerciseId)) continue;
-      if (!byExercise.has(e.exerciseId)) order.push(e.exerciseId);
-      mergeTodayPickVariations(byExercise, e.exerciseId, [e.variation]);
+      fromLast.push({
+        id: generateId(),
+        exerciseId: e.exerciseId,
+        variation: e.variation,
+      });
     }
-    const fromLast = order.map((exerciseId) => ({
-      exerciseId,
-      variations: Array.from(byExercise.get(exerciseId)!),
-    }));
     if (fromLast.length) return fromLast;
   }
 
   return exercises.map((e) => ({
+    id: generateId(),
     exerciseId: e.id,
-    variations: [e.variations[0] ?? 'Standard'],
+    variation: e.variations[0] ?? 'Standard',
   }));
 }
 
