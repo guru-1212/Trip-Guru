@@ -32,7 +32,9 @@ import { SessionSetRow } from '@/components/workout/SessionSetRow';
 import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm';
 import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workout/AddExerciseModal';
 import { TodayExercisePicker } from '@/components/workout/TodayExercisePicker';
+import { useFitTrackCelebration } from '@/components/fittrack/FitTrackCelebrationProvider';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
+import { getHabitStreak } from '@/workout/analytics';
 import { SPLIT_DEFINITIONS, SPLIT_NAMES, MUSCLE_COLORS } from '@/workout/constants';
 import { getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
@@ -138,6 +140,7 @@ export default function WorkoutPage() {
     profile,
     workouts,
     prs,
+    habits,
     activeWorkout,
     customExercises,
     hydrated,
@@ -162,6 +165,9 @@ export default function WorkoutPage() {
     removeVariationImage,
     getVariationImage,
   } = useWorkoutStore();
+
+  const { celebratePR, celebrateWorkoutComplete, resetPRSession } = useFitTrackCelebration();
+  const workoutSessionRef = useRef<number | null>(null);
 
   const [selectedSplit, setSelectedSplit] = useState<SplitId | null>(null);
   const [todayPicks, setTodayPicks] = useState<TodayExercisePick[]>([]);
@@ -300,6 +306,16 @@ export default function WorkoutPage() {
       setSelectedSplit(activeWorkout.splitId);
     }
   }, [activeWorkout]);
+
+  useEffect(() => {
+    if (activeWorkout?.startedAt && activeWorkout.startedAt !== workoutSessionRef.current) {
+      resetPRSession();
+      workoutSessionRef.current = activeWorkout.startedAt;
+    }
+    if (!activeWorkout) {
+      workoutSessionRef.current = null;
+    }
+  }, [activeWorkout?.startedAt, activeWorkout, resetPRSession]);
 
   useEffect(() => {
     if (!activeWorkout) return;
@@ -537,6 +553,27 @@ export default function WorkoutPage() {
   };
 
   const toggleSetDone = (exerciseId: string, variation: string, setIdx: number) => {
+    if (activeWorkout) {
+      const ex = activeWorkout.exercises.find(
+        (e) => e.exerciseId === exerciseId && e.variation === variation
+      );
+      if (ex) {
+        const set = ex.sets[setIdx];
+        if (!set.done && set.weight > 0 && set.reps > 0 && isPR(exerciseId, set.weight, prs)) {
+          const lib = getExerciseById(exerciseId);
+          celebratePR({
+            exerciseId,
+            exerciseName: lib?.name ?? ex.variation,
+            variation: ex.variation,
+            weight: set.weight,
+            reps: set.reps,
+            unit: profile.prefs.unit,
+            previousWeight: prs[exerciseId]?.weight,
+          });
+        }
+      }
+    }
+
     patchActiveWorkout((prev) => {
       let startedRest = false;
       const exercises = prev.exercises.map((ex) => {
@@ -595,21 +632,41 @@ export default function WorkoutPage() {
   const confirmFinish = () => {
     if (!activeWorkout) return;
     const exercisesToSave = filterExercisesForSave(activeWorkout.exercises);
+    const isFirstWorkoutToday = !habits[workoutDate]?.workout;
+    const prCount = activeWorkout.exercises.filter((ex) =>
+      ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs))
+    ).length;
+    const splitName = activeWorkout.splitName;
+    const duration = elapsed;
+    const sets = countCompletedSets(exercisesToSave);
+    const volume = calcWorkoutVolume(exercisesToSave);
+
     saveWorkout({
       date: workoutDate,
       splitId: activeWorkout.splitId,
       splitName: activeWorkout.splitName,
       duration: elapsed,
       exercises: exercisesToSave,
-      totalSets: countCompletedSets(exercisesToSave),
-      totalVolume: calcWorkoutVolume(exercisesToSave),
+      totalSets: sets,
+      totalVolume: volume,
     });
     clearActiveWorkout();
     releaseWakeLock();
     setShowSummary(false);
     setFinishPin('');
     setPinError(false);
-    router.push('/fittrack/progress');
+
+    celebrateWorkoutComplete({
+      splitName,
+      duration,
+      sets,
+      volume,
+      unit: profile.prefs.unit,
+      prCount,
+      isFirstWorkoutToday,
+      workoutStreak: isFirstWorkoutToday ? getHabitStreak(habits, 'workout') + 1 : undefined,
+      onDismiss: () => router.push('/fittrack/progress'),
+    });
   };
 
   const handleSaveWorkout = () => {

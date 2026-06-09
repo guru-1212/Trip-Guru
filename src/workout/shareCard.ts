@@ -7,13 +7,36 @@ import type {
   WorkoutExercise,
   WorkoutSession,
 } from './types';
+import { EXERCISE_LIBRARY } from './exerciseLibrary';
 import {
   calcStreak,
   calcWorkoutVolume,
   countCompletedSets,
+  estimateOneRepMax,
   formatWeight,
   isPR,
 } from './utils';
+
+export const BIG_THREE_LIFT_IDS = ['squat', 'bench-press', 'deadlift'] as const;
+export type BigThreeLiftId = (typeof BIG_THREE_LIFT_IDS)[number];
+
+export type PRShareLift = {
+  exerciseId: string;
+  name: string;
+  estimated1RM: number;
+  estimated1RMLabel: string;
+  actualSet: string;
+  date: string;
+  dateLabel: string;
+  variation: string;
+};
+
+export type PRShareCardData = {
+  athleteName: string;
+  mode: 'single' | 'wall';
+  lifts: PRShareLift[];
+  unit: UserProfile['prefs']['unit'];
+};
 
 /** Duration for share card: hours, minutes, seconds (e.g. "1h 23m 45s"). */
 export function formatShareCardDuration(seconds: number): string {
@@ -264,4 +287,82 @@ export function waitForShareCardPaint(): Promise<void> {
   return new Promise((resolve) => {
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
+}
+
+function buildPRShareLift(
+  exerciseId: string,
+  name: string,
+  pr: PersonalRecord,
+  unit: UserProfile['prefs']['unit']
+): PRShareLift {
+  const estimated1RM = estimateOneRepMax(pr.weight, pr.reps);
+  return {
+    exerciseId,
+    name,
+    estimated1RM,
+    estimated1RMLabel: formatWeight(estimated1RM, unit),
+    actualSet: `${formatWeight(pr.weight, unit)} × ${pr.reps}`,
+    date: pr.date,
+    dateLabel: dayjs(pr.date).format('MMM D, YYYY'),
+    variation: pr.variation,
+  };
+}
+
+export function buildPRShareCardData(input: {
+  athleteName: string;
+  prs: Record<string, PersonalRecord>;
+  unit: UserProfile['prefs']['unit'];
+  mode: 'single' | 'wall';
+  exerciseId?: string;
+  customExercises?: { id: string; name: string }[];
+}): PRShareCardData | null {
+  const { athleteName, prs, unit, mode, exerciseId, customExercises = [] } = input;
+
+  const resolveName = (id: string) =>
+    EXERCISE_LIBRARY.find((e) => e.id === id)?.name ??
+    customExercises.find((e) => e.id === id)?.name ??
+    id;
+
+  if (mode === 'single' && exerciseId) {
+    const pr = prs[exerciseId];
+    if (!pr) return null;
+    return {
+      athleteName: athleteName || 'Athlete',
+      mode: 'single',
+      unit,
+      lifts: [buildPRShareLift(exerciseId, resolveName(exerciseId), pr, unit)],
+    };
+  }
+
+  const lifts = BIG_THREE_LIFT_IDS.flatMap((id) => {
+    const pr = prs[id];
+    if (!pr) return [];
+    return [buildPRShareLift(id, resolveName(id), pr, unit)];
+  });
+
+  if (lifts.length === 0) return null;
+
+  return {
+    athleteName: athleteName || 'Athlete',
+    mode: 'wall',
+    unit,
+    lifts,
+  };
+}
+
+export function prShareCardFilename(liftName: string, date: string): string {
+  const safeName = liftName.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  return `fittrack-${safeName}-pr-${date}.png`;
+}
+
+export async function exportPRShareCard(
+  element: HTMLElement,
+  data: PRShareCardData
+): Promise<'shared' | 'downloaded'> {
+  const blob = await captureShareCardAsPng(element);
+  const filename =
+    data.mode === 'single' && data.lifts[0]
+      ? prShareCardFilename(data.lifts[0].name, data.lifts[0].date)
+      : prShareCardFilename('wall-of-fame', dayjs().format('YYYY-MM-DD'));
+  return shareOrDownloadShareCard(blob, filename);
 }

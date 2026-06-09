@@ -73,6 +73,13 @@ export function formatWeight(kg: number, unit: 'kg' | 'lbs'): string {
   return `${val}${unit}`;
 }
 
+/** Epley formula — estimated one-rep max from weight and reps. */
+export function estimateOneRepMax(weight: number, reps: number): number {
+  if (reps <= 0 || weight <= 0) return 0;
+  if (reps === 1) return weight;
+  return Math.round(weight * (1 + reps / 30));
+}
+
 export function suggestWeight(
   lastWeight: number,
   lastReps: number,
@@ -645,6 +652,32 @@ export function isPR(
   const pr = prs[exerciseId];
   if (!pr) return weight > 0;
   return weight > pr.weight;
+}
+
+export interface PRBeatDetails {
+  isPR: boolean;
+  isFirstRecord: boolean;
+  previousWeight?: number;
+  delta?: number;
+}
+
+export function getPRBeatDetails(
+  exerciseId: string,
+  weight: number,
+  prs: Record<string, PersonalRecord>
+): PRBeatDetails {
+  if (weight <= 0) return { isPR: false, isFirstRecord: false };
+  const pr = prs[exerciseId];
+  if (!pr) return { isPR: true, isFirstRecord: true };
+  if (weight > pr.weight) {
+    return {
+      isPR: true,
+      isFirstRecord: false,
+      previousWeight: pr.weight,
+      delta: weight - pr.weight,
+    };
+  }
+  return { isPR: false, isFirstRecord: false };
 }
 
 export function updatePRsFromWorkout(

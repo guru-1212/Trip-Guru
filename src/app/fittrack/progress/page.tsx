@@ -4,10 +4,12 @@ import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { Trophy } from 'lucide-react';
+import { PRWall } from '@/components/fittrack/PRWall';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { getMuscleVolumeTrend, getExerciseHistory } from '@/workout/analytics';
 import { EXERCISE_LIBRARY } from '@/workout/exerciseLibrary';
+import { BIG_THREE_LIFT_IDS } from '@/workout/shareCard';
 import { formatWeight } from '@/workout/utils';
 
 type Range = '30d' | '3m' | '6m' | 'all';
@@ -25,7 +27,10 @@ export default function ProgressPage() {
   const [bodyNotes, setBodyNotes] = useState('');
 
   const prCards = useMemo(() => {
-    const entries = Object.entries(prs).map(([id, pr]) => {
+    const bigThreeSet = new Set<string>(BIG_THREE_LIFT_IDS);
+    const entries = Object.entries(prs)
+      .filter(([id]) => !bigThreeSet.has(id))
+      .map(([id, pr]) => {
       const ex = EXERCISE_LIBRARY.find((e) => e.id === id) ?? customExercises.find((e) => e.id === id);
       return { id, name: ex?.name ?? id, ...pr };
     });
@@ -82,6 +87,13 @@ export default function ProgressPage() {
           </select>
         </div>
 
+        <PRWall
+          prs={prs}
+          unit={profile.prefs.unit}
+          athleteName={profile.name}
+          customExercises={customExercises}
+        />
+
         {/* PR Board */}
         <section>
           <div className="flex items-center justify-between mb-4">
@@ -95,7 +107,7 @@ export default function ProgressPage() {
             </select>
           </div>
           {prCards.length === 0 ? (
-            <p className="text-muted-foreground text-sm">No PRs yet. Complete workouts to set records!</p>
+            <p className="text-muted-foreground text-sm">No other PRs yet. Complete workouts to set records!</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {prCards.map((pr) => (
