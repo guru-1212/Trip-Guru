@@ -12,6 +12,7 @@ import {
   User,
   Droplets,
   Utensils,
+  History,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +21,7 @@ const navItems = [
   { href: '/fittrack/water', label: 'Water', icon: Droplets },
   { href: '/fittrack/diet', label: 'Diet', icon: Utensils },
   { href: '/fittrack/workout', label: 'Workout', icon: Dumbbell },
+  { href: '/fittrack/history', label: 'History', icon: History },
   { href: '/fittrack/exercises', label: 'Exercises', icon: BookOpen },
   { href: '/fittrack/progress', label: 'Progress', icon: TrendingUp },
   { href: '/fittrack/checklist', label: 'Checklist', icon: CheckSquare },

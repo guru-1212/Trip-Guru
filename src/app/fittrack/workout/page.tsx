@@ -41,6 +41,7 @@ import { getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
 import type { CustomExercise, SplitId, TodayExercisePick, WorkoutExercise, WorkoutSet, LibraryExercise, WeightUnit } from '@/workout/types';
 import {
+  generateId,
   getGreeting,
   getTodayDayKey,
   getTodaysSplit,
@@ -372,6 +373,22 @@ export default function WorkoutPage() {
     },
     [selectedSplit, flushTodayPicks]
   );
+
+  const handleRepeatLastWorkout = useCallback(() => {
+    if (!selectedSplit) return;
+    const lastSession = workouts.find((w) => w.splitId === selectedSplit);
+    if (!lastSession) {
+      toast.error('No previous workout found for this split');
+      return;
+    }
+    const picks: TodayExercisePick[] = lastSession.exercises.map((e) => ({
+      id: generateId(),
+      exerciseId: e.exerciseId,
+      variation: e.variation,
+    }));
+    handlePicksChange(picks);
+    toast.success('Restored last workout picks and sequence');
+  }, [selectedSplit, workouts, handlePicksChange]);
 
   const handleSequenceLockedChange = useCallback(
     (locked: boolean) => {
@@ -1680,6 +1697,8 @@ export default function WorkoutPage() {
             getVariationImage={getVariationImage}
             sequenceLocked={sequenceLocked}
             onSequenceLockedChange={handleSequenceLockedChange}
+            onRepeatLastWorkout={handleRepeatLastWorkout}
+            hasLastWorkout={!!workouts.find((w) => w.splitId === selectedSplit)}
           />
         )}
 

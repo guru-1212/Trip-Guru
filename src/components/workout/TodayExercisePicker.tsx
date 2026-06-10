@@ -36,6 +36,8 @@ interface TodayExercisePickerProps {
   getVariationImage: (exerciseId: string, variation: string) => string | undefined;
   sequenceLocked: boolean;
   onSequenceLockedChange: (locked: boolean) => void;
+  onRepeatLastWorkout?: () => void;
+  hasLastWorkout?: boolean;
 }
 
 function findPickIndex(picks: TodayExercisePick[], exerciseId: string): number {
@@ -56,6 +58,8 @@ export function TodayExercisePicker({
   getVariationImage,
   sequenceLocked,
   onSequenceLockedChange,
+  onRepeatLastWorkout,
+  hasLastWorkout,
 }: TodayExercisePickerProps) {
   const grouped = groupLibraryExercisesByMuscle(exercises, splitId);
   const exerciseById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
@@ -458,7 +462,7 @@ export function TodayExercisePicker({
         </span>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <button
           type="button"
           onClick={selectAll}
@@ -475,6 +479,16 @@ export function TodayExercisePicker({
         >
           Clear
         </button>
+        {onRepeatLastWorkout && hasLastWorkout && (
+          <button
+            type="button"
+            onClick={onRepeatLastWorkout}
+            disabled={sequenceLocked}
+            className="ft-btn ft-btn--ghost ft-btn--sm disabled:opacity-40 disabled:pointer-events-none"
+          >
+            Repeat Last Workout
+          </button>
+        )}
       </div>
 
       {picks.length > 0 && (
