@@ -22,6 +22,8 @@ import {
   getNextReminder,
   getScheduleWithStates,
   computeStreakFromDateKeys,
+  getCurrentMinutesInTimezone,
+  getExpectedMlByTime,
   DEFAULT_TIMEZONE,
 } from '@/lib/water/waterUtils';
 
@@ -67,6 +69,12 @@ export function useWaterTracker() {
     if (!settings) return 'on_track' as const;
     return getPaceStatus(log?.totalMl ?? 0, goalMl, now, schedule, timezone, gymDay);
   }, [log?.totalMl, goalMl, now, schedule, timezone, gymDay, settings]);
+
+  const expectedMl = useMemo(() => {
+    if (!settings) return 0;
+    const currentMinutes = getCurrentMinutesInTimezone(now, timezone);
+    return getExpectedMlByTime(schedule, currentMinutes, gymDay);
+  }, [settings, now, timezone, schedule, gymDay]);
 
   const nextReminder = useMemo(() => {
     return getNextReminder(schedule, now, timezone, gymDay);
@@ -204,6 +212,7 @@ export function useWaterTracker() {
     schedule,
     scheduleWithStates,
     paceStatus,
+    expectedMl,
     nextReminder,
     streak,
     isGymDay: gymDay,

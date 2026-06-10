@@ -18,12 +18,15 @@ export function WaterDashboardWidget({ className }: WaterDashboardWidgetProps) {
     totalMl,
     goalMl,
     paceStatus,
+    scheduleWithStates,
     loading,
     actionLoading,
     ready,
     addIntake,
     isGymDay,
   } = useWaterTracker();
+
+  const suggestedAmounts = Array.from(new Set(scheduleWithStates.map((s) => s.amount))).sort((a, b) => a - b);
 
   const handleAdd = async (amount: number) => {
     try {
@@ -69,7 +72,12 @@ export function WaterDashboardWidget({ className }: WaterDashboardWidgetProps) {
         <WaterProgressRing totalMl={totalMl} goalMl={goalMl} size={140} />
         <div className="flex-1 w-full space-y-3">
           <WaterPaceIndicator status={paceStatus} />
-          <WaterQuickAdd onAdd={handleAdd} disabled={!ready || actionLoading} compact />
+          <WaterQuickAdd 
+            onAdd={handleAdd} 
+            suggestedAmounts={suggestedAmounts}
+            disabled={!ready || actionLoading} 
+            compact 
+          />
         </div>
       </div>
     </section>

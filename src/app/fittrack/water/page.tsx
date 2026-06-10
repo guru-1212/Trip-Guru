@@ -22,6 +22,7 @@ export default function WaterPage() {
     intakes,
     scheduleWithStates,
     paceStatus,
+    expectedMl,
     nextReminder,
     streak,
     isGymDay,
@@ -34,6 +35,8 @@ export default function WaterPage() {
     addIntake,
     removeIntake,
   } = useWaterTracker();
+
+  const suggestedAmounts = Array.from(new Set(scheduleWithStates.map((s) => s.amount))).sort((a, b) => a - b);
 
   const handleAdd = async (amount: number) => {
     try {
@@ -104,8 +107,27 @@ export default function WaterPage() {
 
         <div className="ft-card ft-card-padded flex flex-col items-center gap-4">
           <WaterProgressRing totalMl={totalMl} goalMl={goalMl} />
+          
+          <div className="grid grid-cols-2 gap-4 w-full max-w-md">
+            <div className="flex flex-col items-center p-3 bg-muted/40 rounded-xl border border-border/50">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Target Pace</span>
+              <span className="text-xl font-bold text-[hsl(var(--water))]">{formatMl(expectedMl)}</span>
+              <span className="text-[10px] text-muted-foreground mt-0.5">should have drunk</span>
+            </div>
+            <div className="flex flex-col items-center p-3 bg-muted/40 rounded-xl border border-border/50">
+              <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-widest mb-1">Actual Intake</span>
+              <span className="text-xl font-bold text-foreground">{formatMl(totalMl)}</span>
+              <span className="text-[10px] text-muted-foreground mt-0.5">really drunk</span>
+            </div>
+          </div>
+
           <WaterPaceIndicator status={paceStatus} />
-          <WaterQuickAdd onAdd={handleAdd} disabled={!ready || actionLoading} className="w-full max-w-md" />
+          <WaterQuickAdd 
+            onAdd={handleAdd} 
+            suggestedAmounts={suggestedAmounts}
+            disabled={!ready || actionLoading} 
+            className="w-full max-w-md" 
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
