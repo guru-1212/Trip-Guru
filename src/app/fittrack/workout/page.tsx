@@ -1169,6 +1169,10 @@ export default function WorkoutPage() {
                 uploadMobilityImageFromFile={uploadMobilityImageFromFile}
                 removeMobilityImage={removeMobilityImage}
                 onComplete={handleCooldownComplete}
+                onSkip={() => {
+                  setShowCooldownGate(false);
+                  setShowSummary(true);
+                }}
                 onClose={() => setShowCooldownGate(false)}
               />
             )}
@@ -1788,6 +1792,10 @@ export default function WorkoutPage() {
               uploadMobilityImageFromFile={uploadMobilityImageFromFile}
               removeMobilityImage={removeMobilityImage}
               onComplete={handleWarmupComplete}
+              onSkip={() => {
+                setShowWarmupGate(false);
+                beginWorkout();
+              }}
               onClose={() => setShowWarmupGate(false)}
             />
           )}

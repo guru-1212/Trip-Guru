@@ -29,6 +29,8 @@ import {
 } from '@/workout/utils';
 import { cn } from '@/lib/utils';
 
+const EMPTY_SAVED_MOBILITY_PICKS: Record<string, string> = {};
+
 interface MobilityRoutineModalProps {
   mode: MobilityType;
   splitId: SplitId;
@@ -39,6 +41,7 @@ interface MobilityRoutineModalProps {
   uploadMobilityImageFromFile: (mobilityId: string, variation: string, file: File) => Promise<void>;
   removeMobilityImage: (mobilityId: string, variation: string) => void;
   onComplete: (variationPicks: Record<string, string>) => void;
+  onSkip?: () => void;
   onClose?: () => void;
 }
 
@@ -46,14 +49,16 @@ export function MobilityRoutineModal({
   mode,
   splitId,
   splitName,
-  savedPicks = {},
+  savedPicks,
   getMobilityImage,
   setMobilityImage,
   uploadMobilityImageFromFile,
   removeMobilityImage,
   onComplete,
+  onSkip,
   onClose,
 }: MobilityRoutineModalProps) {
+  const effectiveSavedPicks = savedPicks ?? EMPTY_SAVED_MOBILITY_PICKS;
   const exercises = useMemo(
     () => (mode === 'warmup' ? getWarmupForSplitMerged(splitId) : getStretchForSplitMerged(splitId)),
     [mode, splitId]
@@ -62,7 +67,7 @@ export function MobilityRoutineModal({
   const [variationPicks, setVariationPicks] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const ex of exercises) {
-      initial[ex.id] = savedPicks[ex.id] ?? ex.variations[0] ?? 'Standard';
+      initial[ex.id] = effectiveSavedPicks[ex.id] ?? ex.variations[0] ?? 'Standard';
     }
     return initial;
   });
@@ -75,11 +80,11 @@ export function MobilityRoutineModal({
   useEffect(() => {
     const initial: Record<string, string> = {};
     for (const ex of exercises) {
-      initial[ex.id] = savedPicks[ex.id] ?? ex.variations[0] ?? 'Standard';
+      initial[ex.id] = effectiveSavedPicks[ex.id] ?? ex.variations[0] ?? 'Standard';
     }
     setVariationPicks(initial);
     setDoneSet(new Set());
-  }, [exercises, savedPicks, mode, splitId]);
+  }, [exercises, effectiveSavedPicks, mode, splitId]);
 
   const doneCount = doneSet.size;
   const totalCount = exercises.length;
@@ -127,7 +132,8 @@ export function MobilityRoutineModal({
     mode === 'warmup'
       ? 'Complete each movement before starting your lifts'
       : 'Stretch the muscles you trained today';
-  const completeLabel = mode === 'warmup' ? 'Start Workout' : 'Continue to Summary';
+  const completeLabel = mode === 'warmup' ? 'Start Recording' : 'Continue to Summary';
+  const skipLabel = mode === 'warmup' ? 'Skip Warm-up' : 'Skip Stretching';
   const Icon = mode === 'warmup' ? Flame : Wind;
 
   return (
@@ -233,24 +239,34 @@ export function MobilityRoutineModal({
           </div>
 
           <div className="shrink-0 p-4 sm:p-6 border-t border-border bg-background/95 backdrop-blur-sm">
-            <button
-              type="button"
-              disabled={!allDone}
-              onClick={() => onComplete(variationPicks)}
-              className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg disabled:opacity-40"
-            >
-              {allDone ? (
-                <>
-                  <Check className="h-4 w-4" />
-                  {completeLabel}
-                </>
-              ) : (
-                <>
-                  <Circle className="h-4 w-4" />
-                  {totalCount - doneCount} remaining
-                </>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              {onSkip && (
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  className="ft-btn ft-btn--secondary ft-btn--block ft-btn--lg sm:flex-1"
+                >
+                  {skipLabel}
+                </button>
               )}
-            </button>
+              <button
+                type="button"
+                onClick={() => onComplete(variationPicks)}
+                className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg sm:flex-1"
+              >
+                {allDone ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    {completeLabel}
+                  </>
+                ) : (
+                  <>
+                    <Circle className="h-4 w-4" />
+                    {mode === 'warmup' ? 'Start Recording Anyway' : 'Continue Anyway'}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </motion.div>
       </div>
@@ -343,15 +359,23 @@ function MobilityCard({
           <button
             type="button"
             onClick={onToggleDone}
-            className="shrink-0 mt-0.5"
+            aria-pressed={done}
             aria-label={done ? 'Mark not done' : 'Mark done'}
+            className={cn(
+              'shrink-0 mt-0.5 h-8 w-8 rounded-xl border flex items-center justify-center transition-colors',
+              done
+                ? mode === 'warmup'
+                  ? 'border-orange-500 bg-orange-500 text-white'
+                  : 'border-teal-500 bg-teal-500 text-white'
+                : 'border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+            )}
           >
             {done ? (
               <CheckCircle2
-                className={cn('h-6 w-6', mode === 'warmup' ? 'text-orange-500' : 'text-teal-500')}
+                className="h-4 w-4"
               />
             ) : (
-              <Circle className="h-6 w-6 text-muted-foreground" />
+              <Circle className="h-4 w-4" />
             )}
           </button>
 
