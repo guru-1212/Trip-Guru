@@ -15,6 +15,7 @@ export const STORAGE_KEYS = {
   splitExtras: 'wk_split_extras',
   splitTodayPicks: 'wk_split_today_picks',
   splitSequenceLocked: 'wk_split_sequence_locked',
+  splitMobilityPicks: 'wk_split_mobility_picks',
 } as const;
 
 export const SPLIT_DEFINITIONS: SplitDefinition[] = [

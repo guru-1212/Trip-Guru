@@ -47,6 +47,8 @@ export interface FitTrackStateDoc {
   splitTodayPicks: Partial<Record<SplitId, TodayExercisePick[]>>;
   /** Per-split lock for today's exercise + variation sequence plan. */
   splitSequenceLocked: Partial<Record<SplitId, boolean>>;
+  /** Per-split remembered mobility variation picks: mobilityId → variation name */
+  splitMobilityPicks: Partial<Record<SplitId, Record<string, string>>>;
   activeWorkout: ActiveWorkoutState | null;
   migratedFromLocal?: boolean;
   updatedAt?: unknown;
@@ -103,6 +105,7 @@ export function defaultStateDoc(): FitTrackStateDoc {
     splitExtras: {},
     splitTodayPicks: {},
     splitSequenceLocked: {},
+    splitMobilityPicks: {},
     activeWorkout: null,
   };
 }
@@ -232,6 +235,7 @@ export async function migrateLocalStorageToFirebase(uid: string): Promise<boolea
     splitExtras: localStorage.loadSplitExtras(),
     splitTodayPicks: localStorage.loadSplitTodayPicks(),
     splitSequenceLocked: localStorage.loadSplitSequenceLocked(),
+    splitMobilityPicks: localStorage.loadSplitMobilityPicks(),
     activeWorkout: localStorage.loadActiveWorkout(),
     migratedFromLocal: true,
   });
@@ -255,6 +259,7 @@ export async function importFitTrackData(
     splitExtras?: Partial<Record<SplitId, string[]>>;
     splitTodayPicks?: Partial<Record<SplitId, TodayExercisePick[]>>;
     splitSequenceLocked?: Partial<Record<SplitId, boolean>>;
+    splitMobilityPicks?: Partial<Record<SplitId, Record<string, string>>>;
   }
 ): Promise<void> {
   if (data.profile) await saveFitTrackProfile(uid, data.profile);
@@ -289,6 +294,7 @@ export async function importFitTrackData(
     splitExtras: data.splitExtras,
     splitTodayPicks: data.splitTodayPicks,
     splitSequenceLocked: data.splitSequenceLocked,
+    splitMobilityPicks: data.splitMobilityPicks,
   });
 }
 

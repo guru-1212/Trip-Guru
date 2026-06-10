@@ -209,3 +209,20 @@ export interface ActiveWorkoutState {
 
 /** Map key: `${exerciseId}::${variationName}` → base64 data URL */
 export type VariationImageMap = Record<string, string>;
+
+export type MobilityType = 'warmup' | 'stretch';
+
+export interface MobilityExercise {
+  id: string;
+  name: string;
+  type: MobilityType;
+  targetMuscles: MuscleGroup[];
+  splitIds: SplitId[];
+  variations: string[];
+  durationSeconds?: number;
+  repsLabel?: string;
+  tips: string[];
+}
+
+/** Per-split remembered mobility variation picks: mobilityId → variation name */
+export type SplitMobilityPicks = Partial<Record<SplitId, Record<string, string>>>;

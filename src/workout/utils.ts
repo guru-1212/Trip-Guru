@@ -1065,6 +1065,14 @@ export function variationImageKey(exerciseId: string, variation: string): string
   return `${exerciseId}::${variation}`;
 }
 
+export function mobilityImageKey(mobilityId: string, variation: string): string {
+  return `mobility::${mobilityId}::${variation}`;
+}
+
+export function mobilityStorageId(mobilityId: string): string {
+  return `mobility::${mobilityId}`;
+}
+
 const LIBRARY_MUSCLE_ORDER: MuscleGroup[] = [
   'Chest',
   'Back',
@@ -1165,6 +1173,10 @@ export function exerciseHasMissingUploadedImage(
 
 export function defaultExerciseImageUrl(exerciseId: string): string {
   return `https://images.unsplash.com/photo-1534438327276-14e5300c3a48?auto=format&fit=crop&q=80&w=800&exercise=${exerciseId}`;
+}
+
+export function defaultMobilityImageUrl(mobilityId: string): string {
+  return `https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&q=80&w=800&mobility=${mobilityId}`;
 }
 
 export function resolveExerciseImageUrl(

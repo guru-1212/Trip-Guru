@@ -20,6 +20,7 @@ import type {
   WorkoutSession,
   UserPrefs,
   TodayExercisePick,
+  SplitMobilityPicks,
 } from './types';
 import {
   generateId,
@@ -29,6 +30,7 @@ import {
   updatePRDatesForWorkout,
   getDefaultProfile,
   variationImageKey,
+  mobilityStorageId,
   cloudSafeVariationImages,
   isRemoteImageUrl,
   compressImageFile,
@@ -54,6 +56,7 @@ interface WorkoutContextValue {
   splitExtras: Partial<Record<SplitId, string[]>>;
   splitTodayPicks: Partial<Record<SplitId, TodayExercisePick[]>>;
   splitSequenceLocked: Partial<Record<SplitId, boolean>>;
+  splitMobilityPicks: SplitMobilityPicks;
   hydrated: boolean;
   syncing: boolean;
   fittrackOwnerId: string | null;
@@ -72,6 +75,7 @@ interface WorkoutContextValue {
   toggleHabit: (date: string, key: keyof HabitDay) => void;
   updateWeeklyGoals: (goals: Partial<WeeklyGoals>) => void;
   updateChecklist: (data: ChecklistData) => void;
+  markChecklistItemDone: (id: string) => void;
   addChecklistItem: (label: string) => void;
   deleteChecklistItem: (id: string) => void;
   addVariation: (exerciseId: string, variation: string) => void;
@@ -87,6 +91,10 @@ interface WorkoutContextValue {
   uploadVariationImageFromFile: (exerciseId: string, variation: string, file: File) => Promise<void>;
   removeVariationImage: (exerciseId: string, variation: string) => void;
   getVariationImage: (exerciseId: string, variation: string) => string | undefined;
+  getMobilityImage: (mobilityId: string, variation: string) => string | undefined;
+  setMobilityImage: (mobilityId: string, variation: string, imageSrc: string) => void;
+  uploadMobilityImageFromFile: (mobilityId: string, variation: string, file: File) => Promise<void>;
+  removeMobilityImage: (mobilityId: string, variation: string) => void;
   exportData: () => void;
   importData: (json: string) => boolean;
   clearHistory: () => void;
@@ -96,6 +104,7 @@ interface WorkoutContextValue {
   rememberSplitExercise: (splitId: SplitId, exerciseId: string) => void;
   rememberTodayPicks: (splitId: SplitId, picks: TodayExercisePick[]) => void;
   rememberSequenceLocked: (splitId: SplitId, locked: boolean) => void;
+  rememberMobilityPicks: (splitId: SplitId, picks: Record<string, string>) => void;
 }
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
@@ -121,6 +130,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [splitExtras, setSplitExtras] = useState<Partial<Record<SplitId, string[]>>>({});
   const [splitTodayPicks, setSplitTodayPicks] = useState<Partial<Record<SplitId, TodayExercisePick[]>>>({});
   const [splitSequenceLocked, setSplitSequenceLocked] = useState<Partial<Record<SplitId, boolean>>>({});
+  const [splitMobilityPicks, setSplitMobilityPicks] = useState<SplitMobilityPicks>({});
   const [hydrated, setHydrated] = useState(false);
   const [syncing, setSyncing] = useState(true);
 
@@ -157,6 +167,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setSplitExtras,
     setSplitTodayPicks,
     setSplitSequenceLocked,
+    setSplitMobilityPicks,
     setHydrated,
     setSyncing,
   }, { migrateUid: isFitTrackPartner ? null : uid });
@@ -366,6 +377,20 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const updateChecklist = useCallback((data: ChecklistData) => {
     setChecklist(data);
     persistState({ checklist: data });
+  }, [persistState]);
+
+  const markChecklistItemDone = useCallback((id: string) => {
+    setChecklist((prev) => {
+      const mark = (items: ChecklistData['dailyItems']) =>
+        items.map((i) => (i.id === id && !i.done ? { ...i, done: true } : i));
+      const next = {
+        ...prev,
+        dailyItems: mark(prev.dailyItems),
+        custom: mark(prev.custom),
+      };
+      persistState({ checklist: next });
+      return next;
+    });
   }, [persistState]);
 
   const addChecklistItem = useCallback((label: string) => {
@@ -604,6 +629,34 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     [variationImages]
   );
 
+  const getMobilityImage = useCallback(
+    (mobilityId: string, variation: string) => {
+      return variationImages[variationImageKey(mobilityStorageId(mobilityId), variation)];
+    },
+    [variationImages]
+  );
+
+  const setMobilityImage = useCallback(
+    (mobilityId: string, variation: string, imageSrc: string) => {
+      setVariationImage(mobilityStorageId(mobilityId), variation, imageSrc);
+    },
+    [setVariationImage]
+  );
+
+  const uploadMobilityImageFromFile = useCallback(
+    (mobilityId: string, variation: string, file: File) => {
+      return uploadVariationImageFromFile(mobilityStorageId(mobilityId), variation, file);
+    },
+    [uploadVariationImageFromFile]
+  );
+
+  const removeMobilityImage = useCallback(
+    (mobilityId: string, variation: string) => {
+      removeVariationImage(mobilityStorageId(mobilityId), variation);
+    },
+    [removeVariationImage]
+  );
+
   const exportData = useCallback(() => {
     const data = {
       profile,
@@ -619,6 +672,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitExtras,
       splitTodayPicks,
       splitSequenceLocked,
+      splitMobilityPicks,
       exportedAt: new Date().toISOString(),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -629,7 +683,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Data exported');
-  }, [profile, workouts, prs, customExercises, bodyStats, habits, weeklyGoals, checklist, customVariations, variationImages, splitExtras, splitTodayPicks, splitSequenceLocked]);
+  }, [profile, workouts, prs, customExercises, bodyStats, habits, weeklyGoals, checklist, customVariations, variationImages, splitExtras, splitTodayPicks, splitSequenceLocked, splitMobilityPicks]);
 
   const importData = useCallback((json: string) => {
     const currentUid = uidRef.current;
@@ -727,6 +781,15 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     });
   }, [persistState]);
 
+  const rememberMobilityPicks = useCallback((splitId: SplitId, picks: Record<string, string>) => {
+    setSplitMobilityPicks((prev) => {
+      const next = { ...prev, [splitId]: picks };
+      persistState({ splitMobilityPicks: next });
+      localStorage.saveSplitMobilityPicks(next);
+      return next;
+    });
+  }, [persistState]);
+
   const deleteWorkout = useCallback((id: string) => {
     setWorkouts((prev) => {
       const next = prev.filter((w) => w.id !== id);
@@ -760,6 +823,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitExtras,
       splitTodayPicks,
       splitSequenceLocked,
+      splitMobilityPicks,
       hydrated,
       syncing,
       fittrackOwnerId: effectiveUid,
@@ -778,6 +842,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       toggleHabit,
       updateWeeklyGoals,
       updateChecklist,
+      markChecklistItemDone,
       addChecklistItem,
       deleteChecklistItem,
       addVariation,
@@ -788,6 +853,10 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       uploadVariationImageFromFile,
       removeVariationImage,
       getVariationImage,
+      getMobilityImage,
+      setMobilityImage,
+      uploadMobilityImageFromFile,
+      removeMobilityImage,
       exportData,
       importData,
       clearHistory,
@@ -797,6 +866,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       rememberSplitExercise,
       rememberTodayPicks,
       rememberSequenceLocked,
+      rememberMobilityPicks,
     }),
     [
       profile,
@@ -813,6 +883,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitExtras,
       splitTodayPicks,
       splitSequenceLocked,
+      splitMobilityPicks,
       hydrated,
       syncing,
       effectiveUid,
@@ -831,6 +902,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       toggleHabit,
       updateWeeklyGoals,
       updateChecklist,
+      markChecklistItemDone,
       addChecklistItem,
       deleteChecklistItem,
       addVariation,
@@ -841,6 +913,10 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       uploadVariationImageFromFile,
       removeVariationImage,
       getVariationImage,
+      getMobilityImage,
+      setMobilityImage,
+      uploadMobilityImageFromFile,
+      removeMobilityImage,
       exportData,
       importData,
       clearHistory,
@@ -850,6 +926,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       rememberSplitExercise,
       rememberTodayPicks,
       rememberSequenceLocked,
+      rememberMobilityPicks,
     ]
   );
 

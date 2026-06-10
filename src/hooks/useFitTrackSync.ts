@@ -26,9 +26,11 @@ import { getDefaultProfile, mergeVariationImages, normalizeProfile } from '@/wor
 import {
   loadSplitSequenceLocked,
   loadSplitTodayPicks,
+  loadSplitMobilityPicks,
   loadVariationImages,
   saveSplitSequenceLocked,
   saveSplitTodayPicks,
+  saveSplitMobilityPicks,
 } from '@/workout/storage';
 import { saveFitTrackState } from '@/firebase/fittrack.firestore';
 
@@ -47,6 +49,7 @@ export interface FitTrackSyncCallbacks {
   setSplitExtras: (e: Partial<Record<SplitId, string[]>>) => void;
   setSplitTodayPicks: (p: Partial<Record<SplitId, TodayExercisePick[]>>) => void;
   setSplitSequenceLocked: (l: Partial<Record<SplitId, boolean>>) => void;
+  setSplitMobilityPicks: (p: Partial<Record<SplitId, Record<string, string>>>) => void;
   setHydrated: (h: boolean) => void;
   setSyncing: (s: boolean) => void;
 }
@@ -131,6 +134,9 @@ export function useFitTrackSync(
           saveSplitTodayPicks(cloudPicks);
           cb().setSplitSequenceLocked(cloudLocks);
           saveSplitSequenceLocked(cloudLocks);
+          const cloudMobilityPicks = data.splitMobilityPicks ?? {};
+          cb().setSplitMobilityPicks(cloudMobilityPicks);
+          saveSplitMobilityPicks(cloudMobilityPicks);
 
           if (!migratedLocalPlanRef.current.locks) {
             const localLocks = loadSplitSequenceLocked();

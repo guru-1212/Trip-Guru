@@ -166,6 +166,16 @@ export function saveSplitSequenceLocked(locked: Partial<Record<SplitId, boolean>
   write(STORAGE_KEYS.splitSequenceLocked, locked);
 }
 
+export function loadSplitMobilityPicks(): Partial<Record<SplitId, Record<string, string>>> {
+  return read(STORAGE_KEYS.splitMobilityPicks, {});
+}
+
+export function saveSplitMobilityPicks(
+  picks: Partial<Record<SplitId, Record<string, string>>>
+): void {
+  write(STORAGE_KEYS.splitMobilityPicks, picks);
+}
+
 export function exportAllData(): string {
   const data = {
     profile: loadProfile(),
@@ -181,6 +191,7 @@ export function exportAllData(): string {
     splitExtras: loadSplitExtras(),
     splitTodayPicks: loadSplitTodayPicks(),
     splitSequenceLocked: loadSplitSequenceLocked(),
+    splitMobilityPicks: loadSplitMobilityPicks(),
     exportedAt: new Date().toISOString(),
   };
   return JSON.stringify(data, null, 2);
@@ -202,6 +213,7 @@ export function importAllData(json: string): boolean {
     if (data.splitExtras) saveSplitExtras(data.splitExtras);
     if (data.splitTodayPicks) saveSplitTodayPicks(data.splitTodayPicks);
     if (data.splitSequenceLocked) saveSplitSequenceLocked(data.splitSequenceLocked);
+    if (data.splitMobilityPicks) saveSplitMobilityPicks(data.splitMobilityPicks);
     return true;
   } catch {
     return false;

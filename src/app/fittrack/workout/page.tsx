@@ -32,6 +32,7 @@ import { SessionSetRow } from '@/components/workout/SessionSetRow';
 import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm';
 import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workout/AddExerciseModal';
 import { TodayExercisePicker } from '@/components/workout/TodayExercisePicker';
+import { MobilityRoutineModal } from '@/components/workout/MobilityRoutineModal';
 import { useFitTrackCelebration } from '@/components/fittrack/FitTrackCelebrationProvider';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { getHabitStreak } from '@/workout/analytics';
@@ -164,6 +165,13 @@ export default function WorkoutPage() {
     uploadVariationImageFromFile,
     removeVariationImage,
     getVariationImage,
+    splitMobilityPicks,
+    rememberMobilityPicks,
+    markChecklistItemDone,
+    getMobilityImage,
+    setMobilityImage,
+    uploadMobilityImageFromFile,
+    removeMobilityImage,
   } = useWorkoutStore();
 
   const { celebratePR, celebrateWorkoutComplete, resetPRSession } = useFitTrackCelebration();
@@ -178,6 +186,8 @@ export default function WorkoutPage() {
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+  const [showWarmupGate, setShowWarmupGate] = useState(false);
+  const [showCooldownGate, setShowCooldownGate] = useState(false);
   const [showSharePicks, setShowSharePicks] = useState(false);
   const [shareMode, setShareMode] = useState<'today' | 'overall'>('today');
   const [copied, setCopied] = useState(false);
@@ -619,8 +629,35 @@ export default function WorkoutPage() {
   const finishWorkout = () => {
     setFinishPin('');
     setPinError(false);
-    setShowSummary(true);
+    setShowCooldownGate(true);
   };
+
+  const handleWarmupComplete = useCallback(
+    (variationPicks: Record<string, string>) => {
+      if (!selectedSplit) return;
+      rememberMobilityPicks(selectedSplit, variationPicks);
+      markChecklistItemDone('pre-warmup');
+      setShowWarmupGate(false);
+      beginWorkout();
+    },
+    [selectedSplit, rememberMobilityPicks, markChecklistItemDone, beginWorkout]
+  );
+
+  const handleCooldownComplete = useCallback(
+    (variationPicks: Record<string, string>) => {
+      if (!activeWorkout) return;
+      rememberMobilityPicks(activeWorkout.splitId, variationPicks);
+      markChecklistItemDone('post-cooldown');
+      setShowCooldownGate(false);
+      setShowSummary(true);
+    },
+    [activeWorkout, rememberMobilityPicks, markChecklistItemDone]
+  );
+
+  const openWarmupGate = useCallback(() => {
+    if (!selectedSplit || todayPicks.length === 0) return;
+    setShowWarmupGate(true);
+  }, [selectedSplit, todayPicks.length]);
 
   const discardWorkout = () => {
     clearActiveWorkout();
@@ -1121,6 +1158,20 @@ export default function WorkoutPage() {
 
           {/* Modals & Dialogs */}
           <AnimatePresence>
+            {showCooldownGate && activeWorkout && (
+              <MobilityRoutineModal
+                mode="stretch"
+                splitId={activeWorkout.splitId}
+                splitName={activeWorkout.splitName}
+                savedPicks={splitMobilityPicks[activeWorkout.splitId]}
+                getMobilityImage={getMobilityImage}
+                setMobilityImage={setMobilityImage}
+                uploadMobilityImageFromFile={uploadMobilityImageFromFile}
+                removeMobilityImage={removeMobilityImage}
+                onComplete={handleCooldownComplete}
+                onClose={() => setShowCooldownGate(false)}
+              />
+            )}
             {showSummary && (
               <div className="ft-overlay">
                 <motion.div
@@ -1686,7 +1737,7 @@ export default function WorkoutPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={beginWorkout}
+                      onClick={openWarmupGate}
                       disabled={todayPicks.length === 0}
                       className="ft-btn ft-btn--primary flex-1 ft-btn--lg"
                     >
@@ -1715,7 +1766,7 @@ export default function WorkoutPage() {
             </button>
             <button
               type="button"
-              onClick={beginWorkout}
+              onClick={openWarmupGate}
               disabled={todayPicks.length === 0}
               className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg flex-1"
             >
@@ -1724,6 +1775,23 @@ export default function WorkoutPage() {
             </button>
           </div>
         )}
+
+        <AnimatePresence>
+          {showWarmupGate && selectedSplit && (
+            <MobilityRoutineModal
+              mode="warmup"
+              splitId={selectedSplit}
+              splitName={SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit)?.name ?? ''}
+              savedPicks={splitMobilityPicks[selectedSplit]}
+              getMobilityImage={getMobilityImage}
+              setMobilityImage={setMobilityImage}
+              uploadMobilityImageFromFile={uploadMobilityImageFromFile}
+              removeMobilityImage={removeMobilityImage}
+              onComplete={handleWarmupComplete}
+              onClose={() => setShowWarmupGate(false)}
+            />
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {showSharePicks && (
