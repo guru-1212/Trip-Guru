@@ -11,12 +11,14 @@ import {
   BarChart3,
   User,
   Droplets,
+  Utensils,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/fittrack/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/fittrack/water', label: 'Water', icon: Droplets },
+  { href: '/fittrack/diet', label: 'Diet', icon: Utensils },
   { href: '/fittrack/workout', label: 'Workout', icon: Dumbbell },
   { href: '/fittrack/exercises', label: 'Exercises', icon: BookOpen },
   { href: '/fittrack/progress', label: 'Progress', icon: TrendingUp },

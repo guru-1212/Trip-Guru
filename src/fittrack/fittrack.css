@@ -1651,3 +1651,49 @@
 .ft-schedule-upcoming {
   opacity: 0.85;
 }
+
+/* ── Diet tracker ── */
+.ft-diet-page {
+  width: 100%;
+}
+
+.ft-diet-ring-track {
+  stroke: hsl(var(--muted) / 0.4);
+}
+
+.ft-diet-ring-fill {
+  stroke: hsl(var(--primary));
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.ft-diet-bar-protein {
+  background: hsl(var(--primary));
+}
+
+.ft-diet-bar-carbs {
+  background: hsl(38 92% 50%);
+}
+
+.ft-diet-bar-fat {
+  background: hsl(142 71% 45%);
+}
+
+.ft-diet-bar-fibre {
+  background: hsl(var(--water));
+}
+
+.ft-diet-micro-calcium {
+  background: hsl(var(--primary));
+}
+
+.ft-diet-micro-iron {
+  background: hsl(142 71% 45%);
+}
+
+.ft-diet-micro-mag {
+  background: hsl(38 92% 50%);
+}
+
+.ft-diet-micro-k {
+  background: hsl(0 72% 51% / 0.85);
+}
