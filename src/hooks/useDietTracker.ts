@@ -25,6 +25,7 @@ import {
 } from '@/lib/nutrition/nutritionCalculators';
 import { getLoggedFoodIds, getNutritionSuggestions } from '@/lib/nutrition/nutritionSuggestions';
 import { getTodayDateKey, shiftDateKey } from '@/lib/nutrition/nutritionUtils';
+import type { DietImportLogPayload } from '@/types/dietImport';
 import type { FoodItem, MealSlot, NutrientsPerServing, NutritionLogEntry } from '@/types/nutrition';
 import { EMPTY_NUTRIENTS } from '@/types/nutrition';
 import type { NutritionSettings } from '@/types/nutrition';
@@ -248,6 +249,50 @@ export function useDietTracker() {
     [uid, dateKey, activeTargets]
   );
 
+  const logImportedFoods = useCallback(
+    async (entries: DietImportLogPayload[]) => {
+      if (!uid || entries.length === 0) return;
+      setActionLoading(true);
+      setError(null);
+      try {
+        const added: NutritionLogEntry[] = [];
+        for (const entry of entries) {
+          const result = await addNutritionEntry(
+            uid,
+            dateKey,
+            {
+              ...(entry.foodId ? { foodId: entry.foodId } : {}),
+              name: entry.name,
+              mealSlot: entry.mealSlot,
+              servings: entry.servings,
+              nutrients: entry.nutrients,
+              isCustom: entry.isCustom,
+            },
+            activeTargets
+          );
+          added.push(result);
+        }
+        setLog((prev) => {
+          const allEntries = [...(prev?.entries ?? []), ...added];
+          const newTotals = sumNutrients(allEntries);
+          return {
+            entries: allEntries,
+            totals: newTotals,
+            targets: prev?.targets ?? activeTargets,
+            completed: isNutritionGoalMet(newTotals, prev?.targets ?? activeTargets),
+          };
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to import diet log';
+        setError(msg);
+        throw err;
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [uid, dateKey, activeTargets]
+  );
+
   const logCustomFood = useCallback(
     async (
       name: string,
@@ -360,6 +405,7 @@ export function useDietTracker() {
     goToNextDay,
     goToToday,
     logFood,
+    logImportedFoods,
     logCustomFood,
     removeEntry,
     editEntry,

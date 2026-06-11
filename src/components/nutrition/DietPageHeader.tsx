@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Plus, Utensils } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Sparkles, Utensils } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { formatDateLabel } from '@/lib/nutrition/nutritionUtils';
 
@@ -11,6 +11,7 @@ interface DietPageHeaderProps {
   onPrevDay: () => void;
   onNextDay: () => void;
   onLogMeal: () => void;
+  onAIImport?: () => void;
   className?: string;
 }
 
@@ -21,6 +22,7 @@ export function DietPageHeader({
   onPrevDay,
   onNextDay,
   onLogMeal,
+  onAIImport,
   className,
 }: DietPageHeaderProps) {
   return (
@@ -53,14 +55,28 @@ export function DietPageHeader({
           </div>
         </div>
       </div>
-      <button
-        type="button"
-        onClick={onLogMeal}
-        className="ft-btn ft-btn--primary flex items-center justify-center gap-2 w-full sm:w-auto shrink-0"
-      >
-        <Plus className="h-4 w-4" />
-        Log meal
-      </button>
+      <div className="flex gap-2 w-full sm:w-auto shrink-0">
+        {onAIImport && (
+          <button
+            type="button"
+            onClick={onAIImport}
+            className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 flex-1 sm:flex-none"
+            title="AI Import Diet"
+            aria-label="AI Import Diet"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span className="sm:inline">AI Import</span>
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={onLogMeal}
+          className="ft-btn ft-btn--primary flex items-center justify-center gap-2 flex-1 sm:flex-none"
+        >
+          <Plus className="h-4 w-4" />
+          Log meal
+        </button>
+      </div>
     </header>
   );
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageTransition } from '@/components/workout/PageTransition';
@@ -19,8 +19,11 @@ import { EditFoodEntrySheet } from '@/components/nutrition/EditFoodEntrySheet';
 import { FoodSearchBar } from '@/components/nutrition/FoodSearchBar';
 import { MobileDietSummary } from '@/components/nutrition/MobileDietSummary';
 import { DietQuickAdd } from '@/components/nutrition/DietQuickAdd';
+import { AIDietImportModal } from '@/components/nutrition/AIDietImportModal';
+import { useAIDietImport } from '@/hooks/useAIDietImport';
 import { useDietTracker } from '@/hooks/useDietTracker';
-import { groupEntriesByMeal } from '@/lib/nutrition/nutritionUtils';
+import { formatDateLabel, groupEntriesByMeal } from '@/lib/nutrition/nutritionUtils';
+import type { DietImportLogPayload } from '@/types/dietImport';
 import type { FoodSuggestion } from '@/lib/nutrition/nutritionSuggestions';
 import type { FoodItem, MealSlot, NutritionLogEntry } from '@/types/nutrition';
 import { MEAL_SLOT_ORDER } from '@/types/nutrition';
@@ -57,6 +60,7 @@ export default function DietPage() {
     goToPrevDay,
     goToNextDay,
     logFood,
+    logImportedFoods,
     logCustomFood,
     removeEntry,
     editEntry,
@@ -72,6 +76,26 @@ export default function DietPage() {
   const [editingEntry, setEditingEntry] = useState<NutritionLogEntry | null>(null);
 
   const mealGroups = useMemo(() => groupEntriesByMeal(entries), [entries]);
+
+  const handleImportSuccess = useCallback(
+    async (payloads: DietImportLogPayload[]) => {
+      if (!uid) {
+        toast.error('Please sign in to log food');
+        throw new Error('Not signed in');
+      }
+      await logImportedFoods(payloads);
+    },
+    [uid, logImportedFoods]
+  );
+
+  const aiImport = useAIDietImport({
+    dateKey,
+    timezone,
+    totals,
+    targets,
+    customFoods,
+    onImportSuccess: handleImportSuccess,
+  });
 
   const monthlyDelta = useMemo(() => {
     const monthAgo = dayjs().subtract(30, 'day').format('YYYY-MM-DD');
@@ -153,6 +177,7 @@ export default function DietPage() {
           onPrevDay={goToPrevDay}
           onNextDay={goToNextDay}
           onLogMeal={() => openSheet()}
+          onAIImport={uid ? aiImport.openModal : undefined}
         />
 
         {loading && (
@@ -358,6 +383,22 @@ export default function DietPage() {
           onSave={handleSaveEdit}
           onDelete={handleRemove}
           disabled={actionLoading}
+        />
+
+        <AIDietImportModal
+          open={aiImport.modalOpen}
+          step={aiImport.step}
+          progressValue={aiImport.progressValue}
+          pastedText={aiImport.pastedText}
+          matchedFoods={aiImport.matchedFoods}
+          errorMessage={aiImport.errorMessage}
+          dateLabel={formatDateLabel(dateKey, timezone)}
+          onPastedTextChange={aiImport.setPastedText}
+          onClose={aiImport.closeModal}
+          onCopyPrompt={aiImport.copyPrompt}
+          onProcess={aiImport.processPastedDiet}
+          onBack={aiImport.goBackToPaste}
+          onConfirm={() => void aiImport.confirmImport()}
         />
       </div>
     </PageTransition>
