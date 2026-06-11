@@ -11,6 +11,7 @@ import {
   formatExerciseCatalog,
   formatLastWorkoutBlock,
   formatPRsForSplit,
+  formatFullWorkoutProtocol,
   formatTrainingHistoryBlock,
   getTargetMuscles,
   normalizeImportedReps,
@@ -93,6 +94,7 @@ export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImp
     customExercises,
     splitExtras,
     rememberTodayPicks,
+    getVariationsForExercise,
   } = useWorkoutStore();
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -152,12 +154,17 @@ export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImp
     }
 
     const unit = profile.prefs.unit;
+    const fullWorkoutProtocolBlock = formatFullWorkoutProtocol(
+      exerciseLibrary,
+      getVariationsForExercise
+    );
     const prompt = buildAIPrompt({
       splitName: bodyPartName,
       targetMuscles: getTargetMuscles(splitId),
       athleteProfileBlock: formatAthleteProfile(profile, bodyStats, unit),
       trainingHistoryBlock: formatTrainingHistoryBlock(workouts, splitId, bodyPartName),
       exerciseCatalog: formatExerciseCatalog(exerciseLibrary),
+      fullWorkoutProtocolBlock,
       lastSessionBlock: formatLastWorkoutBlock(
         lastWorkoutForSplit,
         exerciseLibrary,
@@ -184,6 +191,7 @@ export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImp
     bodyStats,
     workouts,
     prs,
+    getVariationsForExercise,
   ]);
 
   const runValidation = useCallback(
@@ -257,11 +265,23 @@ export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImp
       return;
     }
 
-    const picks: TodayExercisePick[] = confirmed.map((m) => ({
-      id: generateId(),
-      exerciseId: m.libraryExercise!.id,
-      variation: m.libraryExercise!.variations[0] ?? 'Standard',
-    }));
+    const picks: TodayExercisePick[] = confirmed.map((m) => {
+      const lastEx = lastWorkoutForSplit?.exercises.find(
+        (e) => e.name.toLowerCase() === m.imported.exerciseName.toLowerCase()
+      );
+      const variation =
+        lastEx?.variation ??
+        getVariationsForExercise(
+          m.libraryExercise!.id,
+          m.libraryExercise!.variations
+        )[0] ??
+        'Standard';
+      return {
+        id: generateId(),
+        exerciseId: m.libraryExercise!.id,
+        variation,
+      };
+    });
 
     const presets: ImportedExercise[] = confirmed.map((m) => m.imported);
 
@@ -269,7 +289,15 @@ export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImp
     onImportSuccess(picks, presets);
     closeModal();
     toast.success('Workout imported successfully! 💪');
-  }, [splitId, matchedExercises, rememberTodayPicks, onImportSuccess, closeModal]);
+  }, [
+    splitId,
+    matchedExercises,
+    lastWorkoutForSplit,
+    getVariationsForExercise,
+    rememberTodayPicks,
+    onImportSuccess,
+    closeModal,
+  ]);
 
   return {
     modalOpen,

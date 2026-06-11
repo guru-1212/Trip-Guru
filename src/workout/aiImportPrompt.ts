@@ -1,7 +1,7 @@
 import dayjs from 'dayjs';
 import { SPLIT_DEFINITIONS } from './constants';
 import { filterByRange } from './analytics';
-import { displayWeight, formatWeight, inputToKg } from './utils';
+import { displayWeight, formatWeight, inputToKg, toSubVariationLabel } from './utils';
 import type {
   BodyStat,
   FitnessGoal,
@@ -334,12 +334,30 @@ const EXPERIENCE_RULES = `## Training experience rules (based on history + body 
 - 14+ days since last session on this split: re-entry — reduce suggested weights 10% OR same weight minus 1 set
 - Scale expectations to body weight, height, and goal`;
 
+export function formatFullWorkoutProtocol(
+  exercises: LibraryExercise[],
+  getVariations?: (exerciseId: string, baseVariations: string[]) => string[]
+): string {
+  if (!exercises.length) return '';
+
+  return exercises
+    .map((ex, index) => {
+      const variations = getVariations?.(ex.id, ex.variations) ?? ex.variations;
+      const variationLines = (variations.length ? variations : ['Standard'])
+        .map((v, vIdx) => `   ${toSubVariationLabel(vIdx)}) ${v}`)
+        .join('\n');
+      return `${index + 1}) ${ex.name}\n${variationLines}`;
+    })
+    .join('\n');
+}
+
 export interface BuildAIPromptParams {
   splitName: string;
   targetMuscles: string[];
   athleteProfileBlock: string;
   trainingHistoryBlock: string;
   exerciseCatalog: string;
+  fullWorkoutProtocolBlock: string;
   lastSessionBlock: string;
   prBlock: string;
   weightUnit: WeightUnit;
@@ -347,6 +365,7 @@ export interface BuildAIPromptParams {
 
 export function buildAIPrompt(params: BuildAIPromptParams): string {
   const muscles = params.targetMuscles.join(', ');
+
   return `You are an expert strength & hypertrophy coach designing ONE gym session.
 
 ## Athlete profile
@@ -360,6 +379,9 @@ ${params.trainingHistoryBlock}
 ## Allowed exercises (ONLY these — copy exerciseName EXACTLY as written)
 ${params.exerciseCatalog}
 
+## Full workout protocol (all exercises & variations for this split)
+${params.fullWorkoutProtocolBlock}
+
 ## Last ${params.splitName} session
 ${params.lastSessionBlock}
 
@@ -371,16 +393,22 @@ ${PROGRESSION_RULES}
 ${EXPERIENCE_RULES}
 
 ## Programming rules
-1. Select exactly 5–6 exercises. Every exerciseName MUST match the allowed list character-for-character.
-2. Muscle coverage: at least 1 compound + 1 isolation per target muscle group.
-3. Order: compounds first, isolations last.
-4. Follow DOUBLE PROGRESSION and each exercise's App progression hint. Do NOT add weight every session.
-5. Sets: 3–4 for compounds, 3 for isolations. Match rep ranges to my goal.
-6. Bodyweight exercises: use weight 0.
-7. Do NOT invent exercises not on the list.
+1. Design today's session by choosing from the full workout protocol above — guided by the last session, progression hints, PRs, and training history. Do NOT use any pre-selected plan; decide based on my data.
+2. Match the exercise count and order from the last session when one exists (often 7–8 slots). If no last session, select 5–6 exercises. Every exerciseName MUST match the allowed list character-for-character.
+3. Muscle coverage: at least 1 compound + 1 isolation per target muscle group.
+4. Order: follow the same training order style as the last session when available; otherwise compounds first, isolations last.
+5. Follow DOUBLE PROGRESSION and each exercise's App progression hint. Do NOT add weight every session.
+6. Sets: 3–4 for compounds, 3 for isolations. Match rep ranges to my goal.
+7. Bodyweight exercises: use weight 0.
+8. Do NOT invent exercises not on the list.
 
 ## Output format — CRITICAL
-Return ONLY a raw JSON array. No markdown, no code fences, no explanation.
+Your ENTIRE response must be ONLY a raw JSON array — nothing before it, nothing after it.
+- NO markdown
+- NO code fences
+- NO explanation, greeting, or summary text
+- NO comments
+- Start with [ and end with ]
 
 [
   {
