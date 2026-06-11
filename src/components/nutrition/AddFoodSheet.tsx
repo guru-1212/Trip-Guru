@@ -21,6 +21,7 @@ const SERVING_PRESETS = [0.5, 1, 1.5, 2, 3];
 
 const CATEGORIES = [
   { id: 'all', label: 'All' },
+  { id: 'custom', label: 'My Foods' },
   { id: 'protein', label: 'Protein' },
   { id: 'staple', label: 'Rice/Roti' },
   { id: 'breakfast', label: 'Breakfast' },
@@ -84,7 +85,7 @@ export function AddFoodSheet({
   const [customSodium, setCustomSodium] = useState('');
   const [customServings, setCustomServings] = useState(1);
 
-  const [saveTemplate, setSaveTemplate] = useState(false);
+  const [saveTemplate, setSaveTemplate] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showExtraMeals, setShowExtraMeals] = useState(
     EXTRA_MEALS.includes(initialMealSlot)
