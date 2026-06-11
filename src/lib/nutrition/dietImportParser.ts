@@ -224,6 +224,7 @@ export function toLogPayload(result: DietMatchResult): DietImportLogPayload {
     name: imported.foodName,
     mealSlot: imported.mealSlot,
     servings: imported.servings,
+    servingLabel: imported.servingLabel,
     nutrients: imported.nutrients,
     isCustom: !matched,
     ...(matched && libraryFood ? { foodId: libraryFood.id } : {}),

@@ -26,6 +26,7 @@ export interface DietImportLogPayload {
   name: string;
   mealSlot: MealSlot;
   servings: number;
+  servingLabel: string;
   nutrients: NutrientsPerServing;
   isCustom: boolean;
   foodId?: string;

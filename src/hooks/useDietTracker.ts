@@ -256,12 +256,32 @@ export function useDietTracker() {
       setError(null);
       try {
         const added: NutritionLogEntry[] = [];
+        const newCustomFoods: FoodItem[] = [];
+
         for (const entry of entries) {
+          let foodId = entry.foodId;
+
+          // Automatically persist custom foods from AI import for future reuse
+          if (entry.isCustom && !foodId) {
+            foodId = `custom_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+            const newCustomFood: FoodItem = {
+              id: foodId,
+              name: entry.name,
+              servingLabel: entry.servingLabel || '1 serving',
+              nutrients: entry.nutrients,
+              category: 'custom',
+              tags: ['veg'],
+              isCustom: true,
+            };
+            await saveCustomFood(uid, newCustomFood);
+            newCustomFoods.push(newCustomFood);
+          }
+
           const result = await addNutritionEntry(
             uid,
             dateKey,
             {
-              ...(entry.foodId ? { foodId: entry.foodId } : {}),
+              ...(foodId ? { foodId } : {}),
               name: entry.name,
               mealSlot: entry.mealSlot,
               servings: entry.servings,
@@ -272,6 +292,11 @@ export function useDietTracker() {
           );
           added.push(result);
         }
+
+        if (newCustomFoods.length > 0) {
+          setCustomFoods((prev) => [...prev, ...newCustomFoods]);
+        }
+
         setLog((prev) => {
           const allEntries = [...(prev?.entries ?? []), ...added];
           const newTotals = sumNutrients(allEntries);
