@@ -41,7 +41,9 @@ interface AddFoodSheetProps {
     name: string,
     nutrients: NutrientsPerServing,
     mealSlot: MealSlot,
-    saveTemplate: boolean
+    saveTemplate: boolean,
+    servings: number,
+    servingLabel: string
   ) => Promise<void>;
   disabled?: boolean;
 }
@@ -64,9 +66,22 @@ export function AddFoodSheet({
   const [category, setCategory] = useState('all');
   const [servings, setServings] = useState(1);
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
+
+  // Custom food states
   const [customName, setCustomName] = useState('');
+  const [customServingLabel, setCustomServingLabel] = useState('1 piece');
   const [customCalories, setCustomCalories] = useState('');
   const [customProtein, setCustomProtein] = useState('');
+  const [customCarbs, setCustomCarbs] = useState('');
+  const [customFat, setCustomFat] = useState('');
+  const [customFiber, setCustomFiber] = useState('');
+  const [customCalcium, setCustomCalcium] = useState('');
+  const [customIron, setCustomIron] = useState('');
+  const [customMagnesium, setCustomMagnesium] = useState('');
+  const [customPotassium, setCustomPotassium] = useState('');
+  const [customSodium, setCustomSodium] = useState('');
+  const [customServings, setCustomServings] = useState(1);
+
   const [saveTemplate, setSaveTemplate] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showExtraMeals, setShowExtraMeals] = useState(
@@ -113,8 +128,18 @@ export function AddFoodSheet({
     setSelectedFood(null);
     setServings(1);
     setCustomName('');
+    setCustomServingLabel('1 piece');
     setCustomCalories('');
     setCustomProtein('');
+    setCustomCarbs('');
+    setCustomFat('');
+    setCustomFiber('');
+    setCustomCalcium('');
+    setCustomIron('');
+    setCustomMagnesium('');
+    setCustomPotassium('');
+    setCustomSodium('');
+    setCustomServings(1);
     setSaveTemplate(false);
     setTab('foods');
     setCategory('all');
@@ -148,8 +173,23 @@ export function AddFoodSheet({
         ...EMPTY_NUTRIENTS,
         calories: Number(customCalories) || 0,
         proteinG: Number(customProtein) || 0,
+        carbsG: Number(customCarbs) || 0,
+        fatG: Number(customFat) || 0,
+        fiberG: Number(customFiber) || 0,
+        calciumMg: Number(customCalcium) || 0,
+        ironMg: Number(customIron) || 0,
+        magnesiumMg: Number(customMagnesium) || 0,
+        potassiumMg: Number(customPotassium) || 0,
+        sodiumMg: Number(customSodium) || 0,
       };
-      await onLogCustom(customName || 'Hostel meal', nutrients, mealSlot, saveTemplate);
+      await onLogCustom(
+        customName || 'Custom meal',
+        nutrients,
+        mealSlot,
+        saveTemplate,
+        customServings,
+        customServingLabel
+      );
       handleClose();
     } finally {
       setSubmitting(false);
@@ -376,41 +416,182 @@ export function AddFoodSheet({
               </>
             ) : (
               <div className="space-y-4 pb-4">
-                <p className="text-sm text-muted-foreground">
-                  Hostel or mess food — enter your best estimate.
-                </p>
-                <input
-                  className="ft-input w-full text-base min-h-[48px]"
-                  placeholder="Food name (e.g. Hostel lunch)"
-                  value={customName}
-                  onChange={(e) => setCustomName(e.target.value)}
-                />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Basic Info
+                  </p>
                   <input
-                    type="number"
-                    inputMode="numeric"
-                    className="ft-input w-full min-h-[48px] text-base"
-                    placeholder="Calories"
-                    value={customCalories}
-                    onChange={(e) => setCustomCalories(e.target.value)}
+                    className="ft-input w-full text-base min-h-[48px]"
+                    placeholder="Food name (e.g. Uttapam)"
+                    value={customName}
+                    onChange={(e) => setCustomName(e.target.value)}
                   />
                   <input
-                    type="number"
-                    inputMode="numeric"
-                    className="ft-input w-full min-h-[48px] text-base"
-                    placeholder="Protein (g)"
-                    value={customProtein}
-                    onChange={(e) => setCustomProtein(e.target.value)}
+                    className="ft-input w-full text-base min-h-[48px]"
+                    placeholder="Serving size (e.g. 1 piece, 100g)"
+                    value={customServingLabel}
+                    onChange={(e) => setCustomServingLabel(e.target.value)}
                   />
                 </div>
-                <label className="flex items-center gap-3 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={saveTemplate}
-                    onChange={(e) => setSaveTemplate(e.target.checked)}
-                  />
-                  Save for reuse
-                </label>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Nutrients (per {customServingLabel || 'serving'})
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Calories (kcal)</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Calories"
+                        value={customCalories}
+                        onChange={(e) => setCustomCalories(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Protein (g)</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Protein (g)"
+                        value={customProtein}
+                        onChange={(e) => setCustomProtein(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Carbs (g)</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Carbs (g)"
+                        value={customCarbs}
+                        onChange={(e) => setCustomCarbs(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Fat (g)</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Fat (g)"
+                        value={customFat}
+                        onChange={(e) => setCustomFat(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Fiber (g)</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Fiber (g)"
+                        value={customFiber}
+                        onChange={(e) => setCustomFiber(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Sodium (mg)</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Sodium (mg)"
+                        value={customSodium}
+                        onChange={(e) => setCustomSodium(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    Minerals (mg)
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Calcium</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Calcium"
+                        value={customCalcium}
+                        onChange={(e) => setCustomCalcium(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Iron</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Iron"
+                        value={customIron}
+                        onChange={(e) => setCustomIron(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Magnesium</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Magnesium"
+                        value={customMagnesium}
+                        onChange={(e) => setCustomMagnesium(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-medium text-muted-foreground px-1">Potassium</label>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        className="ft-input w-full min-h-[48px] text-base"
+                        placeholder="Potassium"
+                        value={customPotassium}
+                        onChange={(e) => setCustomPotassium(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-border/40 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold">How many {customServingLabel || 'servings'}?</p>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setCustomServings((s) => Math.max(0.5, Math.round((s - 0.5) * 2) / 2))}
+                        className="h-10 w-10 rounded-full border flex items-center justify-center font-bold"
+                      >
+                        −
+                      </button>
+                      <span className="text-lg font-bold tabular-nums w-10 text-center">{customServings}</span>
+                      <button
+                        type="button"
+                        onClick={() => setCustomServings((s) => Math.round((s + 0.5) * 2) / 2)}
+                        className="h-10 w-10 rounded-full border flex items-center justify-center font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+
+                  <label className="flex items-center gap-3 text-sm font-medium">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      checked={saveTemplate}
+                      onChange={(e) => setSaveTemplate(e.target.checked)}
+                    />
+                    Save as food template for reuse
+                  </label>
+                </div>
               </div>
             )}
           </div>
@@ -429,12 +610,12 @@ export function AddFoodSheet({
           ) : tab === 'custom' ? (
             <button
               type="button"
-              disabled={disabled || submitting || !customCalories}
+              disabled={disabled || submitting || !customCalories || !customName}
               onClick={() => void handleCustomSubmit()}
               className="ft-btn ft-btn--primary w-full min-h-[52px] flex items-center justify-center gap-2"
             >
               <Plus className="h-5 w-5" />
-              {submitting ? 'Saving…' : 'Add to log'}
+              {submitting ? 'Saving…' : `Add ${customServings}× to ${MEAL_SLOT_LABELS[mealSlot]}`}
             </button>
           ) : (
             <p className="text-xs text-center text-muted-foreground">

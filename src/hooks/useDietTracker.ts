@@ -253,7 +253,9 @@ export function useDietTracker() {
       name: string,
       nutrients: NutrientsPerServing,
       mealSlot: MealSlot,
-      saveTemplate?: boolean
+      saveTemplate?: boolean,
+      servings: number = 1,
+      servingLabel: string = '1 serving'
     ) => {
       if (!uid) return;
       const id = `custom_${Date.now()}`;
@@ -261,7 +263,7 @@ export function useDietTracker() {
         await saveCustomFood(uid, {
           id,
           name,
-          servingLabel: '1 serving',
+          servingLabel,
           nutrients,
           category: 'custom',
           tags: ['veg'],
@@ -269,10 +271,10 @@ export function useDietTracker() {
         });
         setCustomFoods((prev) => [
           ...prev,
-          { id, name, servingLabel: '1 serving', nutrients, category: 'custom', tags: ['veg'], isCustom: true },
+          { id, name, servingLabel, nutrients, category: 'custom', tags: ['veg'], isCustom: true },
         ]);
       }
-      await logFood({ id, name, nutrients }, mealSlot, 1, true);
+      await logFood({ id, name, nutrients }, mealSlot, servings, true);
     },
     [uid, logFood]
   );

@@ -332,13 +332,13 @@ export default function DietPage() {
           customFoods={customFoods}
           onClose={closeSheet}
           onLogFood={handleLogFood}
-          onLogCustom={async (name, nutrients, mealSlot, saveTemplate) => {
+          onLogCustom={async (name, nutrients, mealSlot, saveTemplate, servings, servingLabel) => {
             if (!uid) {
               toast.error('Please sign in to log food');
               throw new Error('Not signed in');
             }
-            await logCustomFood(name, nutrients, mealSlot, saveTemplate);
-            toast.success(`Added ${name}`);
+            await logCustomFood(name, nutrients, mealSlot, saveTemplate, servings, servingLabel);
+            toast.success('Food logged');
           }}
           disabled={actionLoading}
         />

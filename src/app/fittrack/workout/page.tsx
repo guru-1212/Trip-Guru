@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   Trash2,
   Share2,
+  Sparkles,
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { WorkoutShareCard } from '@/components/workout/WorkoutShareCard';
@@ -33,6 +34,9 @@ import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm'
 import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workout/AddExerciseModal';
 import { TodayExercisePicker } from '@/components/workout/TodayExercisePicker';
 import { MobilityRoutineModal } from '@/components/workout/MobilityRoutineModal';
+import { AIImportModal } from '@/components/workout/AIImportModal';
+import { useAIWorkoutImport } from '@/hooks/useAIWorkoutImport';
+import type { ImportedExercise } from '@/types/aiImport';
 import { useFitTrackCelebration } from '@/components/fittrack/FitTrackCelebrationProvider';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { getHabitStreak } from '@/workout/analytics';
@@ -184,6 +188,7 @@ export default function WorkoutPage() {
   const pickInitSplitRef = useRef<SplitId | null>(null);
   const todayPicksRef = useRef<TodayExercisePick[]>([]);
   const picksPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiImportPresetsRef = useRef<Map<string, ImportedExercise>>(new Map());
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
@@ -374,6 +379,28 @@ export default function WorkoutPage() {
     [selectedSplit, flushTodayPicks]
   );
 
+  const handleAIImportSuccess = useCallback(
+    (picks: TodayExercisePick[], presets: ImportedExercise[]) => {
+      if (picksPersistTimerRef.current) {
+        clearTimeout(picksPersistTimerRef.current);
+        picksPersistTimerRef.current = null;
+      }
+      setTodayPicks(picks);
+      const presetMap = new Map<string, ImportedExercise>();
+      picks.forEach((pick, index) => {
+        const preset = presets[index];
+        if (preset) presetMap.set(pick.exerciseId, preset);
+      });
+      aiImportPresetsRef.current = presetMap;
+    },
+    []
+  );
+
+  const aiImport = useAIWorkoutImport({
+    splitId: selectedSplit,
+    onImportSuccess: handleAIImportSuccess,
+  });
+
   const handleRepeatLastWorkout = useCallback(() => {
     if (!selectedSplit) return;
     const lastSession = workouts.find((w) => w.splitId === selectedSplit);
@@ -483,11 +510,32 @@ export default function WorkoutPage() {
     const extraFromPicker = pickerExercises.filter((e) => !baseIds.has(e.id));
     const allExercises = [...baseLibrary, ...extraFromPicker];
     const pickOrder = pickOrderFromPicks(todayPicks);
-    const exercises = buildWorkoutExercisesInPickOrder(
+    let exercises = buildWorkoutExercisesInPickOrder(
       allExercises,
       todayPicks,
       profile.prefs.defaultSets
     ).filter(isPickedToday);
+
+    if (aiImportPresetsRef.current.size > 0) {
+      exercises = exercises.map((ex) => {
+        const preset = aiImportPresetsRef.current.get(ex.exerciseId);
+        if (!preset) return ex;
+        const repsNum = parseInt(preset.reps, 10) || 0;
+        const sets: WorkoutSet[] = Array.from({ length: preset.sets }, () => ({
+          weight: preset.weight,
+          reps: repsNum,
+          done: false,
+        }));
+        return {
+          ...ex,
+          notes: preset.notes ?? ex.notes,
+          sets,
+          setsByVariation: { [ex.variation]: sets },
+        };
+      });
+      aiImportPresetsRef.current = new Map();
+    }
+
     rememberTodayPicks(selectedSplit, todayPicks);
     const state = {
       splitId: selectedSplit,
@@ -1789,6 +1837,15 @@ export default function WorkoutPage() {
             </button>
             <button
               type="button"
+              onClick={aiImport.openModal}
+              className="ft-btn ft-btn--secondary ft-btn--lg whitespace-nowrap"
+              title="AI Import"
+            >
+              <Sparkles className="h-4 w-4" />
+              AI Import ✨
+            </button>
+            <button
+              type="button"
               onClick={openWarmupGate}
               disabled={todayPicks.length === 0}
               className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg flex-1"
@@ -1798,6 +1855,22 @@ export default function WorkoutPage() {
             </button>
           </div>
         )}
+
+        <AIImportModal
+          open={aiImport.modalOpen}
+          step={aiImport.step}
+          progressValue={aiImport.progressValue}
+          pastedText={aiImport.pastedText}
+          matchedExercises={aiImport.matchedExercises}
+          errorMessage={aiImport.errorMessage}
+          weightUnit={profile.prefs.unit}
+          onPastedTextChange={aiImport.setPastedText}
+          onClose={aiImport.closeModal}
+          onCopyPrompt={aiImport.copyPrompt}
+          onProcess={aiImport.processPastedWorkout}
+          onBack={aiImport.goBackToPaste}
+          onConfirm={aiImport.confirmImport}
+        />
 
         <AnimatePresence>
           {showWarmupGate && selectedSplit && (
