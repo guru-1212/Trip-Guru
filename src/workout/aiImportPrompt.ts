@@ -300,40 +300,6 @@ export function formatAthleteProfile(
   ].join('\n');
 }
 
-const PROGRESSION_RULES = `## Progressive overload rules (CRITICAL)
-Default strategy: DOUBLE PROGRESSION — increase REPS before WEIGHT.
-
-For each exercise, use the "App progression hint" from last session:
-
-1. REP PROGRESSION (most common — ~80% of exercises):
-   - Keep the SAME weight as last session.
-   - Target +1 rep on the weakest set.
-   - Example: last 20kg×8,8,8 → suggest 20kg×9 with notes "Rep progression — stay at 20kg".
-
-2. WEIGHT PROGRESSION (only when ALL sets hit the TOP of the rep range):
-   - Then increase weight per increment table and RESET reps to bottom of range.
-   - Example: last 20kg×12,12,12 → suggest 22.5kg×8 (not 25kg).
-
-3. HOLD / REDUCE (when reps dropped):
-   - Same weight or reduce ~10%. Do NOT increase weight.
-
-4. MAX weight increases per session: at most 1–2 exercises (primary compounds only).
-
-5. INCREMENT TABLE (only when rule 2 applies):
-   - Isolation/cable under 30kg: rep-only OR +1.25kg max
-   - Isolation 30kg+: +2.5kg max
-   - Upper compound: +2.5kg | Lower compound: +5kg
-   - Never jump more than 5% of previous weight
-
-6. notes MUST explain the progression choice.`;
-
-const EXPERIENCE_RULES = `## Training experience rules (based on history + body stats)
-- < 4 sessions on this split in last 30 days: 4–5 exercises, 3 sets each, RPE 7, no weight increases
-- 4–8 sessions on this split in last 30 days: 5–6 exercises, standard double progression
-- 8+ sessions on this split in last 30 days: 5–6 exercises, can add 1 back-off set on compounds if progressing well
-- 14+ days since last session on this split: re-entry — reduce suggested weights 10% OR same weight minus 1 set
-- Scale expectations to body weight, height, and goal`;
-
 export function formatFullWorkoutProtocol(
   exercises: LibraryExercise[],
   getVariations?: (exerciseId: string, baseVariations: string[]) => string[]
@@ -364,68 +330,26 @@ export interface BuildAIPromptParams {
 }
 
 export function buildAIPrompt(params: BuildAIPromptParams): string {
-  const muscles = params.targetMuscles.join(', ');
-
-  return `You are an expert strength & hypertrophy coach designing ONE gym session.
-
-## Athlete profile
-${params.athleteProfileBlock}
-- Today's split: ${params.splitName}
-- Target muscles (must all be trained): ${muscles}
-
-## Training history (how often I train — use to judge experience & recovery)
-${params.trainingHistoryBlock}
-
-## Allowed exercises (ONLY these — copy exerciseName EXACTLY as written)
+  return `You are an expert fitness coach AI. I will give you my workout details and you must return a structured JSON workout plan.
+Today's workout focus: ${params.splitName}
+Available exercises (you MUST only pick from this list, no exceptions):
 ${params.exerciseCatalog}
-
-## Full workout protocol (all exercises & variations for this split)
-${params.fullWorkoutProtocolBlock}
-
-## Last ${params.splitName} session
+Last workout for this body part:
 ${params.lastSessionBlock}
+(If this is your first time, write: "This is my first session for this body part")
+Your task:
 
-## Personal records (reference only — do not exceed without notes)
-${params.prBlock}
+Select the best exercises from the available list above only
+selected workouts shoudl Ensure all muscle parts of ${params.splitName} are fully covered
+Sequence should be correct as per the real time trainer suggestions.
+Apply progressive overload or variation based on my last workout history
 
-${PROGRESSION_RULES}
-
-${EXPERIENCE_RULES}
-
-## Programming rules
-1. Design today's session by choosing from the full workout protocol above — guided by the last session, progression hints, PRs, and training history. Do NOT use any pre-selected plan; decide based on my data.
-2. Match the exercise count and order from the last session when one exists (often 7–8 slots). If no last session, select 5–6 exercises. Every exerciseName MUST match the allowed list character-for-character.
-3. Muscle coverage: at least 1 compound + 1 isolation per target muscle group.
-4. Order: follow the same training order style as the last session when available; otherwise compounds first, isolations last.
-5. Follow DOUBLE PROGRESSION and each exercise's App progression hint. Do NOT add weight every session.
-6. Sets: 3–4 for compounds, 3 for isolations. Match rep ranges to my goal.
-7. Bodyweight exercises: use weight 0.
-8. Do NOT invent exercises not on the list.
-
-## Output format — CRITICAL
-Your ENTIRE response must be ONLY a raw JSON array — nothing before it, nothing after it.
-- NO markdown
-- NO code fences
-- NO explanation, greeting, or summary text
-- NO comments
-- Start with [ and end with ]
-
+Return ONLY this JSON format, no extra text, no markdown, no explanation:
 [
-  {
-    "exerciseName": "Bench Press",
-    "sets": 4,
-    "reps": "8",
-    "weight": 80,
-    "notes": "Rep progression — stay at 80kg, aim 8,8,8,8; no weight increase yet"
-  }
+  { "exerciseName": "Barbell Bench Press", "sets": 4, "reps": "8", "weight": 80, "notes": "Focus on full range" },
+  { "exerciseName": "Incline Dumbbell Press", "sets": 3, "reps": "10", "weight": 22, "notes": "Progressive overload from last session" }
 ]
-
-Field rules:
-- exerciseName: exact string from allowed list
-- sets: integer 2–5
-- reps: single number as string (e.g. "8") — NOT ranges like "8-10"
-- weight: number in ${params.weightUnit}; 0 for bodyweight
-- notes: brief coaching note (max 120 chars)`;
+Remember: only exercises from my list, valid JSON only, no other text.`;
 }
 
 export function normalizeImportedReps(reps: string): string {
