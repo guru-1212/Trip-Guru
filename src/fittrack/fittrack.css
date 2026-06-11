@@ -422,6 +422,51 @@
   padding: 0 1rem 1rem;
 }
 
+/* Rotating highlight when weight + reps are entered but set not logged yet */
+.ft-log-set-wrap {
+  position: relative;
+  border-radius: var(--ft-radius-lg);
+}
+
+.ft-log-set-wrap--ready {
+  padding: 2px;
+  border-radius: calc(var(--ft-radius-lg) + 2px);
+  overflow: hidden;
+}
+
+.ft-log-set-wrap--ready::before {
+  content: '';
+  position: absolute;
+  inset: -100%;
+  pointer-events: none;
+  background: conic-gradient(
+    from 0deg,
+    hsl(var(--primary)),
+    hsl(var(--primary) / 0.15),
+    hsl(var(--primary) / 0.5),
+    hsl(var(--primary))
+  );
+  animation: ft-log-set-border-spin 2s linear infinite;
+}
+
+@keyframes ft-log-set-border-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.ft-log-set-wrap--ready .ft-log-set-btn {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  background: hsl(var(--card));
+  border-color: transparent;
+}
+
+.ft-log-set-wrap--ready .ft-log-set-btn:hover {
+  background: hsl(var(--muted) / 0.5);
+}
+
 /* ── Navigation ── */
 .ft-sidebar {
   display: none;

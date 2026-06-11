@@ -4,7 +4,18 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { SPLIT_NAMES } from '@/workout/constants';
-import { buildSplitExerciseLibrary, generateId } from '@/workout/utils';
+import {
+  buildAIPrompt,
+  clampImportedWeight,
+  formatAthleteProfile,
+  formatExerciseCatalog,
+  formatLastWorkoutBlock,
+  formatPRsForSplit,
+  formatTrainingHistoryBlock,
+  getTargetMuscles,
+  normalizeImportedReps,
+} from '@/workout/aiImportPrompt';
+import { buildSplitExerciseLibrary, generateId, inputToKg } from '@/workout/utils';
 import type { ImportedExercise, MatchResult, AIImportStep } from '@/types/aiImport';
 import type { LibraryExercise, SplitId, TodayExercisePick } from '@/workout/types';
 
@@ -15,60 +26,6 @@ function extractJsonPayload(text: string): string {
   const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenceMatch) return fenceMatch[1].trim();
   return trimmed;
-}
-
-function formatLastWorkoutLine(
-  name: string,
-  sets: { weight: number; reps: number }[],
-  unit: 'kg' | 'lbs'
-): string {
-  if (!sets.length) return name;
-  const first = sets[0];
-  const weightLabel = unit === 'lbs' ? `${Math.round(first.weight * 2.20462)}lbs` : `${first.weight}kg`;
-  const repsLabel = sets.every((s) => s.reps === first.reps)
-    ? `${first.reps} reps`
-    : sets.map((s) => s.reps).join('/');
-  return `${name} (${sets.length} sets x ${repsLabel}, ${weightLabel})`;
-}
-
-function buildPrompt(
-  bodyPart: string,
-  exercises: LibraryExercise[],
-  lastWorkoutLines: string[] | null
-): string {
-  const exerciseList = exercises.map((e) => e.name).join(', ');
-
-  const historyBlock = lastWorkoutLines?.length
-    ? `For my last ${bodyPart} workout, I performed:
-${lastWorkoutLines.map((line) => `- ${line}`).join('\n')}
-Please suggest today's workout with progressive overload or smart variation based on this history.`
-    : `This is my first time working out these muscle groups in this program.
-Please provide a solid baseline routine.`;
-
-  return `You are an expert fitness coach. My scheduled workout today focuses on: ${bodyPart}.
-
-Here are the ONLY exercises I have available. You MUST NOT suggest any exercise not on this list:
-${exerciseList}
-
-${historyBlock}
-
-Instructions:
-1. Select the best 5–6 exercises from my available list only.
-2. Ensure the routine hits ALL muscle parts of ${bodyPart} completely.
-3. Sequence optimally: heavy compound movements first, isolation exercises last.
-4. Apply progressive overload logic based on last session if available.
-
-Return ONLY the following JSON format. No extra text, no markdown, no explanation, nothing outside the JSON array:
-
-[
-  {
-    "exerciseName": "Barbell Bench Press",
-    "sets": 4,
-    "reps": "8",
-    "weight": 80,
-    "notes": "Progressive overload — increase weight by 2.5kg"
-  }
-]`;
 }
 
 function matchExerciseByName(
@@ -91,7 +48,7 @@ function parseImportedExercises(raw: unknown): ImportedExercise[] {
     }
     const sets = Number(row.sets);
     if (!Number.isFinite(sets) || sets < 1) throw new Error('invalid');
-    const reps = String(row.reps ?? '').trim();
+    const reps = normalizeImportedReps(String(row.reps ?? ''));
     if (!reps) throw new Error('invalid');
     const weight = Number(row.weight);
     if (!Number.isFinite(weight) || weight < 0) throw new Error('invalid');
@@ -128,7 +85,15 @@ export interface UseAIWorkoutImportOptions {
 }
 
 export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImportOptions) {
-  const { profile, workouts, customExercises, splitExtras, rememberTodayPicks } = useWorkoutStore();
+  const {
+    profile,
+    workouts,
+    bodyStats,
+    prs,
+    customExercises,
+    splitExtras,
+    rememberTodayPicks,
+  } = useWorkoutStore();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [step, setStep] = useState<AIImportStep>('paste');
@@ -186,32 +151,63 @@ export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImp
       return;
     }
 
-    const lastLines = lastWorkoutForSplit
-      ? lastWorkoutForSplit.exercises.map((ex) =>
-          formatLastWorkoutLine(
-            ex.name,
-            ex.sets.filter((s) => s.weight > 0 || s.reps > 0),
-            profile.prefs.unit
-          )
-        )
-      : null;
+    const unit = profile.prefs.unit;
+    const prompt = buildAIPrompt({
+      splitName: bodyPartName,
+      targetMuscles: getTargetMuscles(splitId),
+      athleteProfileBlock: formatAthleteProfile(profile, bodyStats, unit),
+      trainingHistoryBlock: formatTrainingHistoryBlock(workouts, splitId, bodyPartName),
+      exerciseCatalog: formatExerciseCatalog(exerciseLibrary),
+      lastSessionBlock: formatLastWorkoutBlock(
+        lastWorkoutForSplit,
+        exerciseLibrary,
+        unit,
+        profile.goal,
+        bodyPartName
+      ),
+      prBlock: formatPRsForSplit(exerciseLibrary, prs, unit),
+      weightUnit: unit,
+    });
 
-    const prompt = buildPrompt(bodyPartName, exerciseLibrary, lastLines);
     try {
       await navigator.clipboard.writeText(prompt);
       toast.success('Prompt copied to clipboard!');
     } catch {
       toast.error('Could not copy to clipboard');
     }
-  }, [splitId, exerciseLibrary, lastWorkoutForSplit, bodyPartName, profile.prefs.unit]);
+  }, [
+    splitId,
+    exerciseLibrary,
+    lastWorkoutForSplit,
+    bodyPartName,
+    profile,
+    bodyStats,
+    workouts,
+    prs,
+  ]);
 
   const runValidation = useCallback(
     (text: string) => {
       try {
         const payload = extractJsonPayload(text);
         const parsed = parseImportedExercises(JSON.parse(payload));
-        const matched = matchImportedExercises(parsed, exerciseLibrary);
-        setParsedExercises(parsed);
+        const unit = profile.prefs.unit;
+        const clamped = parsed.map((ex) => ({
+          ...ex,
+          weight: inputToKg(
+            clampImportedWeight(
+              ex.exerciseName,
+              ex.weight,
+              unit,
+              profile.goal,
+              lastWorkoutForSplit,
+              exerciseLibrary
+            ),
+            unit
+          ),
+        }));
+        const matched = matchImportedExercises(clamped, exerciseLibrary);
+        setParsedExercises(clamped);
         setMatchedExercises(matched);
         setErrorMessage(null);
         setStep('preview');
@@ -221,7 +217,7 @@ export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImp
         setErrorMessage('Invalid format. Please make sure you pasted the exact AI response.');
       }
     },
-    [exerciseLibrary]
+    [exerciseLibrary, profile.goal, profile.prefs.unit, lastWorkoutForSplit]
   );
 
   const processPastedWorkout = useCallback(() => {

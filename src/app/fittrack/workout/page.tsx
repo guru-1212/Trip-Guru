@@ -1438,9 +1438,10 @@ export default function WorkoutPage() {
                     </button>
                     <div className="absolute bottom-6 left-8 text-left pointer-events-none">
                       <h2 className="ft-title text-3xl font-black text-white mb-2">{infoModal.exercise.name}</h2>
-                      <p className="text-xs font-bold uppercase tracking-widest text-white/80 mb-2">
+                      <span className="inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-xl bg-primary text-primary-foreground shadow-lg mb-2">
+                        <Target className="h-3 w-3" />
                         {infoModal.previewVariation}
-                      </p>
+                      </span>
                       <div className="flex gap-2">
                         <span className="text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1.5 rounded-xl bg-primary text-white shadow-lg">
                           {infoModal.exercise.difficulty}
@@ -1485,8 +1486,10 @@ export default function WorkoutPage() {
                             <div
                               key={variation}
                               className={cn(
-                                'rounded-xl border transition-colors overflow-hidden',
-                                isActive ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/20'
+                                'rounded-xl border-2 transition-all overflow-hidden',
+                                isActive
+                                  ? 'border-primary bg-primary/10 ring-2 ring-primary/40 shadow-md shadow-primary/15'
+                                  : 'border-border bg-muted/20 opacity-70'
                               )}
                             >
                               <div className="flex items-center gap-3 p-3">
@@ -1499,7 +1502,12 @@ export default function WorkoutPage() {
                                         alt: `${infoModal.exercise.name} — ${variation}`,
                                       })
                                     }
-                                    className="shrink-0 rounded-lg overflow-hidden border border-border cursor-zoom-in hover:ring-2 hover:ring-primary/40 transition-shadow"
+                                    className={cn(
+                                      'shrink-0 rounded-lg overflow-hidden border-2 cursor-zoom-in transition-shadow',
+                                      isActive
+                                        ? 'border-primary ring-2 ring-primary/30'
+                                        : 'border-border hover:ring-2 hover:ring-primary/40'
+                                    )}
                                     aria-label={`View full image for ${variation}`}
                                   >
                                     <img
@@ -1520,10 +1528,20 @@ export default function WorkoutPage() {
                                         prev ? { ...prev, previewVariation: variation } : prev
                                       )
                                     }
-                                    className="text-sm font-semibold truncate text-left hover:text-primary transition-colors"
+                                    className={cn(
+                                      'text-sm truncate text-left transition-colors',
+                                      isActive
+                                        ? 'font-black text-primary'
+                                        : 'font-semibold hover:text-primary'
+                                    )}
                                   >
                                     {variation}
                                   </button>
+                                  {isActive && (
+                                    <span className="shrink-0 ft-badge ft-badge--primary text-[10px] uppercase tracking-wider">
+                                      Active
+                                    </span>
+                                  )}
                                 </div>
                                 {hasCustomImage && (
                                   <button
@@ -1838,11 +1856,11 @@ export default function WorkoutPage() {
             <button
               type="button"
               onClick={aiImport.openModal}
-              className="ft-btn ft-btn--secondary ft-btn--lg whitespace-nowrap"
-              title="AI Import"
+              className="ft-btn ft-btn--secondary ft-btn--lg !px-5"
+              title="AI Import Workout"
+              aria-label="AI Import Workout"
             >
               <Sparkles className="h-4 w-4" />
-              AI Import ✨
             </button>
             <button
               type="button"

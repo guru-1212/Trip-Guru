@@ -73,6 +73,21 @@ export function SessionSetRow({
 }: SessionSetRowProps) {
   const displayVal = displayWeight(set.weight, unit);
   const weightStep = WEIGHT_STEP[unit];
+  const showReadyRing = !set.done && displayVal > 0 && set.reps > 0;
+
+  const logSetButton = (
+    <button
+      type="button"
+      onClick={onToggleDone}
+      className={cn(
+        'ft-btn ft-btn--block ft-btn--lg ft-log-set-btn',
+        set.done ? 'ft-btn--primary' : 'ft-btn--ghost'
+      )}
+    >
+      <Check className="h-4 w-4" />
+      {set.done ? 'Completed' : 'Log Set'}
+    </button>
+  );
 
   const adjustWeight = (dir: 1 | -1) => {
     const next = Math.max(0, Math.round((displayVal + dir * weightStep) * 10) / 10);
@@ -163,17 +178,11 @@ export function SessionSetRow({
       </div>
 
       <div className="ft-set-action">
-        <button
-          type="button"
-          onClick={onToggleDone}
-          className={cn(
-            'ft-btn ft-btn--block ft-btn--lg',
-            set.done ? 'ft-btn--primary' : 'ft-btn--ghost'
-          )}
-        >
-          <Check className="h-4 w-4" />
-          {set.done ? 'Completed' : 'Log Set'}
-        </button>
+        {showReadyRing ? (
+          <div className="ft-log-set-wrap ft-log-set-wrap--ready">{logSetButton}</div>
+        ) : (
+          logSetButton
+        )}
       </div>
     </div>
   );
