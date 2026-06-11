@@ -55,10 +55,18 @@ export function NutritionCalorieRing({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-3">
-          <span className="text-3xl sm:text-4xl font-bold tabular-nums leading-none">
+          <span className={cn(
+            "font-bold tabular-nums leading-none",
+            size <= 140 ? "text-2xl" : "text-3xl sm:text-4xl"
+          )}>
             {formatKcal(eaten)}
           </span>
-          <span className="text-xs text-muted-foreground mt-1">kcal eaten</span>
+          <span className={cn(
+            "text-muted-foreground mt-1",
+            size <= 140 ? "text-[10px]" : "text-xs"
+          )}>
+            kcal eaten
+          </span>
         </div>
       </div>
       <p className="text-sm text-muted-foreground mt-3 text-center">
