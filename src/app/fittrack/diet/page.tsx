@@ -68,6 +68,7 @@ export default function DietPage() {
   const [sheetFoodId, setSheetFoodId] = useState<string | null>(null);
   const [pageSearchQuery, setPageSearchQuery] = useState('');
   const [activeMealTab, setActiveMealTab] = useState<MealSlot>('breakfast');
+  const [sheetInitialTab, setSheetInitialTab] = useState<'foods' | 'custom'>('foods');
   const [editingEntry, setEditingEntry] = useState<NutritionLogEntry | null>(null);
 
   const mealGroups = useMemo(() => groupEntriesByMeal(entries), [entries]);
@@ -81,12 +82,13 @@ export default function DietPage() {
     return Math.round((currentWeight - old.weight) * 10) / 10;
   }, [bodyStats, currentWeight]);
 
-  const openSheet = (opts?: { slot?: MealSlot; search?: string; foodId?: string }) => {
+  const openSheet = (opts?: { slot?: MealSlot; search?: string; foodId?: string; tab?: 'foods' | 'custom' }) => {
     const meal = opts?.slot ?? activeMealTab;
     setSheetMealSlot(meal);
     setActiveMealTab(meal);
     setSheetSearchQuery(opts?.search ?? pageSearchQuery);
     setSheetFoodId(opts?.foodId ?? null);
+    setSheetInitialTab(opts?.tab ?? 'foods');
     setSheetOpen(true);
   };
 
@@ -94,6 +96,7 @@ export default function DietPage() {
     setSheetOpen(false);
     setSheetFoodId(null);
     setSheetSearchQuery('');
+    setSheetInitialTab('foods');
   };
 
   const handleLogFood = async (food: FoodItem, mealSlot: MealSlot, servings: number) => {
@@ -211,7 +214,11 @@ export default function DietPage() {
             </div>
           </div>
 
-          <DietQuickAdd onAdd={handleQuickAdd} disabled={actionLoading} />
+          <DietQuickAdd
+            onAdd={handleQuickAdd}
+            onAddCustom={() => openSheet({ tab: 'custom' })}
+            disabled={actionLoading}
+          />
 
           <MealSectionCard
             mealSlot={activeMealTab}
@@ -329,6 +336,7 @@ export default function DietPage() {
           initialMealSlot={sheetMealSlot}
           initialSearchQuery={sheetSearchQuery}
           initialFoodId={sheetFoodId}
+          initialTab={sheetInitialTab}
           customFoods={customFoods}
           onClose={closeSheet}
           onLogFood={handleLogFood}

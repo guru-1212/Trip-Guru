@@ -34,6 +34,7 @@ interface AddFoodSheetProps {
   initialMealSlot?: MealSlot;
   initialSearchQuery?: string;
   initialFoodId?: string | null;
+  initialTab?: Tab;
   customFoods?: FoodItem[];
   onClose: () => void;
   onLogFood: (food: FoodItem, mealSlot: MealSlot, servings: number) => Promise<void>;
@@ -53,6 +54,7 @@ export function AddFoodSheet({
   initialMealSlot = 'breakfast',
   initialSearchQuery = '',
   initialFoodId = null,
+  initialTab = 'foods',
   customFoods = [],
   onClose,
   onLogFood,
@@ -95,7 +97,7 @@ export function AddFoodSheet({
       setServings(1);
       setQuery(initialSearchQuery);
       setCategory('all');
-      setTab('foods');
+      setTab(initialTab ?? 'foods');
       const preselect = initialFoodId ? getFoodById(initialFoodId) ?? null : null;
       setSelectedFood(preselect);
       if (!preselect) {
