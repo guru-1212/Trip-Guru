@@ -178,6 +178,7 @@ export interface LastExerciseSession {
   variation: string;
   sets: { weight: number; reps: number }[];
   bestSet: { weight: number; reps: number };
+  notes?: string;
 }
 
 function normalizeVariation(variation: string): string {
@@ -208,6 +209,7 @@ export function getLastExerciseSession(
       variation: ex.variation,
       sets: doneSets.map((s) => ({ weight: s.weight, reps: s.reps })),
       bestSet: { weight: best.weight, reps: best.reps },
+      notes: ex.notes,
     };
   }
   return null;

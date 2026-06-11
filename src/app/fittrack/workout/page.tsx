@@ -43,7 +43,7 @@ import { getHabitStreak } from '@/workout/analytics';
 import { SPLIT_DEFINITIONS, SPLIT_NAMES, MUSCLE_COLORS } from '@/workout/constants';
 import { getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
-import type { CustomExercise, SplitId, TodayExercisePick, WorkoutExercise, WorkoutSet, LibraryExercise, WeightUnit } from '@/workout/types';
+import type { CustomExercise, SplitId, TodayExercisePick, WorkoutExercise, WorkoutSet, LibraryExercise, WeightUnit, DayKey } from '@/workout/types';
 import {
   generateId,
   getGreeting,
@@ -306,16 +306,28 @@ export default function WorkoutPage() {
   const preselected = searchParams.get('split') as SplitId | null;
   const todaySplit = useMemo(() => getTodaysSplit(profile), [profile]);
 
+  const { hasTrainedToday, tomorrowSplit } = useMemo(() => {
+    const todayStr = dayjs().format('YYYY-MM-DD');
+    const hasTrainedToday = workouts.some((w) => dayjs(w.date).isSame(dayjs(), 'day'));
+    const map: DayKey[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const tomorrowSplit = profile.weekSchedule[map[(dayjs().day() + 1) % 7]];
+    return { hasTrainedToday, tomorrowSplit };
+  }, [profile.weekSchedule, workouts]);
+
   useEffect(() => {
     if (activeWorkout) return;
     if (preselected && SPLIT_DEFINITIONS.some((s) => s.id === preselected)) {
       setSelectedSplit(preselected);
       return;
     }
-    if (hydrated && todaySplit !== 'rest') {
-      setSelectedSplit(todaySplit);
+    if (hydrated) {
+      if (hasTrainedToday && tomorrowSplit !== 'rest') {
+        setSelectedSplit(tomorrowSplit);
+      } else if (!hasTrainedToday && todaySplit !== 'rest') {
+        setSelectedSplit(todaySplit);
+      }
     }
-  }, [preselected, todaySplit, hydrated, activeWorkout]);
+  }, [preselected, todaySplit, hydrated, activeWorkout, hasTrainedToday, tomorrowSplit]);
 
   useEffect(() => {
     if (activeWorkout) {
@@ -1041,6 +1053,18 @@ export default function WorkoutPage() {
                           </p>
                         </div>
                       </div>
+
+                      {lastSession.notes && (
+                        <div className="rounded-xl bg-amber-500/10 border border-amber-500/20 p-3 mt-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 mb-1 flex items-center gap-1.5">
+                            <span className="h-1 w-1 rounded-full bg-amber-500" />
+                            Previous Note
+                          </p>
+                          <p className="text-xs text-foreground/90 leading-relaxed font-medium">
+                            {lastSession.notes}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground rounded-lg border border-dashed border-border px-4 py-3">
@@ -1691,8 +1715,10 @@ export default function WorkoutPage() {
   }
 
   const startButtonLabel =
-    selectedSplit === todaySplit && todaySplit !== 'rest'
+    selectedSplit === todaySplit && todaySplit !== 'rest' && !hasTrainedToday
       ? `Start ${SPLIT_NAMES[todaySplit]}`
+      : selectedSplit === tomorrowSplit && hasTrainedToday && tomorrowSplit !== 'rest'
+      ? `Start ${SPLIT_NAMES[tomorrowSplit]} (Tomorrow)`
       : 'Start Workout';
 
   // Step 1: Split Selection
@@ -1702,13 +1728,27 @@ export default function WorkoutPage() {
         <header>
           <h1 className="ft-title-lg">{getGreeting()}, {profile.name.split(' ')[0]}</h1>
           <p className="ft-subtitle mt-1">
-            {todaySplit !== 'rest'
+            {hasTrainedToday
+              ? `Workout recorded for ${getTodayDayKey()}. Great job!`
+              : todaySplit !== 'rest'
               ? `${getTodayDayKey()} — scheduled: ${SPLIT_NAMES[todaySplit]}`
               : `${getTodayDayKey()} — rest day on your plan`}
           </p>
         </header>
 
-        {todaySplit !== 'rest' && (
+        {hasTrainedToday ? (
+          <div className="ft-today-banner bg-emerald-500/10 border-emerald-500/20">
+            <div className="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center text-white shrink-0">
+              <CheckCircle2 className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-400">Workout recorded!</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Let&apos;s plan for tomorrow: <span className="font-medium text-emerald-700 dark:text-emerald-400">{SPLIT_NAMES[tomorrowSplit]}</span>.
+              </p>
+            </div>
+          </div>
+        ) : todaySplit !== 'rest' ? (
           <div className="ft-today-banner">
             <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shrink-0">
               <Target className="h-5 w-5" />
@@ -1720,9 +1760,7 @@ export default function WorkoutPage() {
               </p>
             </div>
           </div>
-        )}
-
-        {todaySplit === 'rest' && (
+        ) : (
           <div className="ft-card ft-card-padded flex items-start gap-3 bg-muted/30">
             <Dumbbell className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
             <div>

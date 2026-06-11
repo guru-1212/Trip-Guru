@@ -274,9 +274,16 @@ export default function WorkoutPage() {
                         />
 
                         {lastSession && (
-                          <p className="text-xs text-[var(--wk-muted)]">
-                            Last ({lastSession.variation}): {formatWeight(lastSession.bestSet.weight, profile.prefs.unit)} × {lastSession.bestSet.reps}
-                          </p>
+                          <div className="space-y-1">
+                            <p className="text-xs text-[var(--wk-muted)]">
+                              Last ({lastSession.variation}): {formatWeight(lastSession.bestSet.weight, profile.prefs.unit)} × {lastSession.bestSet.reps}
+                            </p>
+                            {lastSession.notes && (
+                              <p className="text-[11px] italic text-[var(--wk-accent)] border-l-2 border-[var(--wk-accent)]/30 pl-2 mt-1 py-0.5">
+                                Note: {lastSession.notes}
+                              </p>
+                            )}
+                          </div>
                         )}
 
                         <div className="space-y-3">

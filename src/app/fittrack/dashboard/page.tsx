@@ -42,7 +42,7 @@ import {
   waitForShareCardPaint,
   type WorkoutShareCardData,
 } from '@/workout/shareCard';
-import type { WorkoutSession } from '@/workout/types';
+import type { WorkoutSession, DayKey } from '@/workout/types';
 import { MUSCLE_COLORS, SPLIT_NAMES } from '@/workout/constants';
 import {
   calcStreak,
@@ -84,6 +84,13 @@ export default function DashboardPage() {
 
   const todaySplit = getTodaysSplit(profile);
   const splitName = SPLIT_NAMES[todaySplit];
+
+  const { hasTrainedToday, tomorrowSplit } = useMemo(() => {
+    const hasTrainedToday = workouts.some((w) => dayjs(w.date).isSame(dayjs(), 'day'));
+    const map: DayKey[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const tomorrowSplit = profile.weekSchedule[map[(dayjs().day() + 1) % 7]];
+    return { hasTrainedToday, tomorrowSplit };
+  }, [profile.weekSchedule, workouts]);
 
   const recoveryData = useMemo(() => {
     const data: Record<string, any> = {};
@@ -316,7 +323,9 @@ export default function DashboardPage() {
             {getGreeting()}, {profile.name.split(' ')[0]}
           </h1>
           <p className="ft-subtitle mt-1">
-            Today is {getTodayDayKey()}. Ready to train?
+            {hasTrainedToday 
+              ? `Workout done for today! Let's plan for tomorrow: ${SPLIT_NAMES[tomorrowSplit]}`
+              : `Today is ${getTodayDayKey()}. Ready to train?`}
           </p>
         </motion.div>
         <motion.div variants={item} className="flex gap-3">
@@ -325,7 +334,7 @@ export default function DashboardPage() {
             className="ft-btn ft-btn--primary flex items-center gap-2"
           >
             <Dumbbell className="h-4 w-4" />
-            <span>Start Session</span>
+            <span>{hasTrainedToday ? 'View Workout' : 'Start Session'}</span>
           </Link>
         </motion.div>
       </header>
