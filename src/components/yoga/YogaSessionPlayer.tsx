@@ -17,11 +17,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { YogaFlow, YogaFlowItem } from '@/types/yoga';
-import { createYogaSessionLog } from '@/firebase/firestore';
+import { YogaFlow, YogaFlowItem, YogaPose } from '@/types/yoga';
+import { createYogaSessionLog, getYogaPoses } from '@/firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
+import { Flower2 } from 'lucide-react';
 
 interface YogaSessionPlayerProps {
   flow: YogaFlow;
@@ -35,8 +36,24 @@ export function YogaSessionPlayer({ flow, onClose }: YogaSessionPlayerProps) {
   const [isActive, setIsActive] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
   const [completedPoses, setCompletedPoses] = useState<number>(0);
+  const [poseLibrary, setPoseLibrary] = useState<Record<string, YogaPose>>({});
 
-  const currentPose = flow.poses[currentIndex];
+  const currentPoseItem = flow.poses[currentIndex];
+  const currentPoseDetail = poseLibrary[currentPoseItem.poseId];
+
+  useEffect(() => {
+    async function loadPoseDetails() {
+      try {
+        const allPoses = await getYogaPoses();
+        const map: Record<string, YogaPose> = {};
+        allPoses.forEach(p => map[p.id] = p);
+        setPoseLibrary(map);
+      } catch (error) {
+        console.error('Failed to load pose details', error);
+      }
+    }
+    loadPoseDetails();
+  }, []);
 
   useEffect(() => {
     let interval: any = null;
@@ -92,8 +109,8 @@ export function YogaSessionPlayer({ flow, onClose }: YogaSessionPlayerProps) {
     }
   };
 
-  const progress = currentPose 
-    ? ((currentPose.durationSeconds - secondsLeft) / currentPose.durationSeconds) * 100
+  const progress = currentPoseItem 
+    ? ((currentPoseItem.durationSeconds - secondsLeft) / currentPoseItem.durationSeconds) * 100
     : 0;
 
   const totalProgress = ((currentIndex) / flow.poses.length) * 100;
@@ -169,13 +186,20 @@ export function YogaSessionPlayer({ flow, onClose }: YogaSessionPlayerProps) {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-8 w-full max-w-lg"
           >
-            <div className="aspect-[4/3] bg-muted/30 rounded-[40px] flex items-center justify-center relative overflow-hidden mb-12">
-               <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
-               <p className="text-6xl font-black text-primary/10 select-none">ASANA</p>
+            <div className="aspect-[4/3] bg-muted/30 rounded-[40px] flex items-center justify-center relative overflow-hidden mb-12 border border-border/50">
+               {currentPoseDetail?.imageUrl ? (
+                 <img src={currentPoseDetail.imageUrl} alt={currentPoseDetail.name} className="w-full h-full object-cover" />
+               ) : (
+                 <>
+                   <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />
+                   <Flower2 className="h-20 w-20 text-primary/10" />
+                   <p className="absolute bottom-10 text-[10px] font-black uppercase tracking-[0.3em] text-primary/20">No Pose Image</p>
+                 </>
+               )}
             </div>
 
             <div>
-              <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-2">{currentPose.poseName}</h2>
+              <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-2">{currentPoseItem.poseName}</h2>
               <p className="text-muted-foreground font-bold uppercase tracking-widest text-xs">Step {currentIndex + 1} of {flow.poses.length}</p>
             </div>
 

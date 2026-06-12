@@ -29,6 +29,7 @@ const yogaLinks = [
   { href: '/yoga/flows', label: 'Yoga Flows', icon: Activity },
   { href: '/yoga/meditation', label: 'Meditation', icon: Heart },
   { href: '/yoga/progress', label: 'Progress Photos', icon: Camera },
+  { href: '/yoga/mates', label: 'Yoga Mates', icon: Users },
   { href: '/profile', label: 'Profile', icon: User },
 ];
 

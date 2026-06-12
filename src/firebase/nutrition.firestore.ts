@@ -1,11 +1,13 @@
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   onSnapshot,
   serverTimestamp,
   setDoc,
+  writeBatch,
   type Unsubscribe,
 } from 'firebase/firestore';
 import { db } from '@/firebase/db';
@@ -40,6 +42,14 @@ function customFoodDoc(uid: string, id: string) {
 
 function customFoodsCol(uid: string) {
   return collection(db(), 'users', uid, 'customFoods');
+}
+
+function globalFoodDoc(id: string) {
+  return doc(db(), 'globalFoods', id);
+}
+
+function globalFoodsCol() {
+  return collection(db(), 'globalFoods');
 }
 
 export class NutritionFirestoreError extends Error {
@@ -271,3 +281,29 @@ export async function getCustomFoods(uid: string): Promise<FoodItem[]> {
   const snap = await getDocs(customFoodsCol(uid));
   return snap.docs.map((d) => d.data() as FoodItem);
 }
+
+export async function getGlobalFoods(): Promise<FoodItem[]> {
+  const snap = await getDocs(globalFoodsCol());
+  return snap.docs.map((d) => d.data() as FoodItem);
+}
+
+export async function uploadGlobalFoods(items: FoodItem[]): Promise<void> {
+  const batchSize = 500;
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = writeBatch(db());
+    const chunk = items.slice(i, i + batchSize);
+    chunk.forEach((item) => {
+      batch.set(globalFoodDoc(item.id), {
+        ...item,
+        isCustom: false,
+        updatedAt: serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  }
+}
+
+export async function deleteGlobalFood(id: string): Promise<void> {
+  await deleteDoc(globalFoodDoc(id));
+}
+

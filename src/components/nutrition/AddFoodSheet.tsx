@@ -37,6 +37,7 @@ interface AddFoodSheetProps {
   initialFoodId?: string | null;
   initialTab?: Tab;
   customFoods?: FoodItem[];
+  globalFoods?: FoodItem[];
   onClose: () => void;
   onLogFood: (food: FoodItem, mealSlot: MealSlot, servings: number) => Promise<void>;
   onLogCustom: (
@@ -57,6 +58,7 @@ export function AddFoodSheet({
   initialFoodId = null,
   initialTab = 'foods',
   customFoods = [],
+  globalFoods = [],
   onClose,
   onLogFood,
   onLogCustom,
@@ -68,6 +70,7 @@ export function AddFoodSheet({
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
   const [servings, setServings] = useState(1);
+  const [grams, setGrams] = useState<string>('');
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
 
   // Custom food states
@@ -118,8 +121,19 @@ export function AddFoodSheet({
       if (category !== 'all' && category !== 'custom') return false;
       return !query || matchesQuerySimple(f.name, query);
     });
-    return [...customResults, ...staticResults];
-  }, [query, category, customFoods]);
+    const globalResults = globalFoods.filter((f) => {
+      if (category !== 'all' && category !== f.category) return false;
+      return !query || matchesQuerySimple(f.name, query);
+    });
+
+    const combined = [...customResults, ...globalResults, ...staticResults];
+    const seen = new Set();
+    return combined.filter((f) => {
+      if (seen.has(f.id)) return false;
+      seen.add(f.id);
+      return true;
+    });
+  }, [query, category, customFoods, globalFoods]);
 
   const previewNutrients = useMemo(() => {
     if (!selectedFood) return null;
@@ -130,6 +144,7 @@ export function AddFoodSheet({
     setQuery('');
     setSelectedFood(null);
     setServings(1);
+    setGrams('');
     setCustomName('');
     setCustomServingLabel('1 piece');
     setCustomCalories('');
@@ -156,6 +171,26 @@ export function AddFoodSheet({
   const selectFood = (food: FoodItem) => {
     setSelectedFood(food);
     setServings(1);
+    if (food.servingGrams) {
+      setGrams(String(food.servingGrams));
+    } else {
+      setGrams('');
+    }
+  };
+
+  const onGramsChange = (val: string) => {
+    setGrams(val);
+    const g = parseFloat(val);
+    if (!isNaN(g) && selectedFood?.servingGrams) {
+      setServings(g / selectedFood.servingGrams);
+    }
+  };
+
+  const onServingsChange = (s: number) => {
+    setServings(s);
+    if (selectedFood?.servingGrams) {
+      setGrams(String(Math.round(s * selectedFood.servingGrams)));
+    }
   };
 
   const handleConfirmAdd = async () => {
@@ -285,52 +320,90 @@ export function AddFoodSheet({
         )}
 
         {selectedFood ? (
-          <div className="px-4 py-6 space-y-5 flex-1">
+          <div className="px-4 py-6 space-y-6 flex-1 overflow-y-auto">
             <div className="text-center">
-              <p className="text-lg font-semibold">{selectedFood.name}</p>
-              <p className="text-sm text-muted-foreground">{selectedFood.servingLabel}</p>
+              <p className="text-lg font-black tracking-tight">{selectedFood.name}</p>
+              <p className="text-sm text-muted-foreground font-medium">{selectedFood.servingLabel}</p>
               {previewNutrients && (
-                <p className="text-base font-medium mt-2 tabular-nums text-primary">
-                  {previewNutrients.calories} kcal · {previewNutrients.proteinG}g protein
-                </p>
+                <div className="flex items-center justify-center gap-2 mt-3">
+                   <div className="px-3 py-1.5 rounded-xl bg-primary/10 text-primary text-sm font-black tabular-nums">
+                      {previewNutrients.calories} kcal
+                   </div>
+                   <div className="px-3 py-1.5 rounded-xl bg-muted text-muted-foreground text-sm font-black tabular-nums">
+                      {previewNutrients.proteinG}g protein
+                   </div>
+                </div>
               )}
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-4">
                 Adding to {MEAL_SLOT_LABELS[mealSlot]}
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2 justify-center">
-              {SERVING_PRESETS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setServings(s)}
-                  className={cn(
-                    'px-5 py-3 rounded-xl text-base font-semibold min-h-[48px] min-w-[56px] border',
-                    servings === s ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
-                  )}
-                >
-                  {s}×
-                </button>
-              ))}
-            </div>
+            <div className="space-y-6 max-w-xs mx-auto">
+              {selectedFood.servingGrams && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">
+                    Quantity (grams)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      className="ft-input w-full h-14 text-xl font-black pr-12 text-center"
+                      placeholder="Grams"
+                      value={grams}
+                      onChange={(e) => onGramsChange(e.target.value)}
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-sm font-black text-muted-foreground">g</span>
+                  </div>
+                </div>
+              )}
 
-            <div className="flex items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => setServings((s) => Math.max(0.5, Math.round((s - 0.5) * 2) / 2))}
-                className="h-12 w-12 rounded-full border text-xl font-bold"
-              >
-                −
-              </button>
-              <span className="text-2xl font-bold tabular-nums w-16 text-center">{servings}×</span>
-              <button
-                type="button"
-                onClick={() => setServings((s) => Math.round((s + 0.5) * 2) / 2)}
-                className="h-12 w-12 rounded-full border text-xl font-bold"
-              >
-                +
-              </button>
+              <div className="space-y-3">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1 block text-center">
+                  Or adjust servings
+                </label>
+                <div className="flex items-center justify-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => onServingsChange(Math.max(0.1, Math.round((servings - 0.1) * 10) / 10))}
+                    className="h-14 w-14 rounded-2xl border-2 border-border flex items-center justify-center text-2xl font-black hover:bg-muted active:scale-90 transition-all"
+                  >
+                    −
+                  </button>
+                  <div className="flex flex-col items-center min-w-[80px]">
+                    <span className="text-3xl font-black tabular-nums tracking-tighter">
+                      {Math.round(servings * 10) / 10}
+                    </span>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground -mt-1">servings</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onServingsChange(Math.round((servings + 0.1) * 10) / 10)}
+                    className="h-14 w-14 rounded-2xl border-2 border-border flex items-center justify-center text-2xl font-black hover:bg-muted active:scale-90 transition-all"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 justify-center pt-2">
+                {SERVING_PRESETS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => onServingsChange(s)}
+                    className={cn(
+                      'px-4 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all',
+                      servings === s 
+                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-105' 
+                        : 'bg-muted/60 text-muted-foreground hover:bg-muted'
+                    )}
+                  >
+                    {s}×
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : (

@@ -8,6 +8,7 @@ import {
   ensureNutritionLog,
   ensureNutritionSettings,
   getCustomFoods,
+  getGlobalFoods,
   getNutritionStreak,
   getRecentNutritionLogs,
   removeNutritionEntry,
@@ -40,6 +41,7 @@ export function useDietTracker() {
   const [settings, setSettings] = useState<NutritionSettings | null>(null);
   const [log, setLog] = useState<Awaited<ReturnType<typeof ensureNutritionLog>> | null>(null);
   const [customFoods, setCustomFoods] = useState<FoodItem[]>([]);
+  const [globalFoods, setGlobalFoods] = useState<FoodItem[]>([]);
   const [weeklyLogs, setWeeklyLogs] = useState<
     Awaited<ReturnType<typeof getRecentNutritionLogs>>
   >([]);
@@ -138,14 +140,16 @@ export function useDietTracker() {
 
         await ensureNutritionLog(uid!, dateKey, nutrients);
 
-        const [customs, recent, st] = await Promise.all([
+        const [customs, globals, recent, st] = await Promise.all([
           getCustomFoods(uid!),
+          getGlobalFoods(),
           getRecentNutritionLogs(uid!, 30),
           getNutritionStreak(uid!),
         ]);
 
         if (gen !== initGenRef.current) return;
         setCustomFoods(customs);
+        setGlobalFoods(globals);
         setWeeklyLogs(recent);
         setStreak(st);
       } catch (err) {
@@ -414,6 +418,7 @@ export function useDietTracker() {
     coverage,
     suggestions,
     customFoods,
+    globalFoods,
     weeklyLogs,
     streak,
     surplusAvg,

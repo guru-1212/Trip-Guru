@@ -170,6 +170,8 @@ export {
 
 export {
   getYogaPoses,
+  createYogaPose,
+  updateYogaPose,
   getYogaFlows,
   getYogaFlow,
   getYogaSessionLogs,
@@ -179,3 +181,30 @@ export {
   getPosturePhotoLogs,
   createPosturePhotoLog,
 } from '@/firebase/yoga.firestore';
+
+export {
+  inviteYogaMate,
+  getPendingYogaInvitesForUser,
+  acceptYogaMate,
+  declineYogaMate,
+  getYogaMatesForOwner,
+  removeYogaMate,
+} from '@/firebase/yogaPartners.firestore';
+
+export {
+  getDefaultNutritionSettings,
+  ensureNutritionSettings,
+  saveNutritionSettings,
+  subscribeNutritionLog,
+  ensureNutritionLog,
+  addNutritionEntry,
+  updateNutritionEntry,
+  removeNutritionEntry,
+  getRecentNutritionLogs,
+  getNutritionStreak,
+  saveCustomFood,
+  getCustomFoods,
+  getGlobalFoods,
+  uploadGlobalFoods,
+  deleteGlobalFood,
+} from '@/firebase/nutrition.firestore';

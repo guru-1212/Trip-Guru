@@ -1,6 +1,7 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Plus, Sparkles, Utensils } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Plus, Sparkles, Utensils } from 'lucide-react';
+import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { formatDateLabel } from '@/lib/nutrition/nutritionUtils';
 
@@ -40,7 +41,7 @@ export function DietPageHeader({
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-sm text-muted-foreground min-w-[140px] text-center">
+            <span className="text-sm text-muted-foreground min-w-[140px] text-center font-medium">
               {formatDateLabel(dateKey, timezone)}
             </span>
             <button
@@ -56,15 +57,23 @@ export function DietPageHeader({
         </div>
       </div>
       <div className="flex gap-2 w-full sm:w-auto shrink-0">
+        <Link
+          href="/fittrack/food-database"
+          className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 flex-1 sm:flex-none"
+          title="Food Database"
+        >
+          <Database className="h-4 w-4" />
+          <span className="sm:inline">Database</span>
+        </Link>
         {onAIImport && (
           <button
             type="button"
             onClick={onAIImport}
-            className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 flex-1 sm:flex-none"
+            className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 flex-1 sm:flex-none border-primary/20"
             title="AI Import Diet"
             aria-label="AI Import Diet"
           >
-            <Sparkles className="h-4 w-4" />
+            <Sparkles className="h-4 w-4 text-primary" />
             <span className="sm:inline">AI Import</span>
           </button>
         )}

@@ -62,3 +62,13 @@ export interface PosturePhotoLog {
   notes?: string;
   createdAt: Timestamp;
 }
+
+export interface YogaMate {
+  id: string;
+  ownerId: string;
+  partnerId?: string;
+  partnerEmail: string;
+  partnerName: string;
+  inviteStatus: 'pending' | 'accepted';
+  invitedBy: string;
+}

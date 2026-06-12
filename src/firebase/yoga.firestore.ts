@@ -27,6 +27,16 @@ export async function getYogaPoses(): Promise<YogaPose[]> {
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<YogaPose, 'id'>) }));
 }
 
+export async function createYogaPose(pose: Omit<YogaPose, 'id'>): Promise<string> {
+  const ref = doc(collection(db(), 'yogaPoses'));
+  await setDoc(ref, pose);
+  return ref.id;
+}
+
+export async function updateYogaPose(id: string, updates: Partial<YogaPose>): Promise<void> {
+  await setDoc(doc(db(), 'yogaPoses', id), updates, { merge: true });
+}
+
 export async function getYogaFlows(): Promise<YogaFlow[]> {
   const snap = await getDocs(query(collection(db(), 'yogaFlows'), orderBy('name', 'asc')));
   return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<YogaFlow, 'id'>) }));

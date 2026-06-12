@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageTransition } from '@/components/workout/PageTransition';
@@ -43,6 +44,7 @@ export default function DietPage() {
     coverage,
     suggestions,
     customFoods,
+    globalFoods,
     weeklyLogs,
     streak,
     surplusAvg,
@@ -75,7 +77,15 @@ export default function DietPage() {
   const [sheetInitialTab, setSheetInitialTab] = useState<'foods' | 'custom'>('foods');
   const [editingEntry, setEditingEntry] = useState<NutritionLogEntry | null>(null);
 
+  const searchParams = useSearchParams();
   const mealGroups = useMemo(() => groupEntriesByMeal(entries), [entries]);
+
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'log-food') {
+      openSheet();
+    }
+  }, [searchParams]);
 
   const handleImportSuccess = useCallback(
     async (payloads: DietImportLogPayload[]) => {
@@ -363,6 +373,7 @@ export default function DietPage() {
           initialFoodId={sheetFoodId}
           initialTab={sheetInitialTab}
           customFoods={customFoods}
+          globalFoods={globalFoods}
           onClose={closeSheet}
           onLogFood={handleLogFood}
           onLogCustom={async (name, nutrients, mealSlot, saveTemplate, servings, servingLabel) => {

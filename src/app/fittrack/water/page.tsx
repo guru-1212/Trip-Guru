@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Droplets } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageTransition } from '@/components/workout/PageTransition';
@@ -15,7 +17,7 @@ import { useWaterTracker } from '@/hooks/useWaterTracker';
 import { formatMl } from '@/lib/water/waterUtils';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
-export default function WaterPage() {
+export function WaterPage() {
   const {
     totalMl,
     goalMl,
@@ -35,6 +37,17 @@ export default function WaterPage() {
     addIntake,
     removeIntake,
   } = useWaterTracker();
+
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const action = searchParams.get('action');
+    if (action === 'log-water' && ready && !actionLoading) {
+      handleAdd(250);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [searchParams, ready, actionLoading]);
+
 
   const suggestedAmounts = Array.from(new Set(scheduleWithStates.map((s) => s.amount))).sort((a, b) => a - b);
 
