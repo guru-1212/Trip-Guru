@@ -17,7 +17,7 @@ import { useWaterTracker } from '@/hooks/useWaterTracker';
 import { formatMl } from '@/lib/water/waterUtils';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
-export function WaterPage() {
+export default function WaterPage() {
   const {
     totalMl,
     goalMl,
