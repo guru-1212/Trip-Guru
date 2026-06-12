@@ -39,6 +39,7 @@ export function useAppMode() {
   const isTripMode = mode === 'trip';
   const isRoomMode = mode === 'room';
   const isGymMode = mode === 'gym';
+  const isYogaMode = mode === 'yoga';
 
   return {
     mode,
@@ -48,6 +49,7 @@ export function useAppMode() {
     isTripMode,
     isRoomMode,
     isGymMode,
+    isYogaMode,
     primaryUseCase: user?.primaryUseCase,
   };
 }

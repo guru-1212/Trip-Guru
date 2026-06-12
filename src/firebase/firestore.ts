@@ -167,3 +167,15 @@ export {
   getRecentWaterLogsForStreak,
   WaterFirestoreError,
 } from '@/firebase/water.firestore';
+
+export {
+  getYogaPoses,
+  getYogaFlows,
+  getYogaFlow,
+  getYogaSessionLogs,
+  createYogaSessionLog,
+  getMeditationLogs,
+  createMeditationLog,
+  getPosturePhotoLogs,
+  createPosturePhotoLog,
+} from '@/firebase/yoga.firestore';

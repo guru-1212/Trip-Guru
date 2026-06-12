@@ -17,7 +17,8 @@ export function Navbar() {
   const [dark, setDark] = useState(false);
   const [open, setOpen] = useState(false);
   const inFitTrack = pathname.startsWith('/fittrack');
-  const profileHref = inFitTrack ? '/fittrack/profile' : '/profile';
+  const inYoga = pathname.startsWith('/yoga');
+  const profileHref = (inFitTrack || inYoga) ? `/${inFitTrack ? 'fittrack' : 'yoga'}/profile` : '/profile';
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');
@@ -59,7 +60,7 @@ export function Navbar() {
                 <div className="hidden sm:flex flex-col items-end">
                   <span className="text-xs font-bold leading-none">{user?.name?.split(' ')[0] || 'User'}</span>
                   <span className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-1">
-                    {inFitTrack ? 'Gym' : 'Explorer'}
+                    {inFitTrack ? 'Gym' : inYoga ? 'Yogi' : 'Explorer'}
                   </span>
                 </div>
                 <Avatar className="h-8 w-8 sm:h-9 sm:h-9 border-2 border-primary/10 transition-transform active:scale-90 shadow-sm">

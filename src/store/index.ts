@@ -12,6 +12,7 @@ import roomBringItemsReducer from '@/features/roomBringItems/roomBringItemsSlice
 import tripPackItemsReducer from '@/features/tripPackItems/tripPackItemsSlice';
 import appModeReducer from '@/features/appMode/appModeSlice';
 import gymReducer from '@/features/gym/gymSlice';
+import yogaReducer from '@/features/yoga/yogaSlice';
 
 export const store = configureStore({
   reducer: {
@@ -27,6 +28,7 @@ export const store = configureStore({
     tripPackItems: tripPackItemsReducer,
     appMode: appModeReducer,
     gym: gymReducer,
+    yoga: yogaReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
@@ -40,12 +42,21 @@ export const store = configureStore({
           'rooms/setRooms',
           'rooms/fetchUser/fulfilled',
           'appMode/setAppModeState',
+          'yoga/setYogaSessionLogs',
+          'yoga/addYogaSessionLog',
+          'yoga/setMeditationLogs',
+          'yoga/addMeditationLog',
+          'yoga/setPosturePhotoLogs',
+          'yoga/addPosturePhotoLog',
         ],
         ignoredPaths: [
           'auth.user.createdAt',
           'trips.trips',
           'expenses.expenses',
           'rooms.rooms',
+          'yoga.sessionLogs',
+          'yoga.meditationLogs',
+          'yoga.posturePhotoLogs',
         ],
       },
     }),

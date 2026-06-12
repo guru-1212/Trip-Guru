@@ -13,12 +13,26 @@ export function WorkspaceGuard() {
   useEffect(() => {
     if (!initialized) return;
 
-    if (mode === 'trip' && pathname.startsWith('/rooms')) {
+    const isTripRoute = pathname.startsWith('/trips');
+    const isRoomRoute = pathname.startsWith('/rooms');
+    const isGymRoute = pathname.startsWith('/fittrack');
+    const isYogaRoute = pathname.startsWith('/yoga');
+
+    if (mode === 'trip' && (isRoomRoute || isYogaRoute)) {
       router.replace('/dashboard');
       return;
     }
-    if (mode === 'room' && pathname.startsWith('/trips')) {
+    if (mode === 'room' && (isTripRoute || isYogaRoute)) {
       router.replace('/dashboard');
+      return;
+    }
+    if (mode === 'gym' && (isTripRoute || isRoomRoute || isYogaRoute)) {
+      router.replace('/fittrack/dashboard');
+      return;
+    }
+    if (mode === 'yoga' && (isTripRoute || isRoomRoute || isGymRoute)) {
+      router.replace('/yoga/dashboard');
+      return;
     }
   }, [mode, pathname, initialized, router]);
 

@@ -7,7 +7,7 @@
     "build": "node scripts/generate-messaging-sw.js && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "npx tsx src/lib/settlementAlgorithm.test.ts && npx tsx src/lib/tripPackProgress.test.ts",
+    "test": "npx tsx src/lib/settlementAlgorithm.test.ts && npx tsx src/lib/tripPackProgress.test.ts && npx tsx src/workout/fittrack.test.ts && npx tsx src/lib/nutrition/dietImportParser.test.ts",
     "icons": "node scripts/generate-icons.js",
     "messaging-sw": "node scripts/generate-messaging-sw.js",
     "firebase:deploy": "firebase deploy --only firestore:rules,firestore:indexes,storage && node scripts/deploy-functions.js",

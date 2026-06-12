@@ -69,3 +69,14 @@ export async function uploadFitTrackVariationImage(
   const safeVariation = sanitizeStorageSegment(variation);
   return uploadFile(`users/${uid}/fittrack/variations/${safeExerciseId}/${safeVariation}.jpg`, file);
 }
+
+export async function uploadYogaPosturePhoto(
+  uid: string,
+  poseId: string,
+  file: File
+): Promise<string> {
+  const ext = file.name.split('.').pop() ?? 'jpg';
+  const timestamp = Date.now();
+  const safePoseId = sanitizeStorageSegment(poseId);
+  return uploadFile(`users/${uid}/yoga/postures/${safePoseId}_${timestamp}.${ext}`, file);
+}

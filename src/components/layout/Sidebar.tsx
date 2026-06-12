@@ -12,11 +12,26 @@ import {
   Globe,
   Users,
   Home,
-  Dumbbell
+  Dumbbell,
+  Flower2,
+  BookOpen,
+  Activity,
+  Heart,
+  Camera
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAppMode } from '@/hooks/useAppMode';
+
+const yogaLinks = [
+  { href: '/yoga/dashboard', label: 'Yoga Home', icon: LayoutDashboard },
+  { href: '/yoga/library', label: 'Pose Library', icon: BookOpen },
+  { href: '/yoga/flows', label: 'Yoga Flows', icon: Activity },
+  { href: '/yoga/meditation', label: 'Meditation', icon: Heart },
+  { href: '/yoga/progress', label: 'Progress Photos', icon: Camera },
+  { href: '/profile', label: 'Profile', icon: User },
+];
+
 const tripLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/trips/new', label: 'New Trip', icon: PlusCircle },
@@ -45,14 +60,14 @@ interface SidebarProps {
 
 export function Sidebar({ mobile, onLinkClick }: SidebarProps) {
   const pathname = usePathname();
-  const { isTripMode, isRoomMode } = useAppMode();
-  const links = isRoomMode ? roomLinks : tripLinks;
+  const { isTripMode, isRoomMode, isYogaMode } = useAppMode();
+  const links = isYogaMode ? yogaLinks : isRoomMode ? roomLinks : tripLinks;
 
   const content = (
     <div className="flex flex-col h-full py-4 px-4 gap-6">
       <div className="space-y-1">
         <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest px-3 mb-4">
-          {isRoomMode ? 'Home' : 'Main Menu'}
+          {isYogaMode ? 'Yoga' : isRoomMode ? 'Home' : 'Main Menu'}
         </p>
         {links.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + '/');
@@ -117,6 +132,20 @@ export function Sidebar({ mobile, onLinkClick }: SidebarProps) {
              <div>
                <p className="text-xs font-black text-primary tracking-tight leading-none mb-1">Shared home</p>
                <p className="text-[10px] text-muted-foreground font-bold">Track rent &amp; expenses</p>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {!mobile && isYogaMode && (
+        <div className="mt-auto p-5 bg-orange-50 dark:bg-orange-500/5 rounded-3xl border border-orange-100 dark:border-orange-500/10">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                <Flower2 className="h-5 w-5" />
+             </div>
+             <div>
+               <p className="text-xs font-black text-primary tracking-tight leading-none mb-1">Yoga Mind</p>
+               <p className="text-[10px] text-muted-foreground font-bold">Poses, Flows & Zen</p>
              </div>
           </div>
         </div>

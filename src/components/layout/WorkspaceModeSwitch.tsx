@@ -1,6 +1,6 @@
 'use client';
 
-import { Plane, Home, Dumbbell } from 'lucide-react';
+import { Plane, Home, Dumbbell, Flower2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppMode } from '@/hooks/useAppMode';
 import { AppMode } from '@/lib/appMode';
@@ -16,12 +16,15 @@ export function WorkspaceModeSwitch({ className }: { className?: string }) {
     { id: 'trip', label: 'Trips', icon: Plane },
     { id: 'room', label: 'Rooms', icon: Home },
     { id: 'gym', label: 'GYM', icon: Dumbbell },
+    { id: 'yoga', label: 'YOGA', icon: Flower2 },
   ];
 
   const handleSwitch = (id: AppMode) => {
     switchMode(id);
     if (id === 'gym') {
       router.push('/fittrack/dashboard');
+    } else if (id === 'yoga') {
+      router.push('/yoga/dashboard');
     } else {
       router.push('/dashboard');
     }

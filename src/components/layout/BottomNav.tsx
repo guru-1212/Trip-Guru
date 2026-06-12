@@ -2,15 +2,22 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, PlusCircle, User, Home, Dumbbell } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, User, Home, Dumbbell, Flower2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppMode } from '@/hooks/useAppMode';
 
 export function BottomNav() {
   const pathname = usePathname();
-  const { isRoomMode } = useAppMode();
+  const { isRoomMode, isYogaMode } = useAppMode();
 
-  const links = isRoomMode
+  const links = isYogaMode
+    ? [
+        { href: '/yoga/dashboard', label: 'Home', icon: LayoutDashboard },
+        { href: '/yoga/flows', label: 'Zen', icon: Flower2 },
+        { href: '/yoga/progress', label: 'Body', icon: PlusCircle }, // Reusing PlusCircle as a placeholder for "Track Progress" or similar
+        { href: '/profile', label: 'Me', icon: User },
+      ]
+    : isRoomMode
     ? [
         { href: '/dashboard', label: 'Home', icon: LayoutDashboard },
         { href: '/rooms/new', label: 'Room', icon: Home },
