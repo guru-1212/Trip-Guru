@@ -26,10 +26,17 @@ export default function HistoryPage() {
     return [...filtered].sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf());
   }, [workouts, muscleFilter]);
 
+  const formatDurationHMS = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
   const generateShareText = (workout: WorkoutSession) => {
     const unit = profile.prefs.unit;
     let text = `${workout.splitName} - ${dayjs(workout.date).format('MMM D, YYYY')}\n`;
-    text += `Duration: ${formatDuration(workout.duration)} | Volume: ${formatWeight(workout.totalVolume, unit)}\n`;
+    text += `Duration: ${formatDurationHMS(workout.duration)} | Volume: ${formatWeight(workout.totalVolume, unit)}\n`;
     text += `--------------------------------\n`;
 
     workout.exercises.forEach((ex, idx) => {
@@ -77,7 +84,7 @@ export default function HistoryPage() {
 
     thisWeekWorkouts.forEach(workout => {
       text += `📅 ${workout.splitName} - ${dayjs(workout.date).format('dddd, MMM D')}\n`;
-      text += `⏱️ ${formatDuration(workout.duration)} | ⚖️ ${formatWeight(workout.totalVolume, unit)} Vol\n`;
+      text += `⏱️ ${formatDurationHMS(workout.duration)} | ⚖️ ${formatWeight(workout.totalVolume, unit)} Vol\n`;
       
       workout.exercises.forEach((ex, idx) => {
         const doneSets = ex.sets.filter(s => s.done);
