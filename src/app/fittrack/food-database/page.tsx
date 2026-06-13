@@ -11,7 +11,8 @@ import {
   FileSpreadsheet,
   ChevronLeft,
   ChevronRight,
-  Plus
+  Plus,
+  Copy
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -40,12 +41,50 @@ const CATEGORIES: FoodCategory[] = [
   'protein', 'staple', 'dairy', 'fruit', 'nut', 'snack', 'breakfast', 'dal', 'beverage', 'supplement', 'custom'
 ];
 
+const DATABASE_IMPORT_PROMPT = `You are an expert nutritionist and diet planner. I need to add high-quality food data to my website's database. Please provide a JSON array of food objects.
+
+**Required JSON Structure:**
+[
+  {
+    "name": "Food Name",
+    "category": "protein", 
+    "servingLabel": "100g",
+    "servingGrams": 100,
+    "calories": 250,
+    "proteinG": 20,
+    "carbsG": 5,
+    "fatG": 15,
+    "fiberG": 2,
+    "calciumMg": 20,
+    "ironMg": 1.5,
+    "magnesiumMg": 10,
+    "potassiumMg": 150,
+    "sodiumMg": 50,
+    "tags": ["veg", "protein_rich"],
+    "price": 45
+  }
+]
+
+**Guidelines:**
+1. Categories must be one of: protein, staple, dairy, fruit, nut, snack, breakfast, dal, beverage, supplement.
+2. Tags can include: veg, egg, non_veg, protein_rich, staple, snack.
+3. Standardize to 100g or 1 serving sizes.
+4. Ensure all nutrient values are numbers.
+5. "price" should be an estimated cost per serving in INR.
+
+Please generate 10-15 popular items for [INSERT DIET TYPE HERE, e.g., Indian Vegetarian / Keto / High Protein].`;
+
 export default function FoodDatabasePage() {
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeSmartFilter, setActiveSmartFilter] = useState<'all' | 'high-protein' | 'high-calorie' | 'low-calorie' | 'cheap'>('all');
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [isTextImportOpen, setIsTextImportOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [importMode, setImportMode] = useState<'upload' | 'check'>('check');
+  const [checkResults, setCheckResults] = useState<{name: string, found: boolean, food?: FoodItem}[]>([]);
   const [pendingItems, setPendingItems] = useState<FoodItem[]>([]);
   const [duplicates, setDuplicates] = useState<FoodItem[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
@@ -66,14 +105,62 @@ export default function FoodDatabasePage() {
     }
   }
 
+  const handleCopyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(DATABASE_IMPORT_PROMPT);
+      toast.success('AI Prompt copied to clipboard!');
+    } catch (err) {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
+
+  const handleTextImport = () => {
+    if (!textInput.trim()) {
+      toast.error('Please paste some text first');
+      return;
+    }
+
+    if (importMode === 'upload') {
+      try {
+        const items = JSON.parse(textInput);
+        processItems(Array.isArray(items) ? items : [items]);
+        setIsTextImportOpen(false);
+      } catch (err) {
+        toast.error('Invalid JSON format');
+      }
+    } else {
+      // Diet Check Mode
+      const lines = textInput.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      const results = lines.map(line => {
+        // Simple name matching, could be improved
+        const name = line.split(/[-:]/)[0].trim();
+        const found = foods.find(f => f.name.toLowerCase() === name.toLowerCase());
+        return { name, found: !!found, food: found };
+      });
+      setCheckResults(results);
+    }
+  };
+
   const filteredFoods = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    return foods.filter(f => 
+    let result = foods.filter(f => 
       f.name.toLowerCase().includes(q) || 
       f.category.toLowerCase().includes(q) ||
       f.id.toLowerCase().includes(q)
     );
-  }, [foods, searchQuery]);
+
+    if (activeSmartFilter === 'high-protein') {
+      result = result.filter(f => f.nutrients.proteinG > 15);
+    } else if (activeSmartFilter === 'high-calorie') {
+      result = result.filter(f => f.nutrients.calories > 350);
+    } else if (activeSmartFilter === 'low-calorie') {
+      result = result.filter(f => f.nutrients.calories < 100);
+    } else if (activeSmartFilter === 'cheap') {
+      result = result.filter(f => (f.price || 0) > 0 && (f.price || 0) < 50);
+    }
+
+    return result;
+  }, [foods, searchQuery, activeSmartFilter]);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -183,6 +270,14 @@ export default function FoodDatabasePage() {
 
         <div className="flex items-center gap-3">
           <Button 
+            onClick={() => setIsTextImportOpen(true)}
+            variant="outline"
+            className="rounded-xl flex items-center gap-2 border-border/60"
+          >
+            <Plus className="h-4 w-4" />
+            <span>Text Import & Check</span>
+          </Button>
+          <Button 
             onClick={() => setIsUploadOpen(true)}
             className="ft-btn ft-btn--primary flex items-center gap-2"
           >
@@ -207,6 +302,23 @@ export default function FoodDatabasePage() {
             <CheckCircle2 className="h-4 w-4 text-primary" />
             <span>{foods.length} Total Items</span>
           </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {(['all', 'high-protein', 'high-calorie', 'low-calorie', 'cheap'] as const).map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setActiveSmartFilter(filter)}
+              className={cn(
+                "px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border",
+                activeSmartFilter === filter 
+                  ? "bg-primary text-primary-foreground border-primary shadow-lg shadow-primary/20 scale-105" 
+                  : "bg-card text-muted-foreground border-border/60 hover:border-primary/40 hover:text-primary"
+              )}
+            >
+              {filter.replace('-', ' ')}
+            </button>
+          ))}
         </div>
 
         <div className="ft-card overflow-hidden border border-border/60 bg-card">
@@ -332,6 +444,102 @@ export default function FoodDatabasePage() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Text Import & Check Dialog */}
+      <Dialog open={isTextImportOpen} onOpenChange={setIsTextImportOpen}>
+        <DialogContent className="sm:max-w-[600px] rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <DialogTitle className="text-2xl font-black tracking-tight">Text Import & Diet Check</DialogTitle>
+                <DialogDescription className="font-medium">
+                  Paste a diet plan to check against the database, or paste JSON for bulk upload.
+                </DialogDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyPrompt}
+                className="rounded-xl flex items-center gap-2 border-primary/20 text-primary hover:bg-primary/5 shrink-0"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                <span className="text-[10px] font-black uppercase tracking-widest">Copy Prompt</span>
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            <div className="flex p-1 bg-muted/30 rounded-xl border border-border/50">
+              <button
+                onClick={() => { setImportMode('check'); setCheckResults([]); }}
+                className={cn(
+                  "flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all",
+                  importMode === 'check' ? "bg-card shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Diet Check
+              </button>
+              <button
+                onClick={() => { setImportMode('upload'); setCheckResults([]); }}
+                className={cn(
+                  "flex-1 py-2 text-xs font-black uppercase tracking-widest rounded-lg transition-all",
+                  importMode === 'upload' ? "bg-card shadow-sm text-primary" : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                Bulk JSON Upload
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+                {importMode === 'check' ? 'Paste Diet Plan (one item per line)' : 'Paste JSON Array'}
+              </label>
+              <textarea
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                className="w-full min-h-[200px] p-4 rounded-xl bg-muted/20 border border-border/60 focus:border-primary/50 focus:ring-0 transition-colors font-mono text-sm"
+                placeholder={importMode === 'check' ? "Oats: 50g\nMilk: 200ml\nEgg: 2 pieces" : "[{\n  \"name\": \"Oats\",\n  \"calories\": 389,\n  ...\n}]"}
+              />
+            </div>
+
+            {importMode === 'check' && checkResults.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-black uppercase tracking-widest text-primary">Check Results</h3>
+                <div className="divide-y divide-border/40 border rounded-xl bg-card overflow-hidden">
+                  {checkResults.map((res, i) => (
+                    <div key={i} className="px-4 py-3 flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-3">
+                        {res.found ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <AlertTriangle className="h-4 w-4 text-warning" />
+                        )}
+                        <span className="font-bold">{res.name}</span>
+                      </div>
+                      {res.found ? (
+                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                          {res.food?.nutrients.calories} kcal · {res.food?.nutrients.proteinG}g P
+                        </div>
+                      ) : (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-danger bg-danger/10 px-2 py-1 rounded-full">Missing</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button 
+              onClick={handleTextImport}
+              className="ft-btn ft-btn--primary w-full h-12"
+            >
+              {importMode === 'check' ? 'Run Diet Check' : 'Process JSON Import'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

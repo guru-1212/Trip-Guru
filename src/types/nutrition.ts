@@ -47,6 +47,7 @@ export interface FoodItem {
   tags: FoodTag[];
   isCustom?: boolean;
   source?: string;
+  price?: number; // Estimated price in local currency
 }
 
 export interface NutritionTargets extends NutrientsPerServing {

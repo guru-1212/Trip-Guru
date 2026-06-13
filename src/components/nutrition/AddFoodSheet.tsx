@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Search, X } from 'lucide-react';
+import { Plus, Search, X, Sparkles, Leaf, Zap, IndianRupee } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   QUICK_ADD_FOOD_IDS,
@@ -14,6 +14,7 @@ import { EMPTY_NUTRIENTS } from '@/types/nutrition';
 import { scaleNutrients } from '@/lib/nutrition/nutritionCalculators';
 
 type Tab = 'foods' | 'custom';
+type SmartFilter = 'all' | 'high-protein' | 'low-cal' | 'veg' | 'cheap';
 
 const PRIMARY_MEALS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 const EXTRA_MEALS: MealSlot[] = ['pre_workout', 'post_workout'];
@@ -28,6 +29,13 @@ const CATEGORIES = [
   { id: 'dal', label: 'Dal' },
   { id: 'fruit', label: 'Fruit' },
   { id: 'snack', label: 'Snack' },
+];
+
+const SMART_FILTERS: { id: SmartFilter; label: string; icon: any }[] = [
+  { id: 'high-protein', label: 'Protein Rich', icon: Zap },
+  { id: 'low-cal', label: 'Low Calorie', icon: Sparkles },
+  { id: 'veg', label: 'Veg Only', icon: Leaf },
+  { id: 'cheap', label: 'Budget Friendly', icon: IndianRupee },
 ];
 
 interface AddFoodSheetProps {
@@ -69,6 +77,7 @@ export function AddFoodSheet({
   const [mealSlot, setMealSlot] = useState<MealSlot>(initialMealSlot);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('all');
+  const [smartFilter, setSmartFilter] = useState<SmartFilter>('all');
   const [servings, setServings] = useState(1);
   const [grams, setGrams] = useState<string>('');
   const [selectedFood, setSelectedFood] = useState<FoodItem | null>(null);
@@ -101,6 +110,7 @@ export function AddFoodSheet({
       setServings(1);
       setQuery(initialSearchQuery);
       setCategory('all');
+      setSmartFilter('all');
       setTab(initialTab ?? 'foods');
       const preselect = initialFoodId ? getFoodById(initialFoodId) ?? null : null;
       setSelectedFood(preselect);
@@ -126,14 +136,26 @@ export function AddFoodSheet({
       return !query || matchesQuerySimple(f.name, query);
     });
 
-    const combined = [...customResults, ...globalResults, ...staticResults];
+    let combined = [...customResults, ...globalResults, ...staticResults];
+
+    // Apply Smart Filters
+    if (smartFilter === 'high-protein') {
+      combined = combined.filter((f) => f.nutrients.proteinG > 15);
+    } else if (smartFilter === 'low-cal') {
+      combined = combined.filter((f) => f.nutrients.calories < 100);
+    } else if (smartFilter === 'veg') {
+      combined = combined.filter((f) => f.tags.includes('veg'));
+    } else if (smartFilter === 'cheap') {
+      combined = combined.filter((f) => (f.price || 0) > 0 && (f.price || 0) < 50);
+    }
+
     const seen = new Set();
     return combined.filter((f) => {
       if (seen.has(f.id)) return false;
       seen.add(f.id);
       return true;
     });
-  }, [query, category, customFoods, globalFoods]);
+  }, [query, category, smartFilter, customFoods, globalFoods]);
 
   const previewNutrients = useMemo(() => {
     if (!selectedFood) return null;
@@ -161,6 +183,7 @@ export function AddFoodSheet({
     setSaveTemplate(false);
     setTab('foods');
     setCategory('all');
+    setSmartFilter('all');
   };
 
   const handleClose = () => {
@@ -410,37 +433,75 @@ export function AddFoodSheet({
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 min-h-0">
             {tab === 'foods' ? (
               <>
-                <div className="relative sticky top-0 bg-card z-10 pb-2">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <input
-                    ref={searchRef}
-                    type="search"
-                    className="ft-input w-full pl-9 text-base min-h-[48px]"
-                    placeholder="Search — rice, annam, egg, paneer, dal…"
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                  />
+                <div className="relative sticky top-0 bg-card z-10 pb-2 space-y-3">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <input
+                      ref={searchRef}
+                      type="search"
+                      className="ft-input w-full pl-9 text-base min-h-[48px]"
+                      placeholder="Search — rice, annam, egg, paneer, dal…"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                      {CATEGORIES.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setCategory(c.id)}
+                          className={cn(
+                            'shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border min-h-[32px] transition-all',
+                            category === c.id
+                              ? 'border-primary bg-primary text-primary-foreground'
+                              : 'border-border bg-muted/20 hover:border-primary/40'
+                          )}
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide border-t border-border/40 pt-2">
+                      <button
+                        type="button"
+                        onClick={() => setSmartFilter('all')}
+                        className={cn(
+                          'shrink-0 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border min-h-[28px] transition-all',
+                          smartFilter === 'all'
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border text-muted-foreground bg-muted/10'
+                        )}
+                      >
+                        All
+                      </button>
+                      {SMART_FILTERS.map((f) => {
+                        const Icon = f.icon;
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setSmartFilter(f.id)}
+                            className={cn(
+                              'shrink-0 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border min-h-[28px] transition-all flex items-center gap-1.5',
+                              smartFilter === f.id
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border text-muted-foreground bg-muted/10 hover:border-primary/40'
+                            )}
+                          >
+                            <Icon className="h-3 w-3" />
+                            {f.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
-                <div className="flex gap-1.5 overflow-x-auto pb-1">
-                  {CATEGORIES.map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setCategory(c.id)}
-                      className={cn(
-                        'shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border min-h-[32px]',
-                        category === c.id
-                          ? 'border-primary bg-primary/10 text-primary'
-                          : 'border-border'
-                      )}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
-
-                {!query && category === 'all' && (
+                {!query && category === 'all' && smartFilter === 'all' && (
                   <div className="grid grid-cols-4 gap-2">
                     {quickFoods.map((food) => (
                       <button
@@ -448,7 +509,7 @@ export function AddFoodSheet({
                         type="button"
                         disabled={disabled}
                         onClick={() => selectFood(food)}
-                        className="rounded-xl border border-border bg-muted/20 p-2 text-center min-h-[64px] active:bg-primary/10"
+                        className="rounded-xl border border-border bg-muted/20 p-2 text-center min-h-[64px] active:bg-primary/10 transition-colors"
                       >
                         <span className="text-[11px] font-semibold leading-tight block line-clamp-2">
                           {food.name.split(' ')[0]}
@@ -462,28 +523,46 @@ export function AddFoodSheet({
                 )}
 
                 {results.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-6">
-                    No foods found. Try &quot;rice&quot;, &quot;egg&quot;, or use Hostel / Custom tab.
-                  </p>
+                  <div className="text-center py-12 space-y-2">
+                    <div className="w-12 h-12 rounded-full bg-muted/40 flex items-center justify-center mx-auto text-muted-foreground">
+                      <Search className="h-6 w-6" />
+                    </div>
+                    <p className="text-sm text-muted-foreground font-medium">
+                      {query ? 'No foods found matching your search.' : 'Try searching for rice, egg, or chicken.'}
+                    </p>
+                  </div>
                 ) : (
                   <ul className="space-y-1 pb-4">
-                    {results.slice(0, 30).map((food) => (
+                    {results.slice(0, 40).map((food) => (
                       <li key={food.id}>
                         <button
                           type="button"
                           disabled={disabled}
                           onClick={() => selectFood(food)}
-                          className="w-full text-left px-3 py-3 rounded-xl min-h-[56px] active:bg-primary/10 flex items-center justify-between gap-2 border border-transparent hover:border-border/60"
+                          className="w-full text-left px-3 py-3 rounded-xl min-h-[56px] active:bg-primary/10 flex items-center justify-between gap-3 border border-transparent hover:border-border/60 transition-all group"
                         >
-                          <div className="min-w-0">
-                            <p className="font-medium text-sm">{food.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {food.servingLabel} · {food.nutrients.proteinG}g protein
-                            </p>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-bold text-sm group-hover:text-primary transition-colors truncate">{food.name}</p>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">
+                                {food.servingLabel} · {food.nutrients.proteinG}g protein
+                              </span>
+                              {food.tags.includes('veg') && (
+                                <Leaf className="h-3 w-3 text-emerald-500 shrink-0" />
+                              )}
+                              {food.price && (
+                                <span className="text-[10px] text-amber-600 font-black shrink-0 bg-amber-50 px-1 rounded">
+                                  ₹{food.price}
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <span className="text-sm font-semibold tabular-nums shrink-0">
-                            {food.nutrients.calories}
-                          </span>
+                          <div className="text-right shrink-0">
+                            <span className="text-sm font-black tabular-nums text-primary block">
+                              {food.nutrients.calories}
+                            </span>
+                            <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground -mt-1 block">kcal</span>
+                          </div>
                         </button>
                       </li>
                     ))}
