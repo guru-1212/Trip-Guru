@@ -57,6 +57,49 @@ export default function HistoryPage() {
     }
   };
 
+  const handleShareThisWeek = async () => {
+    // Current week boundaries
+    const startOfWeek = dayjs().startOf('week'); 
+    const endOfWeek = dayjs().endOf('week');
+    
+    const thisWeekWorkouts = workouts.filter(w => {
+      const d = dayjs(w.date);
+      return d.valueOf() >= startOfWeek.valueOf() && d.valueOf() <= endOfWeek.valueOf();
+    }).sort((a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf());
+
+    if (thisWeekWorkouts.length === 0) {
+      toast.error("No workouts found for this week yet.");
+      return;
+    }
+
+    const unit = profile.prefs.unit;
+    let text = `🏋️ This Week's Workout Summary (${startOfWeek.format('MMM D')} - ${endOfWeek.format('MMM D')})\n\n`;
+
+    thisWeekWorkouts.forEach(workout => {
+      text += `📅 ${workout.splitName} - ${dayjs(workout.date).format('dddd, MMM D')}\n`;
+      text += `⏱️ ${formatDuration(workout.duration)} | ⚖️ ${formatWeight(workout.totalVolume, unit)} Vol\n`;
+      
+      workout.exercises.forEach((ex, idx) => {
+        const doneSets = ex.sets.filter(s => s.done);
+        if (doneSets.length === 0) return;
+        text += `  ${idx + 1}. ${ex.name} ${ex.variation !== 'Standard' ? `(${ex.variation})` : ''}\n`;
+        doneSets.forEach((set, sIdx) => {
+          text += `     Set ${sIdx + 1}: ${formatWeight(set.weight, unit)} × ${set.reps}\n`;
+        });
+      });
+      text += `\n`;
+    });
+
+    text += `Shared via Athlete OS`;
+    
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Weekly summary copied to clipboard!");
+    } catch (err) {
+      toast.error("Failed to copy weekly summary");
+    }
+  };
+
   if (!hydrated) return <div className="text-muted-foreground p-6">Loading...</div>;
 
   return (
@@ -70,17 +113,26 @@ export default function HistoryPage() {
             </h1>
             <p className="ft-subtitle mt-1">Review and share your past sessions.</p>
           </div>
-          <div className="flex items-center gap-2 mt-2 sm:mt-0">
-            <Filter className="h-4 w-4 text-muted-foreground" />
-            <select 
-              className="ft-input w-auto text-sm py-1.5 h-auto min-w-[120px]"
-              value={muscleFilter}
-              onChange={(e) => setMuscleFilter(e.target.value)}
+          <div className="flex flex-wrap items-center gap-2 mt-2 sm:mt-0">
+            <button
+              onClick={handleShareThisWeek}
+              className="ft-btn ft-btn--secondary ft-btn--sm flex items-center gap-2"
             >
-              {MUSCLE_GROUPS.map(m => (
-                <option key={m} value={m}>{m === 'All' ? 'All Muscles' : m}</option>
-              ))}
-            </select>
+              <Share2 className="h-4 w-4" />
+              Share This Week
+            </button>
+            <div className="flex items-center gap-2 border-l border-border pl-2 ml-1">
+              <Filter className="h-4 w-4 text-muted-foreground" />
+              <select 
+                className="ft-input w-auto text-sm py-1.5 h-auto min-w-[120px]"
+                value={muscleFilter}
+                onChange={(e) => setMuscleFilter(e.target.value)}
+              >
+                {MUSCLE_GROUPS.map(m => (
+                  <option key={m} value={m}>{m === 'All' ? 'All Muscles' : m}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </header>
 
