@@ -32,6 +32,10 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/fittrackPartners/$(ownerUid + '_' + request.auth.uid))
         && get(/databases/$(database)/documents/fittrackPartners/$(ownerUid + '_' + request.auth.uid)).data.inviteStatus == 'accepted';
     }
+    function isYogaPartner(ownerUid) {
+      return exists(/databases/$(database)/documents/yogaPartners/$(ownerUid + '_' + request.auth.uid))
+        && get(/databases/$(database)/documents/yogaPartners/$(ownerUid + '_' + request.auth.uid)).data.inviteStatus == 'accepted';
+    }
     function isFitTrackOwnerManagingPartner() {
       return resource.data.fittrackLinkedOwnerId == request.auth.uid
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fittrackLinkedOwnerId']);
@@ -45,13 +49,31 @@ service cloud.firestore {
     }
     match /users/{uid}/{document=**} {
       allow read: if isAuth();
-      allow write: if isOwner(uid) || isFitTrackPartner(uid);
+      allow write: if isOwner(uid) || isFitTrackPartner(uid) || isYogaPartner(uid);
     }
     match /fittrackPartners/{memberId} {
       allow read: if isAuth();
       allow create: if isAuth();
       allow update: if isAuth();
       allow delete: if isAuth();
+    }
+    match /yogaPartners/{memberId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
+      allow delete: if isAuth();
+    }
+    match /yogaPoses/{poseId} {
+      allow read: if isAuth();
+      allow write: if isAuth();
+    }
+    match /yogaFlows/{flowId} {
+      allow read: if isAuth();
+      allow write: if isAuth();
+    }
+    match /globalFoods/{foodId} {
+      allow read: if isAuth();
+      allow write: if isAuth();
     }
     match /trips/{tripId} {
       allow read: if isTripMember(tripId);

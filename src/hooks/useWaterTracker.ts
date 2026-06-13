@@ -5,13 +5,14 @@ import { useAuth } from '@/hooks/useAuth';
 import {
   ensureWaterLog,
   ensureWaterSettings,
+  saveWaterSettings,
   subscribeWaterLog,
   addWaterIntake,
   removeWaterIntake,
   getRecentWaterLogsForStreak,
 } from '@/firebase/water.firestore';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
-import type { WaterLogDoc, WaterSettings } from '@/types/water';
+import type { WaterLogDoc, WaterSettings, WaterScheduleSlot } from '@/types/water';
 import { syncWaterReminderSchedule } from '@/services/waterNotificationService';
 import {
   getTodayDateKey,
@@ -203,6 +204,25 @@ export function useWaterTracker() {
     [waterUid, dateKey]
   );
 
+  const updateSchedule = useCallback(
+    async (newSchedule: WaterScheduleSlot[]) => {
+      if (!waterUid) return;
+      setActionLoading(true);
+      setError(null);
+      try {
+        await saveWaterSettings(waterUid, { schedule: newSchedule });
+        setSettings((prev) => (prev ? { ...prev, schedule: newSchedule } : null));
+        await syncWaterReminderSchedule();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to update schedule');
+        throw err;
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [waterUid]
+  );
+
   return {
     totalMl: log?.totalMl ?? 0,
     goalMl,
@@ -223,7 +243,9 @@ export function useWaterTracker() {
     error,
     addIntake,
     removeIntake,
+    updateSchedule,
     waterUid,
     ready: !loading && profileHydrated && !!waterUid,
   };
 }
+

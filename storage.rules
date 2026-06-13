@@ -15,12 +15,24 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/fittrackPartners/$(ownerUid + '_' + request.auth.uid)).data.inviteStatus == 'accepted';
     }
 
+    function isYogaPartner(ownerUid) {
+      return firestore.exists(/databases/(default)/documents/yogaPartners/$(ownerUid + '_' + request.auth.uid))
+        && firestore.get(/databases/(default)/documents/yogaPartners/$(ownerUid + '_' + request.auth.uid)).data.inviteStatus == 'accepted';
+    }
+
     match /users/{userId}/{allPaths=**} {
       allow read: if isAuth();
-      allow write: if isOwner(userId) || isFitTrackPartner(userId);
+      allow write: if isOwner(userId) || isFitTrackPartner(userId) || isYogaPartner(userId);
     }
 
     match /trips/{tripId}/receipts/{fileName} {
+      allow read: if isAuth();
+      allow write: if isAuth()
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    match /rooms/{roomId}/receipts/{fileName} {
       allow read: if isAuth();
       allow write: if isAuth()
         && request.resource.size < 10 * 1024 * 1024

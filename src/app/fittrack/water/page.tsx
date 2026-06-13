@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Droplets } from 'lucide-react';
+import { Droplets, Settings2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { WaterProgressRing } from '@/components/water/WaterProgressRing';
 import { WaterQuickAdd } from '@/components/water/WaterQuickAdd';
 import { WaterScheduleList } from '@/components/water/WaterScheduleList';
+import { WaterScheduleEditor } from '@/components/water/WaterScheduleEditor';
 import { WaterIntakeLog } from '@/components/water/WaterIntakeLog';
 import { WaterPaceIndicator } from '@/components/water/WaterPaceIndicator';
 import { WaterStreakBadge } from '@/components/water/WaterStreakBadge';
@@ -16,12 +17,22 @@ import { WaterNotificationPrompt } from '@/components/water/WaterNotificationPro
 import { useWaterTracker } from '@/hooks/useWaterTracker';
 import { formatMl } from '@/lib/water/waterUtils';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import type { WaterScheduleSlot } from '@/types/water';
 
 export default function WaterPage() {
   const {
     totalMl,
     goalMl,
     intakes,
+    schedule,
     scheduleWithStates,
     paceStatus,
     expectedMl,
@@ -36,7 +47,10 @@ export default function WaterPage() {
     completed,
     addIntake,
     removeIntake,
+    updateSchedule,
   } = useWaterTracker();
+
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
 
   const searchParams = useSearchParams();
 
@@ -66,6 +80,16 @@ export default function WaterPage() {
       toast.success('Intake removed');
     } catch {
       toast.error('Could not remove intake');
+    }
+  };
+
+  const handleSaveSchedule = async (newSchedule: WaterScheduleSlot[]) => {
+    try {
+      await updateSchedule(newSchedule);
+      toast.success('Schedule updated');
+      setIsEditorOpen(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save schedule');
     }
   };
 
@@ -149,7 +173,28 @@ export default function WaterPage() {
         </div>
 
         <section className="ft-card ft-card-padded">
-          <h2 className="ft-title text-base mb-4">Today&apos;s schedule</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="ft-title text-base">Today&apos;s schedule</h2>
+            <Dialog open={isEditorOpen} onOpenChange={setIsEditorOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-2 text-[hsl(var(--water))] hover:text-[hsl(var(--water))] hover:bg-[hsl(var(--water)/0.1)]">
+                  <Settings2 className="h-4 w-4" />
+                  Edit
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl overflow-y-auto max-h-[90vh]">
+                <DialogHeader>
+                  <DialogTitle>Edit Hydration Schedule</DialogTitle>
+                </DialogHeader>
+                <WaterScheduleEditor
+                  currentSchedule={schedule}
+                  onSave={handleSaveSchedule}
+                  onCancel={() => setIsEditorOpen(false)}
+                  isSaving={actionLoading}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
           <WaterScheduleList slots={scheduleWithStates} />
         </section>
 
@@ -166,3 +211,4 @@ export default function WaterPage() {
     </PageTransition>
   );
 }
+
