@@ -92,6 +92,7 @@ export interface CreateTripInput {
   ownerEmail: string;
   ownerPhone: string;
   members: { name: string; email: string; phone: string }[];
+  googleCalendarEventId?: string;
 }
 
 export async function createTrip(input: CreateTripInput): Promise<Trip> {
@@ -111,6 +112,7 @@ export async function createTrip(input: CreateTripInput): Promise<Trip> {
     currency: input.currency,
     membersCount: input.members.length + 1,
     classification: input.classification,
+    googleCalendarEventId: input.googleCalendarEventId,
   };
 
   batch.set(tripRef, {

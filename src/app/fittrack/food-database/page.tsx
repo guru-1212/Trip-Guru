@@ -5,6 +5,7 @@ import {
   Search, 
   Upload, 
   Trash2, 
+  Edit2,
   AlertTriangle, 
   CheckCircle2, 
   FileJson, 
@@ -12,7 +13,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  Copy
+  Copy,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
@@ -22,7 +24,8 @@ import Link from 'next/link';
 import { 
   getGlobalFoods, 
   uploadGlobalFoods, 
-  deleteGlobalFood 
+  deleteGlobalFood,
+  updateGlobalFood
 } from '@/firebase/firestore';
 import type { FoodItem, FoodCategory, FoodTag } from '@/types/nutrition';
 import { cn } from '@/lib/utils';
@@ -82,12 +85,18 @@ export default function FoodDatabasePage() {
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [isTextImportOpen, setIsTextImportOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  
   const [textInput, setTextInput] = useState('');
-  const [importMode, setImportMode] = useState<'upload' | 'check'>('check');
   const [checkResults, setCheckResults] = useState<{name: string, found: boolean, food?: FoodItem}[]>([]);
+  const [importMode, setImportMode] = useState<'upload' | 'check'>('check');
   const [pendingItems, setPendingItems] = useState<FoodItem[]>([]);
   const [duplicates, setDuplicates] = useState<FoodItem[]>([]);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Edit state
+  const [editingFood, setEditingFood] = useState<FoodItem | null>(null);
+  const [editForm, setEditForm] = useState<Partial<FoodItem>>({});
 
   useEffect(() => {
     loadFoods();
@@ -132,7 +141,7 @@ export default function FoodDatabasePage() {
       // Diet Check Mode
       const lines = textInput.split('\n').map(l => l.trim()).filter(l => l.length > 0);
       const results = lines.map(line => {
-        // Simple name matching, could be improved
+        // Simple name matching
         const name = line.split(/[-:]/)[0].trim();
         const found = foods.find(f => f.name.toLowerCase() === name.toLowerCase());
         return { name, found: !!found, food: found };
@@ -202,6 +211,7 @@ export default function FoodDatabasePage() {
       servingGrams: Number(item.servingGrams) || 100,
       category: (item.category as FoodCategory) || 'custom',
       tags: Array.isArray(item.tags) ? item.tags : (item.tags?.split(',').map((t: string) => t.trim()) || []),
+      price: Number(item.price || 0),
       nutrients: {
         calories: Number(item.calories ?? item.nutrients?.calories ?? 0),
         proteinG: Number(item.proteinG ?? item.nutrients?.proteinG ?? 0),
@@ -250,6 +260,27 @@ export default function FoodDatabasePage() {
       loadFoods();
     } catch (err) {
       toast.error('Failed to delete item');
+    }
+  };
+
+  const openEdit = (food: FoodItem) => {
+    setEditingFood(food);
+    setEditForm({ ...food });
+    setIsEditOpen(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingFood) return;
+    try {
+      setActionLoading(true);
+      await updateGlobalFood(editingFood.id, editForm);
+      toast.success('Food item updated');
+      setIsEditOpen(false);
+      loadFoods();
+    } catch (err) {
+      toast.error('Update failed');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -328,12 +359,12 @@ export default function FoodDatabasePage() {
                 <tr className="bg-muted/50 border-b border-border/60">
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Food Item</th>
                   <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Serving</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Calories</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Protein</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Carbs</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground">Fat</th>
-                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground w-20"></th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Price</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Kcal</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Protein</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Carbs</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center">Fat</th>
+                  <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground w-32">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
@@ -351,44 +382,64 @@ export default function FoodDatabasePage() {
                       </td>
                     </tr>
                   ) : (
-                    filteredFoods.map((food) => (
-                      <motion.tr 
-                        key={food.id}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        className="hover:bg-muted/20 transition-colors group"
-                      >
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="font-black tracking-tight">{food.name}</p>
-                            <p className="text-[10px] font-mono text-muted-foreground uppercase">{food.id}</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="ft-badge ft-badge--secondary text-[10px]">
-                            {food.category}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-xs font-bold text-muted-foreground">
-                          {food.servingLabel} ({food.servingGrams}g)
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-black text-primary tabular-nums">{food.nutrients.calories}</span>
-                        </td>
-                        <td className="px-6 py-4 tabular-nums text-xs font-bold">{food.nutrients.proteinG}g</td>
-                        <td className="px-6 py-4 tabular-nums text-xs font-bold">{food.nutrients.carbsG}g</td>
-                        <td className="px-6 py-4 tabular-nums text-xs font-bold">{food.nutrients.fatG}g</td>
-                        <td className="px-6 py-4">
-                          <button 
-                            onClick={() => handleDelete(food.id)}
-                            className="p-2 text-muted-foreground hover:text-danger hover:bg-danger/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </motion.tr>
-                    ))
+                    filteredFoods.map((food) => {
+                      // Visual highlight if potentially duplicate or common
+                      const isDuplicate = foods.filter(f => f.name.toLowerCase() === food.name.toLowerCase()).length > 1;
+
+                      return (
+                        <motion.tr 
+                          key={food.id}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className={cn(
+                            "transition-colors group",
+                            isDuplicate ? "bg-warning/10 hover:bg-warning/20" : "hover:bg-muted/20"
+                          )}
+                        >
+                          <td className="px-6 py-4">
+                            <div>
+                              <p className="font-black tracking-tight">{food.name}</p>
+                              <p className="text-[10px] font-mono text-muted-foreground uppercase">{food.id}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="ft-badge ft-badge--secondary text-[10px]">
+                              {food.category}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            {food.price ? (
+                              <span className="font-black text-amber-600 tabular-nums text-xs">₹{food.price}</span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <span className="font-black text-primary tabular-nums">{food.nutrients.calories}</span>
+                          </td>
+                          <td className="px-6 py-4 tabular-nums text-xs font-bold text-center">{food.nutrients.proteinG}g</td>
+                          <td className="px-6 py-4 tabular-nums text-xs font-bold text-center">{food.nutrients.carbsG}g</td>
+                          <td className="px-6 py-4 tabular-nums text-xs font-bold text-center">{food.nutrients.fatG}g</td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity justify-end">
+                              <button 
+                                onClick={() => openEdit(food)}
+                                className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-lg transition-all"
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </button>
+                              <button 
+                                onClick={() => handleDelete(food.id)}
+                                className="p-2 text-muted-foreground hover:text-danger hover:bg-danger/10 rounded-lg transition-all"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </motion.tr>
+                      );
+                    })
                   )}
                 </AnimatePresence>
               </tbody>
@@ -444,6 +495,103 @@ export default function FoodDatabasePage() {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Food Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="sm:max-w-[500px] rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black tracking-tight">Edit Food Item</DialogTitle>
+            <DialogDescription className="font-medium">
+              Update nutritional values or category for this food item.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Name</label>
+              <Input 
+                value={editForm.name || ''} 
+                onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                className="rounded-xl h-12 bg-muted/20 border-border/60 font-black"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Category</label>
+                <select 
+                  value={editForm.category}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, category: e.target.value as FoodCategory }))}
+                  className="w-full h-12 rounded-xl bg-muted/20 border border-border/60 px-3 text-sm font-bold appearance-none outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  {CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat.toUpperCase()}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Price (INR)</label>
+                <Input 
+                  type="number"
+                  value={editForm.price || ''} 
+                  onChange={(e) => setEditForm(prev => ({ ...prev, price: Number(e.target.value) }))}
+                  className="rounded-xl h-12 bg-muted/20 border-border/60 font-black"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border/40">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Calories</label>
+                <Input 
+                  type="number"
+                  value={editForm.nutrients?.calories || 0} 
+                  onChange={(e) => setEditForm(prev => ({ ...prev, nutrients: { ...prev.nutrients!, calories: Number(e.target.value) } }))}
+                  className="rounded-xl h-12 bg-muted/20 border-border/60 font-black"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Protein (g)</label>
+                <Input 
+                  type="number"
+                  value={editForm.nutrients?.proteinG || 0} 
+                  onChange={(e) => setEditForm(prev => ({ ...prev, nutrients: { ...prev.nutrients!, proteinG: Number(e.target.value) } }))}
+                  className="rounded-xl h-12 bg-muted/20 border-border/60 font-black"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Carbs (g)</label>
+                <Input 
+                  type="number"
+                  value={editForm.nutrients?.carbsG || 0} 
+                  onChange={(e) => setEditForm(prev => ({ ...prev, nutrients: { ...prev.nutrients!, carbsG: Number(e.target.value) } }))}
+                  className="rounded-xl h-12 bg-muted/20 border-border/60 font-black"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Fat (g)</label>
+                <Input 
+                  type="number"
+                  value={editForm.nutrients?.fatG || 0} 
+                  onChange={(e) => setEditForm(prev => ({ ...prev, nutrients: { ...prev.nutrients!, fatG: Number(e.target.value) } }))}
+                  className="rounded-xl h-12 bg-muted/20 border-border/60 font-black"
+                />
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setIsEditOpen(false)} className="rounded-xl font-bold uppercase tracking-widest text-[10px]">Cancel</Button>
+            <Button 
+              onClick={handleUpdate} 
+              disabled={actionLoading}
+              className="ft-btn ft-btn--primary px-8 h-12"
+            >
+              {actionLoading ? 'Saving...' : 'Update Item'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -509,18 +657,29 @@ export default function FoodDatabasePage() {
                 <h3 className="text-xs font-black uppercase tracking-widest text-primary">Check Results</h3>
                 <div className="divide-y divide-border/40 border rounded-xl bg-card overflow-hidden">
                   {checkResults.map((res, i) => (
-                    <div key={i} className="px-4 py-3 flex items-center justify-between text-sm">
+                    <div 
+                      key={i} 
+                      className={cn(
+                        "px-4 py-3 flex items-center justify-between text-sm transition-colors",
+                        res.found ? "bg-warning/10" : "bg-card"
+                      )}
+                    >
                       <div className="flex items-center gap-3">
                         {res.found ? (
-                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                          <CheckCircle2 className="h-4 w-4 text-warning" />
                         ) : (
-                          <AlertTriangle className="h-4 w-4 text-warning" />
+                          <AlertTriangle className="h-4 w-4 text-muted-foreground" />
                         )}
-                        <span className="font-bold">{res.name}</span>
+                        <span className={cn("font-bold", res.found ? "text-amber-800" : "")}>
+                          {res.name}
+                        </span>
                       </div>
                       {res.found ? (
-                        <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
-                          {res.food?.nutrients.calories} kcal · {res.food?.nutrients.proteinG}g P
+                        <div className="flex items-center gap-2">
+                           <span className="text-[9px] font-black uppercase tracking-widest bg-warning/20 text-warning-foreground px-2 py-0.5 rounded-full">Available</span>
+                           <div className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                             {res.food?.nutrients.calories} kcal · {res.food?.nutrients.proteinG}g P
+                           </div>
                         </div>
                       ) : (
                         <span className="text-[10px] font-black uppercase tracking-widest text-danger bg-danger/10 px-2 py-1 rounded-full">Missing</span>
@@ -559,14 +718,14 @@ export default function FoodDatabasePage() {
           <div className="py-4 space-y-3">
              <div className="max-h-[200px] overflow-y-auto divide-y divide-border/40 border rounded-xl bg-muted/20">
                 {duplicates.map(d => (
-                   <div key={d.id} className="p-3 flex justify-between items-center text-xs">
-                      <span className="font-black">{d.name}</span>
+                   <div key={d.id} className="p-3 flex justify-between items-center text-xs bg-warning/5">
+                      <span className="font-black text-amber-900">{d.name}</span>
                       <span className="text-muted-foreground font-mono">{d.id}</span>
                    </div>
                 ))}
              </div>
-             <p className="text-[11px] text-muted-foreground italic font-medium">
-                Overwriting will update the nutritional values for these items.
+             <p className="text-[11px] text-muted-foreground italic font-medium text-center">
+                Available items are highlighted in yellow.
              </p>
           </div>
           

@@ -207,4 +207,5 @@ export {
   getGlobalFoods,
   uploadGlobalFoods,
   deleteGlobalFood,
+  updateGlobalFood,
 } from '@/firebase/nutrition.firestore';

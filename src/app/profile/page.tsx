@@ -25,10 +25,11 @@ import { TripMember } from '@/types/member';
 import { PrimaryUseCase, AppMode } from '@/types/user';
 import { setAppMode } from '@/features/appMode/appModeSlice';
 import { writeStoredMode } from '@/lib/appMode';
-import { LogOut, Bell, Camera, User as UserIcon, ChevronLeft } from 'lucide-react';
+import { LogOut, Bell, Camera, User as UserIcon, ChevronLeft, Calendar } from 'lucide-react';
 import Link from 'next/link';
 import { ImageCropper } from '@/components/profile/ImageCropper';
 import toast from 'react-hot-toast';
+import { linkGoogleWithCalendarScope } from '@/firebase/auth';
 import {
   getPushSetupStatus,
   isPushConfigured,
@@ -530,6 +531,42 @@ function ProfileContent() {
           </Button>
         </DialogContent>
       </Dialog>
+
+      <Card className="rounded-[32px] border-border/40 shadow-sm bg-white dark:bg-slate-900/50">
+        <CardHeader className="px-8 pt-8">
+          <CardTitle className="text-xl font-black flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-primary" /> Integrations
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="px-8 pb-8 space-y-4">
+          <div className="flex items-center justify-between gap-4 bg-muted/30 p-4 rounded-2xl">
+            <div className="space-y-0.5 min-w-0">
+              <p className="text-sm font-bold">Google Calendar</p>
+              <p className="text-[10px] font-medium text-muted-foreground leading-snug">
+                {user?.googleCalendarLinked 
+                  ? 'Connected to your "Trip-Guru Reminders" calendar.' 
+                  : 'Sync your trips and reminders to a dedicated calendar.'}
+              </p>
+            </div>
+            <Button 
+              variant={user?.googleCalendarLinked ? "secondary" : "default"}
+              size="sm"
+              className="rounded-xl font-bold px-4"
+              onClick={async () => {
+                try {
+                  await linkGoogleWithCalendarScope();
+                  toast.success('Google Calendar linked successfully!');
+                } catch (err) {
+                  console.error(err);
+                  toast.error('Failed to link Google Calendar.');
+                }
+              }}
+            >
+              {user?.googleCalendarLinked ? 'Re-sync' : 'Connect'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="pt-4 flex flex-col gap-4">
         <Button variant="ghost" className="w-full rounded-2xl font-black text-xs uppercase tracking-widest h-12 hover:bg-destructive/5 hover:text-destructive transition-all" onClick={handleSignOut}>

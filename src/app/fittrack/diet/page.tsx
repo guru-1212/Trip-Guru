@@ -184,6 +184,7 @@ export default function DietPage() {
           dateKey={dateKey}
           timezone={timezone}
           isToday={isToday}
+          settings={settings}
           onPrevDay={goToPrevDay}
           onNextDay={goToNextDay}
           onLogMeal={() => openSheet()}

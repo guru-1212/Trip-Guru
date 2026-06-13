@@ -26,4 +26,5 @@ export interface Trip {
   category?: string;
   classification?: 'real' | 'test';
   customExpenseCategories?: string[];
+  googleCalendarEventId?: string;
 }

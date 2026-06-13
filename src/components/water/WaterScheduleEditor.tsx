@@ -1,14 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, RotateCcw, Save, X } from 'lucide-react';
+import { Plus, Trash2, RotateCcw, Save, X, Calendar } from 'lucide-react';
 import type { WaterScheduleSlot } from '@/types/water';
 import { getDefaultSchedule } from '@/lib/water/waterUtils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { linkGoogleWithCalendarScope } from '@/firebase/auth';
+import { createCalendarEvent, updateCalendarEvent, generateDailyRRule } from '@/services/googleCalendarService';
 
 interface WaterScheduleEditorProps {
   currentSchedule: WaterScheduleSlot[];
@@ -23,9 +27,12 @@ export function WaterScheduleEditor({
   onCancel,
   isSaving,
 }: WaterScheduleEditorProps) {
+  const { user } = useAuth();
   const [slots, setSlots] = useState<WaterScheduleSlot[]>(
     currentSchedule.length > 0 ? [...currentSchedule] : getDefaultSchedule()
   );
+  const [syncToCalendar, setSyncToCalendar] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const addSlot = () => {
     const lastTime = slots.length > 0 ? slots[slots.length - 1].time : '08:00';
@@ -56,9 +63,62 @@ export function WaterScheduleEditor({
   };
 
   const handleSave = async () => {
-    // Sort chronologically before saving
-    const sorted = [...slots].sort((a, b) => a.time.localeCompare(b.time));
-    await onSave(sorted);
+    setSyncing(true);
+    try {
+      const updatedSlots = [...slots];
+      
+      if (syncToCalendar) {
+        let accessToken = user?.googleAccessToken;
+        if (!user?.googleCalendarLinked || !accessToken) {
+          const result = await linkGoogleWithCalendarScope();
+          accessToken = result.accessToken;
+        }
+
+        if (accessToken) {
+          for (let i = 0; i < updatedSlots.length; i++) {
+            const slot = updatedSlots[i];
+            const [hours, minutes] = slot.time.split(':').map(Number);
+            
+            const startDate = new Date();
+            startDate.setHours(hours, minutes, 0, 0);
+            
+            const endDate = new Date(startDate);
+            endDate.setMinutes(endDate.getMinutes() + 15);
+
+            const eventDetails = {
+              summary: `Water: ${slot.label}`,
+              description: `Reminder to drink water. Goal: ${slot.amountGym}ml (Gym) / ${slot.amountRest}ml (Rest). ${slot.note ? `\nNote: ${slot.note}` : ''}`,
+              start: {
+                dateTime: startDate.toISOString(),
+                timeZone: 'Asia/Kolkata',
+              },
+              end: {
+                dateTime: endDate.toISOString(),
+                timeZone: 'Asia/Kolkata',
+              },
+              recurrence: [generateDailyRRule()],
+            };
+
+            try {
+              const calendarId = user?.googleCalendarId || 'primary';
+              if (slot.googleCalendarEventId) {
+                await updateCalendarEvent(accessToken, calendarId, slot.googleCalendarEventId, eventDetails);
+              } else {
+                const eventId = await createCalendarEvent(accessToken, eventDetails, calendarId);
+                updatedSlots[i] = { ...slot, googleCalendarEventId: eventId };
+              }
+            } catch (err) {
+              console.error(`Failed to sync slot ${slot.label} to calendar:`, err);
+            }
+          }
+        }
+      }
+
+      const sorted = updatedSlots.sort((a, b) => a.time.localeCompare(b.time));
+      await onSave(sorted);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const restoreDefaults = () => {
@@ -80,7 +140,7 @@ export function WaterScheduleEditor({
           variant="outline"
           size="sm"
           onClick={restoreDefaults}
-          disabled={isSaving}
+          disabled={isSaving || syncing}
           className="gap-2"
         >
           <RotateCcw className="h-4 w-4" />
@@ -88,7 +148,23 @@ export function WaterScheduleEditor({
         </Button>
       </div>
 
-      <div className="grid gap-4 max-h-[60vh] overflow-y-auto pr-2 pb-4">
+      <div className="flex items-center justify-between p-4 border rounded-xl bg-muted/30">
+        <div className="flex items-center gap-3">
+          <Calendar className="h-5 w-5 text-[hsl(var(--water))]" />
+          <div>
+            <Label htmlFor="sync-water-calendar" className="text-sm font-semibold">Sync to Google Calendar</Label>
+            <p className="text-xs text-muted-foreground">Create daily recurring reminders in your calendar</p>
+          </div>
+        </div>
+        <Switch
+          id="sync-water-calendar"
+          checked={syncToCalendar}
+          onCheckedChange={setSyncToCalendar}
+          disabled={isSaving || syncing}
+        />
+      </div>
+
+      <div className="grid gap-4 max-h-[50vh] overflow-y-auto pr-2 pb-4">
         {slots.map((slot, index) => (
           <Card key={index} className="p-4 relative group">
             <Button
@@ -96,7 +172,7 @@ export function WaterScheduleEditor({
               size="icon"
               className="absolute top-2 right-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
               onClick={() => removeSlot(index)}
-              disabled={isSaving}
+              disabled={isSaving || syncing}
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -108,7 +184,7 @@ export function WaterScheduleEditor({
                   type="time"
                   value={slot.time}
                   onChange={(e) => updateSlot(index, { time: e.target.value })}
-                  disabled={isSaving}
+                  disabled={isSaving || syncing}
                   className="font-mono"
                 />
               </div>
@@ -120,7 +196,7 @@ export function WaterScheduleEditor({
                   value={slot.label}
                   placeholder="e.g. Morning kickstart"
                   onChange={(e) => updateSlot(index, { label: e.target.value })}
-                  disabled={isSaving}
+                  disabled={isSaving || syncing}
                 />
               </div>
 
@@ -131,7 +207,7 @@ export function WaterScheduleEditor({
                   value={slot.note}
                   placeholder="e.g. Rehydrate after sleep"
                   onChange={(e) => updateSlot(index, { note: e.target.value })}
-                  disabled={isSaving}
+                  disabled={isSaving || syncing}
                 />
               </div>
 
@@ -141,7 +217,7 @@ export function WaterScheduleEditor({
                   type="number"
                   value={slot.amountGym}
                   onChange={(e) => updateSlot(index, { amountGym: parseInt(e.target.value) || 0 })}
-                  disabled={isSaving}
+                  disabled={isSaving || syncing}
                 />
               </div>
 
@@ -151,7 +227,7 @@ export function WaterScheduleEditor({
                   type="number"
                   value={slot.amountRest}
                   onChange={(e) => updateSlot(index, { amountRest: parseInt(e.target.value) || 0 })}
-                  disabled={isSaving}
+                  disabled={isSaving || syncing}
                 />
               </div>
             </div>
@@ -164,18 +240,18 @@ export function WaterScheduleEditor({
           variant="outline"
           className="flex-1 gap-2"
           onClick={addSlot}
-          disabled={isSaving}
+          disabled={isSaving || syncing}
         >
           <Plus className="h-4 w-4" />
           Add Reminder
         </Button>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={onCancel} disabled={isSaving}>
+          <Button variant="ghost" onClick={onCancel} disabled={isSaving || syncing}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isSaving} className="gap-2 bg-[hsl(var(--water))] hover:bg-[hsl(var(--water))]/90 text-white">
+          <Button onClick={handleSave} disabled={isSaving || syncing} className="gap-2 bg-[hsl(var(--water))] hover:bg-[hsl(var(--water))]/90 text-white">
             <Save className="h-4 w-4" />
-            {isSaving ? 'Saving...' : 'Save Schedule'}
+            {isSaving || syncing ? 'Saving...' : 'Save Schedule'}
           </Button>
         </div>
       </div>

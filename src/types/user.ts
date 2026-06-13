@@ -20,4 +20,8 @@ export interface User {
   activeMode?: AppMode;
   /** When set, FitTrack reads/writes use this owner's data instead of own uid. */
   fittrackLinkedOwnerId?: string;
+  googleCalendarLinked?: boolean;
+  googleCalendarId?: string;
+  /** Temporary access token stored in memory/session for calendar operations */
+  googleAccessToken?: string;
 }

@@ -7,4 +7,6 @@ export interface RoomMember {
   phone: string;
   role: 'owner' | 'editor' | 'viewer';
   inviteStatus: 'accepted' | 'pending';
+  birthday?: string; // YYYY-MM-DD
+  googleCalendarBirthdayEventId?: string;
 }

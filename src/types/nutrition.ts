@@ -61,6 +61,7 @@ export interface NutritionSettings {
   targetDate?: string;
   overrides?: Partial<NutrientsPerServing>;
   timezone: string;
+  googleCalendarEventId?: string;
 }
 
 export interface NutritionLogEntry {

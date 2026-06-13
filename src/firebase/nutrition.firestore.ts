@@ -307,3 +307,10 @@ export async function deleteGlobalFood(id: string): Promise<void> {
   await deleteDoc(globalFoodDoc(id));
 }
 
+export async function updateGlobalFood(id: string, food: Partial<FoodItem>): Promise<void> {
+  await setDoc(globalFoodDoc(id), {
+    ...food,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+

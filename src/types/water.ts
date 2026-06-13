@@ -5,6 +5,7 @@ export interface WaterScheduleSlot {
   amountRest: number;
   label: string;
   note: string;
+  googleCalendarEventId?: string;
 }
 
 export interface WaterSettings {

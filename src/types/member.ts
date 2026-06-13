@@ -10,4 +10,6 @@ export interface TripMember {
   phone: string;
   role: MemberRole;
   inviteStatus: InviteStatus;
+  birthday?: string; // YYYY-MM-DD
+  googleCalendarBirthdayEventId?: string;
 }

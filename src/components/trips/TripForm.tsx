@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -23,6 +24,8 @@ import { findUserByEmailOrPhone } from '@/firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
 import { TripType, Trip } from '@/types/trip';
 import { useAppDispatch } from '@/store';
+import { linkGoogleWithCalendarScope } from '@/firebase/auth';
+import { createCalendarEvent } from '@/services/googleCalendarService';
 import dayjs from 'dayjs';
 import { Timestamp } from 'firebase/firestore';
 
@@ -73,6 +76,7 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
     phone: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [syncToCalendar, setSyncToCalendar] = useState(false);
   const [error, setError] = useState('');
 
   const isEditing = !!initialData;
@@ -119,6 +123,42 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
     setSubmitting(true);
     setError('');
     try {
+      let calendarEventId: string | undefined = initialData?.googleCalendarEventId;
+
+      if (syncToCalendar) {
+        try {
+          let accessToken = user?.googleAccessToken;
+          
+          if (!user?.googleCalendarLinked || !accessToken) {
+            const result = await linkGoogleWithCalendarScope();
+            accessToken = result.accessToken;
+          }
+
+          if (accessToken) {
+            const eventDetails = {
+              summary: `Trip: ${data.tripName}`,
+              description: `Trip to ${data.destination}. Group trip managed by Trip-Guru.`,
+              location: data.destination,
+              start: {
+                dateTime: new Date(data.startDate).toISOString(),
+              },
+              end: {
+                dateTime: new Date(data.endDate).toISOString(),
+              },
+            };
+
+            if (isEditing && calendarEventId) {
+              // Note: updateCalendarEvent implementation could be added here
+            } else {
+              calendarEventId = await createCalendarEvent(accessToken, eventDetails, user?.googleCalendarId || 'primary');
+            }
+          }
+        } catch (err) {
+          console.error('Failed to sync with Google Calendar:', err);
+          // Don't block trip creation if calendar sync fails
+        }
+      }
+
       if (isEditing) {
         await dispatch(
           updateTripThunk({
@@ -132,6 +172,7 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
               endDate: Timestamp.fromDate(new Date(data.endDate)),
               expectedBudget: data.expectedBudget,
               currency: data.currency,
+              googleCalendarEventId: calendarEventId,
             },
           }),
         ).unwrap();
@@ -151,6 +192,7 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
             ownerName: user?.name ?? 'Owner',
             ownerEmail: user?.email ?? '',
             ownerPhone: user?.phone ?? '',
+            googleCalendarEventId: calendarEventId,
             members: members.map((m) => ({
               ...m,
               name: m.name,
@@ -188,6 +230,20 @@ export function TripForm({ initialData, onSuccess }: TripFormProps) {
           </CardHeader>
         )}
         <CardContent className={`space-y-4 ${isEditing ? 'p-0' : ''}`}>
+          <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-5 w-5 text-primary" />
+              <div>
+                <Label htmlFor="sync-calendar" className="text-sm font-medium">Sync to Google Calendar</Label>
+                <p className="text-xs text-muted-foreground">Add this trip to your calendar automatically</p>
+              </div>
+            </div>
+            <Switch
+              id="sync-calendar"
+              checked={syncToCalendar}
+              onCheckedChange={setSyncToCalendar}
+            />
+          </div>
           <div>
             <Label htmlFor="tripName">Trip name</Label>
             <Input id="tripName" {...register('tripName')} />

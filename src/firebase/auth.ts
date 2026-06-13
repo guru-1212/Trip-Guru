@@ -5,14 +5,18 @@ import {
   updateProfile,
   deleteUser,
   User as FirebaseUser,
+  GoogleAuthProvider,
+  linkWithPopup,
+  signInWithPopup,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseDb } from '@/firebase/config';
 import { autoLinkMembersOnRegister } from '@/lib/autoLinkMembers';
 import { isEmail, normalizePhone } from '@/lib/utils';
 import { getEmailByPhone, findUserByEmailOrPhone } from '@/firebase/firestore';
 import { PrimaryUseCase, AppMode } from '@/types/user';
 import { defaultModeForUseCase } from '@/lib/appMode';
+import { getOrCreateAppCalendar } from '@/services/googleCalendarService';
 
 const auth = () => getFirebaseAuth();
 const db = () => getFirebaseDb();
@@ -103,6 +107,56 @@ async function createUserDocument(
 
 export async function signOut(): Promise<void> {
   await firebaseSignOut(auth());
+}
+
+/**
+ * Links the current user with Google and requests Calendar scopes.
+ */
+export async function linkGoogleWithCalendarScope(): Promise<{
+  user: FirebaseUser;
+  accessToken: string;
+}> {
+  const provider = new GoogleAuthProvider();
+  provider.addScope('https://www.googleapis.com/auth/calendar.events');
+  provider.addScope('https://www.googleapis.com/auth/calendar');
+
+  const currentUser = auth().currentUser;
+  let result;
+
+  if (currentUser) {
+    const isLinked = currentUser.providerData.some(p => p.providerId === 'google.com');
+    if (isLinked) {
+      // If already linked, signInWithPopup will refresh the credential/token
+      // without trying to link it again (which would throw an error).
+      result = await signInWithPopup(auth(), provider);
+    } else {
+      // If not linked yet, link the accounts
+      result = await linkWithPopup(currentUser, provider);
+    }
+  } else {
+    // If not logged in, sign in with Google
+    result = await signInWithPopup(auth(), provider);
+  }
+
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+  const accessToken = credential?.accessToken;
+
+  if (!accessToken) {
+    throw new Error('Failed to obtain Google access token.');
+  }
+
+  // Update user document to mark as linked
+  const calendarId = await getOrCreateAppCalendar(accessToken);
+
+  await updateDoc(doc(db(), 'users', result.user.uid), {
+    googleCalendarLinked: true,
+    googleCalendarId: calendarId,
+  });
+
+  return {
+    user: result.user,
+    accessToken,
+  };
 }
 
 export { getFirebaseAuth as auth };

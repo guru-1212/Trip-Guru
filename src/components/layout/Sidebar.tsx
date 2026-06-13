@@ -17,7 +17,8 @@ import {
   BookOpen,
   Activity,
   Heart,
-  Camera
+  Camera,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -36,6 +37,7 @@ const yogaLinks = [
 const tripLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/trips/new', label: 'New Trip', icon: PlusCircle },
+  { href: '/calendar', label: 'Sync Center', icon: CalendarIcon },
   { href: '/fittrack/dashboard', label: 'Gym Tracker', icon: Dumbbell },
   { href: '/profile', label: 'Profile', icon: User },
 ];
@@ -43,6 +45,7 @@ const tripLinks = [
 const roomLinks = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/rooms/new', label: 'New Room', icon: Home },
+  { href: '/calendar', label: 'Sync Center', icon: CalendarIcon },
   { href: '/fittrack/dashboard', label: 'Gym Tracker', icon: Dumbbell },
   { href: '/profile', label: 'Profile', icon: User },
 ];
