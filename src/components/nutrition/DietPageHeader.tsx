@@ -176,42 +176,42 @@ export function DietPageHeader({
         </Dialog>
         <Link
           href="/fittrack/food-database"
-          className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 flex-1 sm:flex-none"
+          className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 w-auto sm:flex-none"
           title="Food Database"
         >
           <Database className="h-4 w-4" />
-          <span className="sm:inline">Database</span>
+          <span className="hidden sm:inline">Database</span>
         </Link>
         {onShare && (
           <button
             type="button"
             onClick={onShare}
-            className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 flex-1 sm:flex-none"
+            className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 w-auto sm:flex-none"
             title="Share Diet Log"
           >
             <Share className="h-4 w-4" />
-            <span className="sm:inline">Share</span>
+            <span className="hidden sm:inline">Share</span>
           </button>
         )}
         {onAIImport && (
           <button
             type="button"
             onClick={onAIImport}
-            className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 flex-1 sm:flex-none border-primary/20"
+            className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 w-auto sm:flex-none border-primary/20"
             title="AI Import Diet"
             aria-label="AI Import Diet"
           >
             <Sparkles className="h-4 w-4 text-primary" />
-            <span className="sm:inline">AI Import</span>
+            <span className="hidden sm:inline">AI Import</span>
           </button>
         )}
         <button
           type="button"
           onClick={onLogMeal}
-          className="ft-btn ft-btn--primary flex items-center justify-center gap-2 flex-1 sm:flex-none"
+          className="ft-btn ft-btn--primary flex items-center justify-center gap-2 flex-1 sm:flex-none shadow-lg shadow-primary/10"
         >
           <Plus className="h-4 w-4" />
-          Log meal
+          <span>Log meal</span>
         </button>
       </div>
     </header>
