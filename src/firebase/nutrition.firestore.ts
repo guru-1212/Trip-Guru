@@ -151,6 +151,10 @@ function sanitizeNutrients(n: NutrientsPerServing): NutrientsPerServing {
     potassiumMg: n.potassiumMg ?? 0,
   };
   if (n.sodiumMg != null) clean.sodiumMg = n.sodiumMg;
+  if (n.vitaminAMcg != null) clean.vitaminAMcg = n.vitaminAMcg;
+  if (n.vitaminCMg != null) clean.vitaminCMg = n.vitaminCMg;
+  if (n.vitaminDMcg != null) clean.vitaminDMcg = n.vitaminDMcg;
+  if (n.vitaminB12Mcg != null) clean.vitaminB12Mcg = n.vitaminB12Mcg;
   return clean;
 }
 

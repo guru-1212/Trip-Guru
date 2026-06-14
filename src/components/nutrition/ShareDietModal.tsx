@@ -12,7 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { NutritionLogDoc } from '@/types/nutrition';
+import { NutritionLogDoc, NutrientsPerServing } from '@/types/nutrition';
 import { formatDateLabel } from '@/lib/nutrition/nutritionUtils';
 import toast from 'react-hot-toast';
 
@@ -21,10 +21,10 @@ dayjs.extend(isBetween);
 interface ShareDietModalProps {
   open: boolean;
   onClose: () => void;
-  weeklyLogs: NutritionLogDoc[];
-  currentTotals: any;
+  weeklyLogs: { dateKey: string; totals: NutrientsPerServing; targets: NutrientsPerServing }[];
+  currentTotals: NutrientsPerServing;
   currentDateKey: string;
-  targets: any;
+  targets: NutrientsPerServing;
   timezone: string;
 }
 
@@ -71,8 +71,7 @@ export function ShareDietModal({
       end = dayjs(customEnd);
     }
 
-    // weeklyLogs items have dateKey instead of date
-    const filtered = weeklyLogs.filter((log: any) => {
+    const filtered = weeklyLogs.filter((log) => {
       const d = dayjs(log.dateKey);
       return d.isBetween(start, end, 'day', '[]');
     });
@@ -80,11 +79,9 @@ export function ShareDietModal({
     return {
       label: range === 'yesterday' 
         ? formatDateLabel(start.format('YYYY-MM-DD'), timezone)
-        : range === 'today'
-        ? formatDateLabel(currentDateKey, timezone)
         : `${start.format('MMM D')} - ${end.format('MMM D')}`,
       days: filtered.map(f => f.totals),
-      isRange: range !== 'yesterday' && range !== 'today',
+      isRange: range !== 'yesterday',
     };
   }, [range, weeklyLogs, currentTotals, currentDateKey, timezone, customStart, customEnd]);
 
