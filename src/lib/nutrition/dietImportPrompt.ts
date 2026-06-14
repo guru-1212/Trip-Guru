@@ -43,7 +43,7 @@ export function buildDietAIPrompt({
 
   return `You are a nutrition expert. I will list foods and quantities I ate on ${dateLabel}.
 Calculate total nutrients for each item (not per 100g — totals for what I actually ate).
-Use ICMR-NIN / USDA references. Round: calories whole number, macros 1 decimal, minerals 1 decimal.
+Use ICMR-NIN / USDA references. Round: calories whole number, macros 1 decimal, minerals 1 decimal, vitamins 1 decimal.
 
 ${formatNutritionGapBlock(totals, targets)}
 
@@ -58,7 +58,7 @@ Each item must include:
 - quantity: { "amount": number, "unit": "g" | "piece" | "cup" | "tbsp" | "ml" | "serving" | "katori" | "slice" }
 - servingLabel (reference portion, e.g. "100 g", "1 egg", "1 katori")
 - servings (multiplier vs servingLabel)
-- nutrients: { calories, proteinG, carbsG, fatG, fiberG, calciumMg, ironMg, magnesiumMg, potassiumMg, sodiumMg? }
+- nutrients: { calories, proteinG, carbsG, fatG, fiberG, calciumMg, ironMg, magnesiumMg, potassiumMg, sodiumMg?, vitaminAMcg?, vitaminCMg?, vitaminDMcg?, vitaminB12Mcg? }
 
 Example output:
 [
@@ -77,7 +77,11 @@ Example output:
       "calciumMg": 50,
       "ironMg": 1.8,
       "magnesiumMg": 12,
-      "potassiumMg": 140
+      "potassiumMg": 140,
+      "vitaminAMcg": 160,
+      "vitaminCMg": 0,
+      "vitaminDMcg": 2.2,
+      "vitaminB12Mcg": 1.2
     }
   },
   {
@@ -95,7 +99,11 @@ Example output:
       "calciumMg": 15,
       "ironMg": 0.3,
       "magnesiumMg": 18,
-      "potassiumMg": 53
+      "potassiumMg": 53,
+      "vitaminAMcg": 0,
+      "vitaminCMg": 0,
+      "vitaminDMcg": 0,
+      "vitaminB12Mcg": 0
     }
   }
 ]

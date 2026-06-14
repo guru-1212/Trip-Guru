@@ -34,6 +34,10 @@ export interface NutrientsPerServing {
   magnesiumMg: number;
   potassiumMg: number;
   sodiumMg?: number;
+  vitaminAMcg?: number;
+  vitaminCMg?: number;
+  vitaminDMcg?: number;
+  vitaminB12Mcg?: number;
 }
 
 export interface FoodItem {
@@ -91,6 +95,13 @@ export interface MicronutrientCoverage {
   protein: number;
 }
 
+export interface VitaminCoverage {
+  vitaminA: number;
+  vitaminC: number;
+  vitaminD: number;
+  vitaminB12: number;
+}
+
 export const MEAL_SLOT_LABELS: Record<MealSlot, string> = {
   breakfast: 'Breakfast',
   lunch: 'Lunch',
@@ -119,4 +130,9 @@ export const EMPTY_NUTRIENTS: NutrientsPerServing = {
   ironMg: 0,
   magnesiumMg: 0,
   potassiumMg: 0,
+  sodiumMg: 0,
+  vitaminAMcg: 0,
+  vitaminCMg: 0,
+  vitaminDMcg: 0,
+  vitaminB12Mcg: 0,
 };

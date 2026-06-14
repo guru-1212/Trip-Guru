@@ -11,6 +11,7 @@ import type {
   NutritionLogEntry,
   NutritionTargets,
   MicronutrientCoverage,
+  VitaminCoverage,
 } from '@/types/nutrition';
 import { EMPTY_NUTRIENTS } from '@/types/nutrition';
 import type { UserProfile } from '@/workout/types';
@@ -74,6 +75,10 @@ export function computeNutritionTargets(
     ironMg: isMale ? 17 : 21,
     magnesiumMg: 400,
     potassiumMg: 3500,
+    vitaminAMcg: isMale ? 900 : 700,
+    vitaminCMg: isMale ? 90 : 75,
+    vitaminDMcg: Math.round(15 + (Math.max(0, profile.weight - 70) * 0.1)),
+    vitaminB12Mcg: 2.4,
     targetWeightKg: targetWeightKg ?? profile.weight + 5,
     currentWeightKg: profile.weight,
   };
@@ -97,6 +102,10 @@ export function scaleNutrients(
     magnesiumMg: Math.round(nutrients.magnesiumMg * s),
     potassiumMg: Math.round(nutrients.potassiumMg * s),
     sodiumMg: nutrients.sodiumMg != null ? Math.round(nutrients.sodiumMg * s) : undefined,
+    vitaminAMcg: nutrients.vitaminAMcg != null ? Math.round(nutrients.vitaminAMcg * s) : undefined,
+    vitaminCMg: nutrients.vitaminCMg != null ? Math.round(nutrients.vitaminCMg * s * 10) / 10 : undefined,
+    vitaminDMcg: nutrients.vitaminDMcg != null ? Math.round(nutrients.vitaminDMcg * s * 10) / 10 : undefined,
+    vitaminB12Mcg: nutrients.vitaminB12Mcg != null ? Math.round(nutrients.vitaminB12Mcg * s * 10) / 10 : undefined,
   };
 }
 
@@ -114,6 +123,11 @@ export function sumNutrients(entries: NutritionLogEntry[]): NutrientsPerServing 
         ironMg: Math.round((acc.ironMg + n.ironMg) * 10) / 10,
         magnesiumMg: acc.magnesiumMg + n.magnesiumMg,
         potassiumMg: acc.potassiumMg + n.potassiumMg,
+        sodiumMg: (acc.sodiumMg ?? 0) + (n.sodiumMg ?? 0),
+        vitaminAMcg: (acc.vitaminAMcg ?? 0) + (n.vitaminAMcg ?? 0),
+        vitaminCMg: Math.round(((acc.vitaminCMg ?? 0) + (n.vitaminCMg ?? 0)) * 10) / 10,
+        vitaminDMcg: Math.round(((acc.vitaminDMcg ?? 0) + (n.vitaminDMcg ?? 0)) * 10) / 10,
+        vitaminB12Mcg: Math.round(((acc.vitaminB12Mcg ?? 0) + (n.vitaminB12Mcg ?? 0)) * 10) / 10,
       };
     },
     { ...EMPTY_NUTRIENTS }
@@ -132,6 +146,19 @@ export function computeCoverage(
     magnesium: pct(totals.magnesiumMg, targets.magnesiumMg),
     potassium: pct(totals.potassiumMg, targets.potassiumMg),
     fiber: pct(totals.fiberG, targets.fiberG),
+  };
+}
+
+export function computeVitaminCoverage(
+  totals: NutrientsPerServing,
+  targets: NutrientsPerServing
+): VitaminCoverage {
+  const pct = (v: number, t: number) => (t > 0 ? Math.min(100, Math.round((v / t) * 100)) : 0);
+  return {
+    vitaminA: pct(totals.vitaminAMcg ?? 0, targets.vitaminAMcg ?? 900),
+    vitaminC: pct(totals.vitaminCMg ?? 0, targets.vitaminCMg ?? 90),
+    vitaminD: pct(totals.vitaminDMcg ?? 0, targets.vitaminDMcg ?? 15),
+    vitaminB12: pct(totals.vitaminB12Mcg ?? 0, targets.vitaminB12Mcg ?? 2.4),
   };
 }
 

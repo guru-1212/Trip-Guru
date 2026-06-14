@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, Database, Plus, Sparkles, Utensils, Settings2, Calendar, Save } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Database, Plus, Sparkles, Utensils, Settings2, Calendar, Save, Share } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -29,6 +29,7 @@ interface DietPageHeaderProps {
   onNextDay: () => void;
   onLogMeal: () => void;
   onAIImport?: () => void;
+  onShare?: () => void;
   className?: string;
   settings?: any;
 }
@@ -41,6 +42,7 @@ export function DietPageHeader({
   onNextDay,
   onLogMeal,
   onAIImport,
+  onShare,
   className,
   settings,
 }: DietPageHeaderProps) {
@@ -180,6 +182,17 @@ export function DietPageHeader({
           <Database className="h-4 w-4" />
           <span className="sm:inline">Database</span>
         </Link>
+        {onShare && (
+          <button
+            type="button"
+            onClick={onShare}
+            className="ft-btn ft-btn--secondary flex items-center justify-center gap-2 flex-1 sm:flex-none"
+            title="Share Diet Log"
+          >
+            <Share className="h-4 w-4" />
+            <span className="sm:inline">Share</span>
+          </button>
+        )}
         {onAIImport && (
           <button
             type="button"

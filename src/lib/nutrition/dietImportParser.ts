@@ -95,10 +95,21 @@ function parseNutrients(raw: unknown): NutrientsPerServing | null {
     nutrients[key] = key === 'calories' ? Math.round(value) : Math.round(value * 10) / 10;
   }
 
-  if (row.sodiumMg != null) {
-    const sodium = Number(row.sodiumMg);
-    if (!Number.isFinite(sodium) || sodium < 0) return null;
-    nutrients.sodiumMg = Math.round(sodium * 10) / 10;
+  const optionals: (keyof NutrientsPerServing)[] = [
+    'sodiumMg',
+    'vitaminAMcg',
+    'vitaminCMg',
+    'vitaminDMcg',
+    'vitaminB12Mcg',
+  ];
+
+  for (const key of optionals) {
+    if (row[key] != null) {
+      const val = Number(row[key]);
+      if (Number.isFinite(val) && val >= 0) {
+        nutrients[key] = Math.round(val * 10) / 10;
+      }
+    }
   }
 
   return nutrients;

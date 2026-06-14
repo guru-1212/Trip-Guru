@@ -10,6 +10,7 @@ import { DietPageHeader } from '@/components/nutrition/DietPageHeader';
 import { NutritionCalorieRing } from '@/components/nutrition/NutritionCalorieRing';
 import { MacroProgressBars } from '@/components/nutrition/MacroProgressBars';
 import { MicronutrientGrid } from '@/components/nutrition/MicronutrientGrid';
+import { VitaminGrid } from '@/components/nutrition/VitaminGrid';
 import { WeightProgressCard } from '@/components/nutrition/WeightProgressCard';
 import { NutritionStatCards } from '@/components/nutrition/NutritionStatCards';
 import { SuggestionChips } from '@/components/nutrition/SuggestionChips';
@@ -21,9 +22,11 @@ import { FoodSearchBar } from '@/components/nutrition/FoodSearchBar';
 import { MobileDietSummary } from '@/components/nutrition/MobileDietSummary';
 import { DietQuickAdd } from '@/components/nutrition/DietQuickAdd';
 import { AIDietImportModal } from '@/components/nutrition/AIDietImportModal';
+import { ShareDietModal } from '@/components/nutrition/ShareDietModal';
 import { useAIDietImport } from '@/hooks/useAIDietImport';
 import { useDietTracker } from '@/hooks/useDietTracker';
 import { formatDateLabel, groupEntriesByMeal } from '@/lib/nutrition/nutritionUtils';
+import { computeVitaminCoverage } from '@/lib/nutrition/nutritionCalculators';
 import type { DietImportLogPayload } from '@/types/dietImport';
 import type { FoodSuggestion } from '@/lib/nutrition/nutritionSuggestions';
 import type { FoodItem, MealSlot, NutritionLogEntry } from '@/types/nutrition';
@@ -76,6 +79,7 @@ export default function DietPage() {
   const [activeMealTab, setActiveMealTab] = useState<MealSlot>('breakfast');
   const [sheetInitialTab, setSheetInitialTab] = useState<'foods' | 'custom'>('foods');
   const [editingEntry, setEditingEntry] = useState<NutritionLogEntry | null>(null);
+  const [shareModalOpen, setShareDietModalOpen] = useState(false);
 
   const searchParams = useSearchParams();
   const mealGroups = useMemo(() => groupEntriesByMeal(entries), [entries]);
@@ -115,6 +119,8 @@ export default function DietPage() {
     if (!old) return undefined;
     return Math.round((currentWeight - old.weight) * 10) / 10;
   }, [bodyStats, currentWeight]);
+
+  const vitaminCoverage = useMemo(() => computeVitaminCoverage(totals, targets), [totals, targets]);
 
   const openSheet = (opts?: { slot?: MealSlot; search?: string; foodId?: string; tab?: 'foods' | 'custom' }) => {
     const meal = opts?.slot ?? activeMealTab;
@@ -189,6 +195,7 @@ export default function DietPage() {
           onNextDay={goToNextDay}
           onLogMeal={() => openSheet()}
           onAIImport={uid ? aiImport.openModal : undefined}
+          onShare={() => setShareDietModalOpen(true)}
         />
 
         {loading && (
@@ -288,6 +295,7 @@ export default function DietPage() {
                 surplusAvg={surplusAvg}
               />
               <MicronutrientGrid coverage={coverage} />
+              <VitaminGrid coverage={vitaminCoverage} />
               <WeightProgressCard
                 currentKg={currentWeight}
                 targetKg={settings?.targetWeightKg ?? nutritionTargets?.targetWeightKg ?? 75}
@@ -309,6 +317,7 @@ export default function DietPage() {
               <NutritionCalorieRing eaten={totals.calories} target={targets.calories} size={180} />
               <MacroProgressBars totals={totals} targets={targets} />
               <MicronutrientGrid coverage={coverage} />
+              <VitaminGrid coverage={vitaminCoverage} />
               <WeightProgressCard
                 currentKg={currentWeight}
                 targetKg={settings?.targetWeightKg ?? nutritionTargets?.targetWeightKg ?? 75}
@@ -395,6 +404,16 @@ export default function DietPage() {
           onSave={handleSaveEdit}
           onDelete={handleRemove}
           disabled={actionLoading}
+        />
+
+        <ShareDietModal
+          open={shareModalOpen}
+          onClose={() => setShareDietModalOpen(false)}
+          weeklyLogs={weeklyLogs}
+          currentTotals={totals}
+          currentDateKey={dateKey}
+          targets={targets}
+          timezone={timezone}
         />
 
         <AIDietImportModal
