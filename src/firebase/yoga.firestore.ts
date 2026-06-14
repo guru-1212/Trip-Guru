@@ -48,6 +48,19 @@ export async function getYogaFlow(id: string): Promise<YogaFlow | null> {
   return { id: snap.id, ...(snap.data() as Omit<YogaFlow, 'id'>) };
 }
 
+export async function createYogaFlow(flow: Omit<YogaFlow, 'id' | 'createdAt'>): Promise<string> {
+  const ref = doc(collection(db(), 'yogaFlows'));
+  await setDoc(ref, {
+    ...flow,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export async function updateYogaFlow(id: string, updates: Partial<YogaFlow>): Promise<void> {
+  await setDoc(doc(db(), 'yogaFlows', id), updates, { merge: true });
+}
+
 /**
  * User-specific Collections for Tracking
  */

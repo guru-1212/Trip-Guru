@@ -174,6 +174,8 @@ export {
   updateYogaPose,
   getYogaFlows,
   getYogaFlow,
+  createYogaFlow,
+  updateYogaFlow,
   getYogaSessionLogs,
   createYogaSessionLog,
   getMeditationLogs,

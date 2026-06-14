@@ -86,6 +86,7 @@ export function TodayExercisePicker({
   const [showUnlockDialog, setShowUnlockDialog] = useState(false);
   const [unlockPin, setUnlockPin] = useState('');
   const [unlockPinError, setUnlockPinError] = useState(false);
+  const [showSequenceModal, setShowSequenceModal] = useState(false);
 
   const pickerIds = new Set(exercises.map((e) => e.id));
 
@@ -371,7 +372,6 @@ export function TodayExercisePicker({
     showCustomInput = true
   ) => {
     const allVariations = getVariationsForExercise(ex.id, ex.variations);
-    const unselectedVariations = allVariations.filter((v) => !selectedVariations.includes(v));
 
     return (
       <div className={cn('ft-today-variation-block', sequenceLocked && 'ft-today-variation-block--locked')}>
@@ -383,44 +383,51 @@ export function TodayExercisePicker({
 
         {!sequenceLocked && (
           <>
-            {unselectedVariations.length > 0 && (
-              <div className="space-y-2">
-                <p className="ft-today-variation-label">Add variation</p>
-                <ul className="ft-today-variation-list">
-                  {unselectedVariations.map((v) => {
-                    const storedImage = getVariationImage(ex.id, v);
-                    return (
-                      <li key={v}>
-                        <div className="ft-today-variation-option">
+            <div className="space-y-2">
+              <p className="ft-today-variation-label">Variations</p>
+              <ul className="ft-today-variation-list">
+                {allVariations.map((v) => {
+                  const storedImage = getVariationImage(ex.id, v);
+                  const isChecked = selectedVariations.includes(v);
+                  return (
+                    <li key={v}>
+                      <div className={cn(
+                        "ft-today-variation-option",
+                        isChecked && "ft-today-variation-option--selected"
+                      )}>
+                        <button
+                          type="button"
+                          className="ft-today-variation-option-main"
+                          onClick={() => onToggle(v)}
+                        >
+                          <span className={cn(
+                            "ft-today-variation-check",
+                            isChecked && "ft-today-variation-check--on"
+                          )} aria-hidden>
+                            {isChecked && <Check className="h-2.5 w-2.5" />}
+                          </span>
+                          {storedImage && (
+                            <img src={storedImage} alt="" className="ft-today-variation-thumb" />
+                          )}
+                          <span className="ft-today-variation-name">{v}</span>
+                        </button>
+                        {storedImage && (
                           <button
                             type="button"
-                            className="ft-today-variation-option-main"
-                            onClick={() => onToggle(v)}
+                            className="ft-today-variation-view"
+                            onClick={() => openVariationPreview(storedImage, `${ex.name} — ${v}`)}
+                            aria-label={`View image for ${v}`}
+                            title="View variation image"
                           >
-                            <span className="ft-today-variation-check" aria-hidden />
-                            {storedImage && (
-                              <img src={storedImage} alt="" className="ft-today-variation-thumb" />
-                            )}
-                            <span className="ft-today-variation-name">{v}</span>
+                            <Eye className="h-4 w-4" />
                           </button>
-                          {storedImage && (
-                            <button
-                              type="button"
-                              className="ft-today-variation-view"
-                              onClick={() => openVariationPreview(storedImage, `${ex.name} — ${v}`)}
-                              aria-label={`View image for ${v}`}
-                              title="View variation image"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            )}
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
             {showCustomInput && (
               <div className="ft-today-variation-custom">
                 <label className="ft-today-variation-custom-label">Or add custom</label>
@@ -492,56 +499,25 @@ export function TodayExercisePicker({
       </div>
 
       {picks.length > 0 && (
-        <div className="ft-sequence-panel rounded-xl border border-primary/20 bg-primary/[0.03] p-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary shrink-0">
-              <ListOrdered className="h-4 w-4" />
+        <div className="sticky top-4 z-[40] ft-card ft-card-padded !p-3 shadow-lg border-primary/20 bg-background/95 backdrop-blur-md flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <ListOrdered className="h-5 w-5" />
             </div>
-            <div className="min-w-0 flex-1">
-              <h3 className="text-sm font-black tracking-tight">Workout sequence</h3>
-              <p className="text-xs text-muted-foreground">
-                {sequenceLocked
-                  ? 'Your training order for today'
-                  : 'Drag exercises and variations into your training order'}
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold truncate">Workout Sequence</h3>
+              <p className="text-[10px] text-muted-foreground truncate">
+                {picks.length} variations selected for today
               </p>
             </div>
           </div>
-          {sequenceLocked ? (
-            <div className="ft-sequence-list space-y-2">
-              {picks.map((pick, index) => renderSequenceRow(pick, index, false))}
-            </div>
-          ) : (
-            <Reorder.Group
-              axis="y"
-              values={picks}
-              onReorder={onPicksChange}
-              className="ft-sequence-list space-y-2"
-            >
-              {picks.map((pick, index) => renderSequenceRow(pick, index, true))}
-            </Reorder.Group>
-          )}
-          <div className="pt-3 mt-1 border-t border-primary/15 flex flex-col sm:flex-row sm:items-center gap-3">
-            <button
-              type="button"
-              onClick={handleLockToggle}
-              className={cn(
-                'ft-btn ft-btn--sm shrink-0',
-                sequenceLocked ? 'ft-btn--secondary' : 'ft-btn--primary'
-              )}
-            >
-              {sequenceLocked ? (
-                <Lock className="h-4 w-4" />
-              ) : (
-                <LockOpen className="h-4 w-4" />
-              )}
-              {sequenceLocked ? 'Unlock plan' : 'Lock this plan'}
-            </button>
-            <p className="text-xs text-muted-foreground">
-              {sequenceLocked
-                ? 'Synced to your account — enter PIN 0000 to unlock and edit'
-                : 'Lock to save this plan to your account on all devices'}
-            </p>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowSequenceModal(true)}
+            className="ft-btn ft-btn--primary ft-btn--sm shrink-0 shadow-sm"
+          >
+            Change Sequence
+          </button>
         </div>
       )}
 
@@ -819,6 +795,97 @@ export function TodayExercisePicker({
                 </button>
                 <button type="button" className="ft-btn ft-btn--primary flex-1" onClick={confirmUnlock}>
                   Unlock
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+        {showSequenceModal && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSequenceModal(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 20 }}
+              className="relative z-10 w-full max-w-lg max-h-[85vh] flex flex-col rounded-3xl border border-border bg-card shadow-2xl overflow-hidden"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 border-b border-border flex items-center justify-between gap-4 bg-muted/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                    <ListOrdered className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black tracking-tight">Workout Sequence</h3>
+                    <p className="text-xs text-muted-foreground">
+                      {sequenceLocked
+                        ? 'Training order for today'
+                        : 'Drag items to reorder your training sequence'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSequenceModal(false)}
+                  className="p-3 rounded-2xl text-muted-foreground hover:bg-muted/60 transition-colors shrink-0"
+                  aria-label="Close sequence modal"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 custom-scrollbar">
+                {sequenceLocked ? (
+                  <div className="space-y-2">
+                    {picks.map((pick, index) => renderSequenceRow(pick, index, false))}
+                  </div>
+                ) : (
+                  <Reorder.Group
+                    axis="y"
+                    values={picks}
+                    onReorder={onPicksChange}
+                    className="space-y-2"
+                  >
+                    {picks.map((pick, index) => renderSequenceRow(pick, index, true))}
+                  </Reorder.Group>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-border bg-muted/20 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={handleLockToggle}
+                    className={cn(
+                      'ft-btn ft-btn--sm shrink-0 shadow-sm',
+                      sequenceLocked ? 'ft-btn--secondary' : 'ft-btn--primary'
+                    )}
+                  >
+                    {sequenceLocked ? (
+                      <Lock className="h-4 w-4" />
+                    ) : (
+                      <LockOpen className="h-4 w-4" />
+                    )}
+                    {sequenceLocked ? 'Unlock plan' : 'Lock this plan'}
+                  </button>
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    {sequenceLocked
+                      ? 'Synced to your account — enter PIN 0000 to unlock'
+                      : 'Lock to save this sequence to your account on all devices'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowSequenceModal(false)}
+                  className="ft-btn ft-btn--secondary ft-btn--block shadow-sm"
+                >
+                  Done
                 </button>
               </div>
             </motion.div>

@@ -187,8 +187,12 @@ export function YogaSessionPlayer({ flow, onClose }: YogaSessionPlayerProps) {
             className="space-y-8 w-full max-w-lg"
           >
             <div className="aspect-[4/3] bg-muted/30 rounded-[40px] flex items-center justify-center relative overflow-hidden mb-12 border border-border/50">
-               {currentPoseDetail?.imageUrl ? (
-                 <img src={currentPoseDetail.imageUrl} alt={currentPoseDetail.name} className="w-full h-full object-cover" />
+               {(currentPoseItem?.imageUrl || currentPoseDetail?.imageUrl) ? (
+                 <img 
+                   src={currentPoseItem?.imageUrl || currentPoseDetail?.imageUrl} 
+                   alt={currentPoseItem.poseName} 
+                   className="w-full h-full object-cover" 
+                 />
                ) : (
                  <>
                    <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent" />

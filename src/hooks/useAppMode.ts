@@ -40,6 +40,7 @@ export function useAppMode() {
   const isRoomMode = mode === 'room';
   const isGymMode = mode === 'gym';
   const isYogaMode = mode === 'yoga';
+  const isSharedPartner = !!user?.fittrackLinkedOwnerId;
 
   return {
     mode,
@@ -50,6 +51,7 @@ export function useAppMode() {
     isRoomMode,
     isGymMode,
     isYogaMode,
+    isSharedPartner,
     primaryUseCase: user?.primaryUseCase,
   };
 }

@@ -613,25 +613,7 @@ export function getDefaultTodayPicks(
   const saved = normalizeSavedTodayPicks(splitTodayPicks[splitId], allExerciseIds, exercisesById);
   if (saved.length) return saved;
 
-  const lastSession = workouts.find((w) => w.splitId === splitId);
-  if (lastSession) {
-    const fromLast: TodayExercisePick[] = [];
-    for (const e of lastSession.exercises) {
-      if (!allExerciseIds.has(e.exerciseId)) continue;
-      fromLast.push({
-        id: generateId(),
-        exerciseId: e.exerciseId,
-        variation: e.variation,
-      });
-    }
-    if (fromLast.length) return fromLast;
-  }
-
-  return exercises.map((e) => ({
-    id: generateId(),
-    exerciseId: e.id,
-    variation: e.variations[0] ?? 'Standard',
-  }));
+  return [];
 }
 
 export function formatLastSessionPreview(

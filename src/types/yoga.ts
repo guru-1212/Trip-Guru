@@ -17,6 +17,7 @@ export interface YogaFlowItem {
   poseId: string;
   poseName: string;
   durationSeconds: number;
+  imageUrl?: string;
 }
 
 export interface YogaFlow {
