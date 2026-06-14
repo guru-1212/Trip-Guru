@@ -65,7 +65,7 @@
     @apply border-border transition-colors duration-200;
   }
   body {
-    @apply bg-background text-foreground antialiased selection:bg-primary/30;
+    @apply bg-background text-foreground antialiased selection:bg-yellow-300 selection:text-black;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
