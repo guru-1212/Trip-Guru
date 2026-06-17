@@ -21,6 +21,7 @@ import { EditFoodEntrySheet } from '@/components/nutrition/EditFoodEntrySheet';
 import { FoodSearchBar } from '@/components/nutrition/FoodSearchBar';
 import { MobileDietSummary } from '@/components/nutrition/MobileDietSummary';
 import { DietQuickAdd } from '@/components/nutrition/DietQuickAdd';
+import { DietRecentAdd } from '@/components/nutrition/DietRecentAdd';
 import { AIDietImportModal } from '@/components/nutrition/AIDietImportModal';
 import { ShareDietModal } from '@/components/nutrition/ShareDietModal';
 import { useAIDietImport } from '@/hooks/useAIDietImport';
@@ -48,6 +49,7 @@ export default function DietPage() {
     suggestions,
     customFoods,
     globalFoods,
+    recentFoods,
     weeklyLogs,
     streak,
     surplusAvg,
@@ -263,6 +265,12 @@ export default function DietPage() {
             disabled={actionLoading}
           />
 
+          <DietRecentAdd
+            recentFoods={recentFoods}
+            onAdd={handleQuickAdd}
+            disabled={actionLoading}
+          />
+
           <MealSectionCard
             mealSlot={activeMealTab}
             entries={mealGroups[activeMealTab]}
@@ -339,6 +347,11 @@ export default function DietPage() {
             <SuggestionChips
               suggestions={suggestions}
               onSelect={handleSuggestion}
+              disabled={actionLoading}
+            />
+            <DietRecentAdd
+              recentFoods={recentFoods}
+              onAdd={handleQuickAdd}
               disabled={actionLoading}
             />
             <section className="space-y-3">

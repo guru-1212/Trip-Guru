@@ -87,6 +87,20 @@ export async function saveNutritionSettings(
   await setDoc(settingsDoc(uid), { ...partial, updatedAt: serverTimestamp() }, { merge: true });
 }
 
+export async function updateRecentFoods(uid: string, foodId: string): Promise<void> {
+  if (!foodId) return;
+  const snap = await getDoc(settingsDoc(uid));
+  const current = snap.exists() ? (snap.data() as NutritionSettings).recentFoodIds || [] : [];
+  
+  // Prepend, remove duplicates, cap at 15
+  const updated = [foodId, ...current.filter((id) => id !== foodId)].slice(0, 15);
+  
+  await setDoc(settingsDoc(uid), { 
+    recentFoodIds: updated, 
+    updatedAt: serverTimestamp() 
+  }, { merge: true });
+}
+
 export function subscribeNutritionLog(
   uid: string,
   dateKey: string,

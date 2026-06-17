@@ -15,6 +15,7 @@ import {
   saveCustomFood,
   subscribeNutritionLog,
   updateNutritionEntry,
+  updateRecentFoods,
 } from '@/firebase/nutrition.firestore';
 import {
   computeCoverage,
@@ -24,6 +25,7 @@ import {
   scaleNutrients,
   sumNutrients,
 } from '@/lib/nutrition/nutritionCalculators';
+import { getFoodById } from '@/lib/nutrition/indianFoodDatabase';
 import { getLoggedFoodIds, getNutritionSuggestions } from '@/lib/nutrition/nutritionSuggestions';
 import { getTodayDateKey, shiftDateKey } from '@/lib/nutrition/nutritionUtils';
 import type { DietImportLogPayload } from '@/types/dietImport';
@@ -97,6 +99,19 @@ export function useDietTracker() {
     const pace = settings?.gainPace ?? 'moderate';
     return computeWeightProjection(currentWeight, targetKg, pace);
   }, [currentWeight, settings, nutritionTargets.targetWeightKg]);
+
+  const recentFoods = useMemo(() => {
+    if (!settings?.recentFoodIds) return [];
+    return settings.recentFoodIds
+      .map((id) => {
+        const found =
+          customFoods.find((f) => f.id === id) ||
+          globalFoods.find((f) => f.id === id) ||
+          getFoodById(id);
+        return found;
+      })
+      .filter(Boolean) as FoodItem[];
+  }, [settings?.recentFoodIds, customFoods, globalFoods]);
 
   const surplusAvg = useMemo(() => {
     if (weeklyLogs.length === 0) return 0;
@@ -232,6 +247,17 @@ export function useDietTracker() {
           },
           activeTargets
         );
+        
+        // Background: update recent food history
+        if (food.id) {
+          void updateRecentFoods(uid, food.id).then(() => {
+             setSettings(prev => prev ? ({
+               ...prev,
+               recentFoodIds: [food.id, ...(prev.recentFoodIds || []).filter(id => id !== food.id)].slice(0, 15)
+             }) : prev);
+          });
+        }
+
         setLog((prev) => {
           const entries = [...(prev?.entries ?? []), added];
           const newTotals = sumNutrients(entries);
@@ -294,11 +320,23 @@ export function useDietTracker() {
             },
             activeTargets
           );
+          
+          if (foodId) {
+            void updateRecentFoods(uid, foodId);
+          }
           added.push(result);
         }
 
         if (newCustomFoods.length > 0) {
           setCustomFoods((prev) => [...prev, ...newCustomFoods]);
+        }
+
+        // Update local settings recent list for the first food at least
+        if (entries[0]?.foodId) {
+          setSettings(prev => prev ? ({
+            ...prev,
+            recentFoodIds: [entries[0].foodId!, ...(prev.recentFoodIds || []).filter(id => id !== entries[0].foodId)].slice(0, 15)
+          }) : prev);
         }
 
         setLog((prev) => {
@@ -419,6 +457,7 @@ export function useDietTracker() {
     suggestions,
     customFoods,
     globalFoods,
+    recentFoods,
     weeklyLogs,
     streak,
     surplusAvg,
