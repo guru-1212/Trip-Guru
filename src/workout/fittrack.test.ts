@@ -8,13 +8,19 @@ import {
   estimateOneRepMax,
   suggestWeight,
   syncWorkoutHabits,
+  getLastSessionsForSplit,
+  buildRepeatDataFromSession,
+  repeatSessionPresetKey,
+  exerciseMatchesSearch,
+  getMatchingVariations,
+  exerciseBelongsToSplit,
 } from './utils';
 import {
   filterByRange,
   calcTrainingOverview,
 } from './analytics';
 import { normalizeChecklist } from '../firebase/fittrack.firestore';
-import type { WorkoutSession, WorkoutExercise, WorkoutSet, ChecklistData } from './types';
+import type { WorkoutSession, WorkoutExercise, WorkoutSet, ChecklistData, LibraryExercise } from './types';
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(`Assertion Failed: ${message}`);
@@ -145,6 +151,191 @@ function testSyncHabits() {
   assert(synced['2024-01-02'].workout === false, 'Habit for 2024-01-02 should have workout false (no workout that day)');
 }
 
+function testRepeatSessionHelpers() {
+  console.log('Testing Repeat Session Helpers...');
+
+  const workouts: WorkoutSession[] = [
+    {
+      id: 'w1',
+      date: '2024-06-20',
+      splitId: 'ct',
+      splitName: 'Chest/Triceps',
+      duration: 3600,
+      exercises: [],
+      totalSets: 0,
+      totalVolume: 0,
+    },
+    {
+      id: 'w2',
+      date: '2024-06-24',
+      splitId: 'ct',
+      splitName: 'Chest/Triceps',
+      duration: 3600,
+      exercises: [],
+      totalSets: 0,
+      totalVolume: 0,
+    },
+    {
+      id: 'w3',
+      date: '2024-06-27',
+      splitId: 'ct',
+      splitName: 'Chest/Triceps',
+      duration: 3600,
+      exercises: [],
+      totalSets: 0,
+      totalVolume: 0,
+    },
+    {
+      id: 'w4',
+      date: '2024-06-28',
+      splitId: 'bb',
+      splitName: 'Back',
+      duration: 3600,
+      exercises: [],
+      totalSets: 0,
+      totalVolume: 0,
+    },
+    {
+      id: 'w5',
+      date: '2024-06-29',
+      splitId: 'ct',
+      splitName: 'Chest/Triceps',
+      duration: 3600,
+      exercises: [],
+      totalSets: 0,
+      totalVolume: 0,
+    },
+  ];
+
+  const recent = getLastSessionsForSplit(workouts, 'ct', 3);
+  assert(recent.length === 3, 'Should return 3 sessions for split');
+  assert(recent[0].id === 'w5', 'Most recent session should be first');
+  assert(recent[1].id === 'w3', 'Second session should be w3');
+  assert(recent[2].id === 'w2', 'Third session should be w2');
+  assert(recent.every((w) => w.splitId === 'ct'), 'All sessions should match split');
+
+  const session: WorkoutSession = {
+    id: 'repeat',
+    date: '2024-06-27',
+    splitId: 'ct',
+    splitName: 'Chest/Triceps',
+    duration: 3600,
+    totalSets: 3,
+    totalVolume: 3000,
+    exercises: [
+      {
+        exerciseId: 'bench',
+        name: 'Bench Press',
+        variation: 'Barbell',
+        muscle: 'Chest',
+        sets: [
+          { weight: 100, reps: 10, done: true },
+          { weight: 100, reps: 8, done: true },
+          { weight: 90, reps: 10, done: false },
+        ],
+      },
+      {
+        exerciseId: 'fly',
+        name: 'Fly',
+        variation: 'Cable',
+        muscle: 'Chest',
+        sets: [
+          { weight: 0, reps: 0, done: false },
+          { weight: 0, reps: 0, done: false },
+        ],
+      },
+    ],
+  };
+
+  const { picks, presets } = buildRepeatDataFromSession(session);
+  assert(picks.length === 2, 'Should create picks for all exercises');
+  assert(picks[0].exerciseId === 'bench', 'Pick order should match session');
+  assert(picks[0].variation === 'Barbell', 'Variation should be preserved');
+  assert(picks[1].exerciseId === 'fly', 'Second exercise pick should be preserved');
+
+  const benchKey = repeatSessionPresetKey('bench', 'Barbell');
+  const benchSets = presets.get(benchKey);
+  assert(benchSets?.length === 2, 'Should include only completed sets');
+  assert(!!benchSets?.every((s) => !s.done), 'Preset sets should reset done to false');
+  assert(benchSets?.[0].weight === 100 && benchSets?.[0].reps === 10, 'First set values preserved');
+  assert(benchSets?.[1].weight === 100 && benchSets?.[1].reps === 8, 'Second set values preserved');
+  assert(!presets.has(repeatSessionPresetKey('fly', 'Cable')), 'Exercises without done sets have no preset');
+}
+
+function testExerciseSearchHelpers() {
+  console.log('Testing Exercise Search Helpers...');
+
+  const benchPress: LibraryExercise = {
+    id: 'bench-press',
+    name: 'Bench Press',
+    muscle: 'Chest',
+    secondary: 'Triceps',
+    equipment: 'Barbell',
+    difficulty: 'Intermediate',
+    variations: ['Flat Barbell', 'Incline Barbell', 'Decline Barbell'],
+    tips: [],
+    splitIds: ['ct'],
+    category: ['Chest'],
+  };
+
+  const variations = benchPress.variations;
+
+  assert(
+    exerciseMatchesSearch(benchPress, 'incline', variations),
+    'Should match variation substring incline'
+  );
+  assert(
+    exerciseMatchesSearch(benchPress, 'bench', variations),
+    'Should match exercise name'
+  );
+  assert(
+    !exerciseMatchesSearch(benchPress, 'squat', variations),
+    'Should not match unrelated query'
+  );
+
+  const allWhenNameMatch = getMatchingVariations(variations, 'bench press');
+  assert(
+    allWhenNameMatch.length === variations.length,
+    'Should return all variations when exercise name matches but no variation substring matches'
+  );
+
+  const matchedOnly = getMatchingVariations(variations, 'incline');
+  assert(matchedOnly.length === 1, 'Should return only matched variations');
+  assert(matchedOnly[0] === 'Incline Barbell', 'Should return Incline Barbell for incline query');
+}
+
+function testSplitExerciseFilter() {
+  console.log('Testing Split Exercise Filter...');
+
+  const chestEx: LibraryExercise = {
+    id: 'bench',
+    name: 'Bench Press',
+    muscle: 'Chest',
+    equipment: 'Barbell',
+    difficulty: 'Intermediate',
+    variations: ['Flat'],
+    tips: [],
+    splitIds: ['ct'],
+    category: ['Chest'],
+  };
+
+  const legEx: LibraryExercise = {
+    id: 'squat',
+    name: 'Squat',
+    muscle: 'Legs',
+    equipment: 'Barbell',
+    difficulty: 'Intermediate',
+    variations: ['Standard'],
+    tips: [],
+    splitIds: ['legs'],
+    category: ['Legs'],
+  };
+
+  assert(exerciseBelongsToSplit(chestEx, 'ct'), 'Chest exercise belongs to ct split');
+  assert(!exerciseBelongsToSplit(legEx, 'ct'), 'Leg exercise does not belong to ct split');
+  assert(exerciseBelongsToSplit(legEx, 'legs'), 'Leg exercise belongs to legs split');
+}
+
 function runTests() {
   try {
     testVolumeCalculations();
@@ -155,6 +346,9 @@ function runTests() {
     testTrainingOverview();
     testChecklistNormalization();
     testSyncHabits();
+    testRepeatSessionHelpers();
+    testExerciseSearchHelpers();
+    testSplitExerciseFilter();
     console.log('\nAll FitTrack tests passed! ✅');
   } catch (error) {
     console.error('\nTests failed! ❌');

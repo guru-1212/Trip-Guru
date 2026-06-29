@@ -173,6 +173,43 @@ export function getLastTrainedDate(workouts: WorkoutSession[], splitId: SplitId)
   return match?.date ?? null;
 }
 
+export function getLastSessionsForSplit(
+  workouts: WorkoutSession[],
+  splitId: SplitId,
+  limit = 3
+): WorkoutSession[] {
+  return workouts
+    .filter((w) => w.splitId === splitId)
+    .sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf())
+    .slice(0, limit);
+}
+
+export function repeatSessionPresetKey(exerciseId: string, variation: string): string {
+  return `${exerciseId}::${variation}`;
+}
+
+export function buildRepeatDataFromSession(session: WorkoutSession): {
+  picks: TodayExercisePick[];
+  presets: Map<string, WorkoutSet[]>;
+} {
+  const presets = new Map<string, WorkoutSet[]>();
+  const picks: TodayExercisePick[] = session.exercises.map((e) => {
+    const doneSets = e.sets.filter((s) => s.done && (s.weight > 0 || s.reps > 0));
+    if (doneSets.length > 0) {
+      presets.set(
+        repeatSessionPresetKey(e.exerciseId, e.variation),
+        doneSets.map((s) => ({ weight: s.weight, reps: s.reps, done: false }))
+      );
+    }
+    return {
+      id: generateId(),
+      exerciseId: e.exerciseId,
+      variation: e.variation,
+    };
+  });
+  return { picks, presets };
+}
+
 export interface LastExerciseSession {
   date: string;
   variation: string;
@@ -700,6 +737,107 @@ export function calcStreak(workouts: WorkoutSession[]): number {
   return streak;
 }
 
+export type AttendanceKind = 'none' | 'regular' | 'early';
+
+function getDateKeyInTimezone(timestampMs: number, timezone: string): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(new Date(timestampMs));
+}
+
+function getTimePartsInTimezone(timestampMs: number, timezone: string): { hour: number; minute: number } {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(new Date(timestampMs));
+  const hour = Number(parts.find((p) => p.type === 'hour')?.value ?? '0');
+  const minute = Number(parts.find((p) => p.type === 'minute')?.value ?? '0');
+  return { hour, minute };
+}
+
+function parseGymTime(gymTime: string | null): { hour: number; minute: number } {
+  if (!gymTime) return { hour: 12, minute: 0 };
+  const [hourPart, minutePart] = gymTime.split(':');
+  const hour = Number(hourPart);
+  const minute = Number(minutePart);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return { hour: 12, minute: 0 };
+  return { hour, minute };
+}
+
+export function isEarlyAttendance(
+  completedAt: number,
+  gymTime: string | null,
+  timezone: string
+): boolean {
+  const { hour, minute } = getTimePartsInTimezone(completedAt, timezone);
+  const cutoff = parseGymTime(gymTime);
+  return hour < cutoff.hour || (hour === cutoff.hour && minute < cutoff.minute);
+}
+
+export function buildYearlyAttendanceMap(
+  workouts: WorkoutSession[],
+  year: number,
+  profile: Pick<UserProfile, 'gymTime' | 'timezone'>
+): Record<string, AttendanceKind> {
+  const timezone = profile.timezone || 'UTC';
+  const byDate = new Map<string, WorkoutSession[]>();
+  for (const workout of workouts) {
+    const date = workout.date;
+    if (!byDate.has(date)) byDate.set(date, []);
+    byDate.get(date)!.push(workout);
+  }
+
+  const attendanceMap: Record<string, AttendanceKind> = {};
+  const start = dayjs(`${year}-01-01`);
+  const end = dayjs(`${year}-12-31`);
+  for (let day = start; day.isSame(end) || day.isBefore(end); day = day.add(1, 'day')) {
+    const dateKey = day.format('YYYY-MM-DD');
+    const dayWorkouts = byDate.get(dateKey) ?? [];
+    if (!dayWorkouts.length) {
+      attendanceMap[dateKey] = 'none';
+      continue;
+    }
+
+    const early = dayWorkouts.some((workout) => {
+      if (!workout.completedAt) return false;
+      if (getDateKeyInTimezone(workout.completedAt, timezone) !== workout.date) return false;
+      return isEarlyAttendance(workout.completedAt, profile.gymTime, timezone);
+    });
+    attendanceMap[dateKey] = early ? 'early' : 'regular';
+  }
+  return attendanceMap;
+}
+
+export function getLongestStreakForYear(workouts: WorkoutSession[], year: number): number {
+  const yearDates = new Set(
+    workouts
+      .map((workout) => workout.date)
+      .filter((date) => dayjs(date).year() === year)
+  );
+  if (!yearDates.size) return 0;
+
+  let best = 0;
+  let current = 0;
+  const start = dayjs(`${year}-01-01`);
+  const end = dayjs(`${year}-12-31`);
+  for (let day = start; day.isSame(end) || day.isBefore(end); day = day.add(1, 'day')) {
+    if (yearDates.has(day.format('YYYY-MM-DD'))) {
+      current += 1;
+      if (current > best) best = current;
+    } else {
+      current = 0;
+    }
+  }
+  return best;
+}
+
 export function getWorkoutsInRange(workouts: WorkoutSession[], start: string, end: string): WorkoutSession[] {
   return workouts.filter((w) => {
     const d = dayjs(w.date);
@@ -989,6 +1127,24 @@ export function getMuscleFromSplit(splitId: SplitId): string[] {
   return map[splitId];
 }
 
+/** True when an exercise targets muscles in the active split (e.g. Chest/Triceps for ct). */
+export function exerciseBelongsToSplit(
+  ex: Pick<LibraryExercise, 'muscle' | 'secondary' | 'splitIds'>,
+  splitId: SplitId
+): boolean {
+  if (splitId === 'rest') return false;
+  const splitMuscles = getMuscleFromSplit(splitId);
+  if (splitMuscles.includes(ex.muscle)) return true;
+  if (ex.secondary && splitMuscles.includes(ex.secondary)) return true;
+  if (splitId === 'ctbb') {
+    return ex.splitIds.includes('ct') || ex.splitIds.includes('bb');
+  }
+  if (splitId === 'coresh') {
+    return ex.splitIds.includes('core') || ex.splitIds.includes('sh');
+  }
+  return ex.splitIds.includes(splitId);
+}
+
 export function getMuscleOrderForSplit(splitId: SplitId): MuscleGroup[] {
   const map: Record<SplitId, MuscleGroup[]> = {
     ct: ['Chest', 'Triceps'],
@@ -1261,6 +1417,47 @@ export function syncWorkoutHabits(
   }
 
   return next;
+}
+
+export function exerciseMatchesSearch(
+  ex: LibraryExercise,
+  query: string,
+  variations: string[]
+): boolean {
+  const q = query.toLowerCase().trim();
+  if (!q) return true;
+  return (
+    ex.name.toLowerCase().includes(q) ||
+    ex.muscle.toLowerCase().includes(q) ||
+    (ex.secondary?.toLowerCase().includes(q) ?? false) ||
+    variations.some((v) => v.toLowerCase().includes(q))
+  );
+}
+
+export function getMatchingVariations(variations: string[], query: string): string[] {
+  const q = query.toLowerCase().trim();
+  if (!q) return variations;
+  const matched = variations.filter((v) => v.toLowerCase().includes(q));
+  return matched.length > 0 ? matched : variations;
+}
+
+export function variationMatchesSearch(variation: string, query: string): boolean {
+  const q = query.toLowerCase().trim();
+  if (!q) return false;
+  return variation.toLowerCase().includes(q);
+}
+
+export function exerciseSearchRank(
+  ex: LibraryExercise,
+  query: string,
+  variations: string[]
+): number {
+  const q = query.toLowerCase().trim();
+  if (!q) return 0;
+  if (ex.name.toLowerCase().includes(q)) return 0;
+  if (ex.muscle.toLowerCase().includes(q) || (ex.secondary?.toLowerCase().includes(q) ?? false)) return 1;
+  if (variations.some((v) => v.toLowerCase().includes(q))) return 2;
+  return 3;
 }
 
 export function updatePRDatesForWorkout(

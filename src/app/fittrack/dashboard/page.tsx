@@ -67,6 +67,7 @@ import { WaterDashboardWidget } from '@/components/water/WaterDashboardWidget';
 import { NutritionDashboardWidget } from '@/components/nutrition/NutritionDashboardWidget';
 import { getWeeklyMuscleTrainingCounts } from '@/workout/analytics';
 import { MuscleRecoveryMap } from '@/components/fittrack/MuscleRecoveryMap';
+import { GymAttendanceCalendar } from '@/components/fittrack/GymAttendanceCalendar';
 import { cn } from '@/lib/utils';
 
 dayjs.extend(relativeTime);
@@ -232,30 +233,6 @@ export default function DashboardPage() {
   const freqWeekNumber = useMemo(() => getTrackingWeekNumber(freqWeek), [freqWeek]);
 
   const weekRangeLabel = useMemo(() => getTrackingWeekRangeLabel(), []);
-
-  const calendarDays = useMemo(() => {
-    const monthStart = dayjs().startOf('month');
-    const startOffset = (monthStart.day() + 6) % 7;
-    const start = monthStart.subtract(startOffset, 'day');
-    
-    const monthEnd = dayjs().endOf('month');
-    const endOffset = (7 - monthEnd.day()) % 7;
-    const end = monthEnd.add(endOffset, 'day');
-
-    const days = [];
-    const workoutDates = new Set(workouts.map((w) => w.date));
-
-    for (let d = start; d.isBefore(end) || d.isSame(end); d = d.add(1, 'day')) {
-      days.push({
-        date: d.format('YYYY-MM-DD'),
-        day: d.date(),
-        isCurrentMonth: d.month() === monthStart.month(),
-        hasWorkout: workoutDates.has(d.format('YYYY-MM-DD')),
-        isToday: d.isSame(dayjs(), 'day'),
-      });
-    }
-    return days;
-  }, [workouts]);
 
   const feedWeek = useMemo(() => {
     const start = getTrackingWeekStart().subtract(feedWeekOffset, 'week');
@@ -697,44 +674,9 @@ export default function DashboardPage() {
           variants={item}
           icon={Calendar}
           title="Consistency"
-          description="Monthly training calendar"
-          badge={
-            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-3 py-1.5 rounded-full border border-border bg-muted/40">
-              {dayjs().format('MMMM')}
-            </span>
-          }
+          description="Monthly and yearly attendance"
         >
-          <div className="grid grid-cols-7 gap-1.5 mb-2">
-            {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-              <div
-                key={`${d}-${i}`}
-                className="text-center text-[9px] font-black uppercase tracking-widest text-muted-foreground/60"
-              >
-                {d}
-              </div>
-            ))}
-          </div>
-          <div className="grid grid-cols-7 gap-1.5">
-            {calendarDays.map((d) => (
-              <div
-                key={d.date}
-                title={d.date}
-                className={cn(
-                  'aspect-square rounded-xl flex items-center justify-center text-[10px] font-black transition-all duration-300',
-                  d.hasWorkout
-                    ? 'bg-primary text-white shadow-md shadow-primary/25 scale-[1.02]'
-                    : 'bg-muted/50 text-muted-foreground/40 border border-transparent',
-                  !d.isCurrentMonth && 'opacity-20',
-                  d.isToday &&
-                    !d.hasWorkout &&
-                    'ring-2 ring-primary/60 ring-offset-2 ring-offset-background border-primary/20',
-                  d.isToday && d.hasWorkout && 'ring-2 ring-white/30 ring-offset-2 ring-offset-primary'
-                )}
-              >
-                {d.day}
-              </div>
-            ))}
-          </div>
+          <GymAttendanceCalendar workouts={workouts} profile={profile} />
         </DashboardPanel>
 
         <DashboardPanel

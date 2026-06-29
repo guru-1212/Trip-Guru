@@ -12,12 +12,13 @@ import {
   Plus,
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
+import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workout/AddExerciseModal';
 import { VariationSelector } from '@/components/workout/VariationSelector';
 import { SessionSetRow } from '@/components/workout/SessionSetRow';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { SPLIT_DEFINITIONS } from '@/workout/constants';
 import { getExercisesForSplit, getExerciseById } from '@/workout/exerciseLibrary';
-import type { SplitId, WorkoutExercise, WorkoutSet, WeightUnit } from '@/workout/types';
+import type { CustomExercise, SplitId, WorkoutExercise, WorkoutSet, WeightUnit } from '@/workout/types';
 import {
   getGreeting,
   getTodayDayKey,
@@ -32,6 +33,7 @@ import {
   countCompletedSets,
   createWorkoutExercises,
 } from '@/workout/utils';
+import toast from 'react-hot-toast';
 
 const SPLIT_ICONS: Record<string, string> = {
   chest: '💪',
@@ -59,7 +61,9 @@ export default function WorkoutPage() {
     saveWorkout,
     addVariation,
     getVariationsForExercise,
+    getVariationImage,
     updateProfile,
+    addCustomExercise,
   } = useWorkoutStore();
 
   const handleWeightUnitChange = useCallback(
@@ -71,6 +75,8 @@ export default function WorkoutPage() {
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
+  const [showAddExercise, setShowAddExercise] = useState(false);
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false);
   const restDuration = activeWorkout?.restTimerSeconds ?? profile.prefs.restTimer;
 
   const preselected = searchParams.get('split') as SplitId | null;
@@ -139,17 +145,21 @@ export default function WorkoutPage() {
     setExpandedEx(exercises[0]?.exerciseId ?? null);
   }, [selectedSplit, profile.prefs.defaultSets, profile.prefs.restTimer, customExercises, startActiveWorkout]);
 
-  const updateExercise = (exerciseId: string, updater: (ex: WorkoutExercise) => WorkoutExercise) => {
+  const updateExercise = (
+    exerciseId: string,
+    variation: string,
+    updater: (ex: WorkoutExercise) => WorkoutExercise
+  ) => {
     if (!activeWorkout) return;
     const exercises = activeWorkout.exercises.map((ex) =>
-      ex.exerciseId === exerciseId ? updater(ex) : ex
+      ex.exerciseId === exerciseId && ex.variation === variation ? updater(ex) : ex
     );
     updateActiveWorkout({ ...activeWorkout, exercises });
   };
 
-  const toggleSetDone = (exerciseId: string, setIdx: number) => {
+  const toggleSetDone = (exerciseId: string, variation: string, setIdx: number) => {
     if (!activeWorkout) return;
-    updateExercise(exerciseId, (ex) => {
+    updateExercise(exerciseId, variation, (ex) => {
       const sets = [...ex.sets];
       const wasDone = sets[setIdx].done;
       sets[setIdx] = { ...sets[setIdx], done: !wasDone };
@@ -157,7 +167,7 @@ export default function WorkoutPage() {
         updateActiveWorkout({
           ...activeWorkout,
           exercises: activeWorkout.exercises.map((e) =>
-            e.exerciseId === exerciseId ? { ...ex, sets } : e
+            e.exerciseId === exerciseId && e.variation === variation ? { ...ex, sets } : e
           ),
           restTimerEnd: Date.now() + restDuration * 1000,
         });
@@ -166,8 +176,14 @@ export default function WorkoutPage() {
     });
   };
 
-  const updateSet = (exerciseId: string, setIdx: number, field: keyof WorkoutSet, value: number | boolean) => {
-    updateExercise(exerciseId, (ex) => {
+  const updateSet = (
+    exerciseId: string,
+    variation: string,
+    setIdx: number,
+    field: keyof WorkoutSet,
+    value: number | boolean
+  ) => {
+    updateExercise(exerciseId, variation, (ex) => {
       const sets = [...ex.sets];
       if (field === 'weight') {
         sets[setIdx] = { ...sets[setIdx], weight: inputToKg(value as number, profile.prefs.unit) };
@@ -178,8 +194,8 @@ export default function WorkoutPage() {
     });
   };
 
-  const addSet = (exerciseId: string) => {
-    updateExercise(exerciseId, (ex) => {
+  const addSet = (exerciseId: string, variation: string) => {
+    updateExercise(exerciseId, variation, (ex) => {
       const last = ex.sets[ex.sets.length - 1];
       return {
         ...ex,
@@ -188,14 +204,53 @@ export default function WorkoutPage() {
     });
   };
 
-  const removeSet = (exerciseId: string, setIdx: number) => {
-    updateExercise(exerciseId, (ex) => ({
+  const removeSet = (exerciseId: string, variation: string, setIdx: number) => {
+    updateExercise(exerciseId, variation, (ex) => ({
       ...ex,
       sets: ex.sets.filter((_, i) => i !== setIdx),
     }));
   };
 
   const finishWorkout = () => setShowSummary(true);
+
+  const addExerciseToWorkout = useCallback(
+    (exerciseId: string, variations: string[], remember: boolean) => {
+      void remember;
+      if (!activeWorkout) return;
+      const uniqueVariations = Array.from(new Set(variations.filter(Boolean)));
+      if (!uniqueVariations.length) return;
+      const existingKeys = new Set(activeWorkout.exercises.map((ex) => `${ex.exerciseId}::${ex.variation}`));
+      const variationsToAdd = uniqueVariations.filter(
+        (variation) => !existingKeys.has(`${exerciseId}::${variation}`)
+      );
+      if (!variationsToAdd.length) {
+        toast.error('Selected variation is already in workout');
+        return;
+      }
+
+      const baseItem = resolveExerciseForWorkout(exerciseId, customExercises, profile.prefs.defaultSets);
+      if (!baseItem) return;
+      const additions = variationsToAdd.map((variation) => ({ ...baseItem, variation }));
+      updateActiveWorkout({ ...activeWorkout, exercises: [...activeWorkout.exercises, ...additions] });
+      setExpandedEx(`${exerciseId}::${variationsToAdd[0]}`);
+      setShowAddExercise(false);
+      toast.success(`${baseItem.name} added`);
+    },
+    [activeWorkout, customExercises, profile.prefs.defaultSets, updateActiveWorkout]
+  );
+
+  const handleCreateCustomExercise = useCallback(
+    (data: Omit<CustomExercise, 'id'>, remember: boolean) => {
+      const created = addCustomExercise(data);
+      addExerciseToWorkout(created.id, [created.variations[0] ?? 'Standard'], remember);
+    },
+    [addCustomExercise, addExerciseToWorkout]
+  );
+
+  const replaceWorkout = () => {
+    clearActiveWorkout();
+    setShowReplaceDialog(false);
+  };
 
   const confirmFinish = () => {
     if (!activeWorkout) return;
@@ -241,15 +296,16 @@ export default function WorkoutPage() {
               const lib = getExerciseById(ex.exerciseId);
               const variations = getVariationsForExercise(ex.exerciseId, lib?.variations ?? [ex.variation]);
               const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
-              const isExpanded = expandedEx === ex.exerciseId;
+              const cardKey = `${ex.exerciseId}::${ex.variation}`;
+              const isExpanded = expandedEx === cardKey;
               const hasPR = ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
 
               return (
-                <div key={ex.exerciseId} className="wk-card overflow-hidden">
+                <div key={cardKey} className="wk-card overflow-hidden">
                   <button
                     type="button"
                     className="w-full p-4 flex items-center justify-between"
-                    onClick={() => setExpandedEx(isExpanded ? null : ex.exerciseId)}
+                    onClick={() => setExpandedEx(isExpanded ? null : cardKey)}
                   >
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">{ex.name}</span>
@@ -269,7 +325,9 @@ export default function WorkoutPage() {
                         <VariationSelector
                           value={ex.variation}
                           variations={variations}
-                          onChange={(v) => updateExercise(ex.exerciseId, (e) => ({ ...e, variation: v }))}
+                          onChange={(v) =>
+                            updateExercise(ex.exerciseId, ex.variation, (e) => ({ ...e, variation: v }))
+                          }
                           onAddVariation={(v) => addVariation(ex.exerciseId, v)}
                         />
 
@@ -294,10 +352,10 @@ export default function WorkoutPage() {
                               set={set}
                               unit={profile.prefs.unit}
                               isPR={set.done && isPR(ex.exerciseId, set.weight, prs)}
-                              onWeightChange={(v) => updateSet(ex.exerciseId, idx, 'weight', v)}
-                              onRepsChange={(v) => updateSet(ex.exerciseId, idx, 'reps', v)}
-                              onToggleDone={() => toggleSetDone(ex.exerciseId, idx)}
-                              onRemove={() => removeSet(ex.exerciseId, idx)}
+                              onWeightChange={(v) => updateSet(ex.exerciseId, ex.variation, idx, 'weight', v)}
+                              onRepsChange={(v) => updateSet(ex.exerciseId, ex.variation, idx, 'reps', v)}
+                              onToggleDone={() => toggleSetDone(ex.exerciseId, ex.variation, idx)}
+                              onRemove={() => removeSet(ex.exerciseId, ex.variation, idx)}
                               onUnitChange={handleWeightUnitChange}
                             />
                           ))}
@@ -305,7 +363,7 @@ export default function WorkoutPage() {
 
                         <button
                           type="button"
-                          onClick={() => addSet(ex.exerciseId)}
+                          onClick={() => addSet(ex.exerciseId, ex.variation)}
                           className="flex items-center justify-center gap-2 w-full min-h-[48px] border-2 border-dashed border-[var(--wk-border)] hover:border-[var(--wk-accent)] rounded-2xl text-[var(--wk-muted)] hover:text-[var(--wk-accent)] font-semibold text-sm transition-all"
                         >
                           <Plus className="h-4 w-4" /> Add Set
@@ -317,7 +375,10 @@ export default function WorkoutPage() {
                             className="wk-input text-sm mt-1 min-h-[60px]"
                             value={ex.notes ?? ''}
                             onChange={(e) =>
-                              updateExercise(ex.exerciseId, (exer) => ({ ...exer, notes: e.target.value }))
+                              updateExercise(ex.exerciseId, ex.variation, (exer) => ({
+                                ...exer,
+                                notes: e.target.value,
+                              }))
                             }
                             placeholder="Optional notes..."
                           />
@@ -330,9 +391,68 @@ export default function WorkoutPage() {
             })}
           </div>
 
-          <button type="button" onClick={finishWorkout} className="wk-btn-primary w-full py-3 text-base">
-            Finish Workout
-          </button>
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
+            <button
+              type="button"
+              onClick={() => setShowAddExercise(true)}
+              className="wk-btn-secondary w-full py-2.5 text-sm sm:flex-1 sm:py-3 sm:text-base"
+            >
+              Add<span className="hidden sm:inline"> Workout</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowReplaceDialog(true)}
+              className="wk-btn-secondary w-full py-2.5 text-sm sm:flex-1 sm:py-3 sm:text-base"
+            >
+              Replace<span className="hidden sm:inline"> Workout</span>
+            </button>
+            <button
+              type="button"
+              onClick={finishWorkout}
+              className="wk-btn-primary col-span-2 w-full py-3 text-base sm:col-span-1 sm:flex-1"
+            >
+              Finish Workout
+            </button>
+          </div>
+
+          {showAddExercise && activeWorkout && (
+            <AddExerciseModal
+              splitId={activeWorkout.splitId}
+              currentSelections={activeWorkout.exercises.map((e) => ({
+                exerciseId: e.exerciseId,
+                variation: e.variation,
+              }))}
+              customExercises={customExercises}
+              getVariationsForExercise={getVariationsForExercise}
+              getVariationImage={getVariationImage}
+              onAdd={addExerciseToWorkout}
+              onCreateCustom={handleCreateCustomExercise}
+              onClose={() => setShowAddExercise(false)}
+            />
+          )}
+
+          {showReplaceDialog && (
+            <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+              <div className="wk-card p-6 max-w-md w-full space-y-4">
+                <h2 className="wk-heading text-xl font-bold">Replace current workout?</h2>
+                <p className="text-sm text-[var(--wk-muted)]">
+                  This closes the current active workout and returns to split selection.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    className="wk-btn-secondary flex-1"
+                    onClick={() => setShowReplaceDialog(false)}
+                  >
+                    Keep Current
+                  </button>
+                  <button type="button" className="wk-btn-primary flex-1" onClick={replaceWorkout}>
+                    Replace
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {showSummary && (
             <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">

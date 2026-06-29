@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import dayjs from 'dayjs';
 import { AnimatePresence, Reorder, motion } from 'framer-motion';
 import { Check, Eye, GripVertical, ListOrdered, Lock, LockOpen, Plus, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -12,13 +13,20 @@ import type {
   MuscleGroup,
   SplitId,
   TodayExercisePick,
+  WorkoutSession,
 } from '@/workout/types';
 import { MUSCLE_COLORS } from '@/workout/constants';
 import {
   countVariationsInTodayPicks,
+  defaultExerciseImageUrl,
+  exerciseMatchesSearch,
+  exerciseBelongsToSplit,
+  exerciseSearchRank,
   generateId,
+  getMatchingVariations,
   groupLibraryExercisesByMuscle,
   toSubVariationLabel,
+  variationMatchesSearch,
 } from '@/workout/utils';
 import { cn } from '@/lib/utils';
 
@@ -36,8 +44,18 @@ interface TodayExercisePickerProps {
   getVariationImage: (exerciseId: string, variation: string) => string | undefined;
   sequenceLocked: boolean;
   onSequenceLockedChange: (locked: boolean) => void;
-  onRepeatLastWorkout?: () => void;
-  hasLastWorkout?: boolean;
+  recentSessions?: WorkoutSession[];
+  onRepeatSession?: (session: WorkoutSession) => void;
+}
+
+interface SearchDropdownItem {
+  exerciseId: string;
+  exerciseName: string;
+  muscle: LibraryExercise['muscle'];
+  variation: string;
+  imageUrl: string;
+  isSelected: boolean;
+  isVariationMatch: boolean;
 }
 
 function findPickIndex(picks: TodayExercisePick[], exerciseId: string): number {
@@ -58,8 +76,8 @@ export function TodayExercisePicker({
   getVariationImage,
   sequenceLocked,
   onSequenceLockedChange,
-  onRepeatLastWorkout,
-  hasLastWorkout,
+  recentSessions = [],
+  onRepeatSession,
 }: TodayExercisePickerProps) {
   const grouped = groupLibraryExercisesByMuscle(exercises, splitId);
   const exerciseById = useMemo(() => new Map(exercises.map((e) => [e.id, e])), [exercises]);
@@ -73,7 +91,8 @@ export function TodayExercisePicker({
     [exercises, getVariationsForExercise]
   );
   const [showAddPanel, setShowAddPanel] = useState(false);
-  const [search, setSearch] = useState('');
+  const [pickerSearch, setPickerSearch] = useState('');
+  const [addPanelSearch, setAddPanelSearch] = useState('');
   const [rememberAdded, setRememberAdded] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -103,19 +122,70 @@ export function TodayExercisePicker({
     category: [c.muscle],
   }));
 
+  const pickerQuery = pickerSearch.toLowerCase().trim();
+
+  const searchResults = useMemo(() => {
+    if (!pickerQuery) return [];
+    return exercises
+      .filter((ex) => {
+        const variations = getVariationsForExercise(ex.id, ex.variations);
+        return exerciseMatchesSearch(ex, pickerSearch, variations);
+      })
+      .sort((a, b) => {
+        const aVars = getVariationsForExercise(a.id, a.variations);
+        const bVars = getVariationsForExercise(b.id, b.variations);
+        const rankDiff =
+          exerciseSearchRank(a, pickerSearch, aVars) - exerciseSearchRank(b, pickerSearch, bVars);
+        if (rankDiff !== 0) return rankDiff;
+        return a.name.localeCompare(b.name);
+      });
+  }, [exercises, pickerSearch, pickerQuery, getVariationsForExercise]);
+
+  const searchDropdownItems = useMemo((): SearchDropdownItem[] => {
+    if (!pickerQuery) return [];
+    const items: SearchDropdownItem[] = [];
+    for (const ex of searchResults) {
+      const allVariations = getVariationsForExercise(ex.id, ex.variations);
+      const variationsToShow = getMatchingVariations(allVariations, pickerSearch);
+      for (const variation of variationsToShow) {
+        items.push({
+          exerciseId: ex.id,
+          exerciseName: ex.name,
+          muscle: ex.muscle,
+          variation,
+          imageUrl: getVariationImage(ex.id, variation) ?? defaultExerciseImageUrl(ex.id),
+          isSelected: picks.some((p) => p.exerciseId === ex.id && p.variation === variation),
+          isVariationMatch: variationMatchesSearch(variation, pickerSearch),
+        });
+      }
+    }
+    return items.sort((a, b) => {
+      if (a.isVariationMatch !== b.isVariationMatch) return a.isVariationMatch ? -1 : 1;
+      const exA = exercises.find((e) => e.id === a.exerciseId);
+      const exB = exercises.find((e) => e.id === b.exerciseId);
+      if (exA && exB) {
+        const aVars = getVariationsForExercise(exA.id, exA.variations);
+        const bVars = getVariationsForExercise(exB.id, exB.variations);
+        const rankDiff =
+          exerciseSearchRank(exA, pickerSearch, aVars) - exerciseSearchRank(exB, pickerSearch, bVars);
+        if (rankDiff !== 0) return rankDiff;
+      }
+      const nameCmp = a.exerciseName.localeCompare(b.exerciseName);
+      if (nameCmp !== 0) return nameCmp;
+      return a.variation.localeCompare(b.variation);
+    });
+  }, [searchResults, pickerSearch, pickerQuery, getVariationsForExercise, getVariationImage, picks, exercises]);
+
   const addableExercises = useMemo(() => {
-    const all = [...EXERCISE_LIBRARY, ...customAsLibrary];
-    const q = search.toLowerCase().trim();
+    const all = [...EXERCISE_LIBRARY, ...customAsLibrary].filter((ex) =>
+      exerciseBelongsToSplit(ex, splitId)
+    );
     return all.filter((ex) => {
       if (pickerIds.has(ex.id)) return false;
-      if (!q) return true;
-      return (
-        ex.name.toLowerCase().includes(q) ||
-        ex.muscle.toLowerCase().includes(q) ||
-        (ex.secondary?.toLowerCase().includes(q) ?? false)
-      );
+      const variations = getVariationsForExercise(ex.id, ex.variations);
+      return exerciseMatchesSearch(ex, addPanelSearch, variations);
     });
-  }, [search, pickerIds, customAsLibrary]);
+  }, [addPanelSearch, pickerIds, customAsLibrary, getVariationsForExercise, splitId]);
 
   const toggle = (ex: LibraryExercise) => {
     if (sequenceLocked) return;
@@ -138,6 +208,17 @@ export function TodayExercisePicker({
     } else {
       onPicksChange([...picks, { id: generateId(), exerciseId, variation }]);
     }
+  };
+
+  const selectFromDropdown = (exerciseId: string, variation: string, exerciseName: string) => {
+    if (sequenceLocked) return;
+    const alreadySelected = picks.some((p) => p.exerciseId === exerciseId && p.variation === variation);
+    if (alreadySelected) {
+      toast.success(`${exerciseName} — ${variation} is already in your workout`);
+      return;
+    }
+    onPicksChange([...picks, { id: generateId(), exerciseId, variation }]);
+    toast.success(`Added ${exerciseName} — ${variation}`);
   };
 
   const selectAll = () => {
@@ -190,7 +271,7 @@ export function TodayExercisePicker({
 
     setPendingAddId(null);
     setPendingVariations(['Standard']);
-    setSearch('');
+    setAddPanelSearch('');
     toast.success(`${ex.name} added to today's picks`);
   };
 
@@ -469,6 +550,112 @@ export function TodayExercisePicker({
         </span>
       </div>
 
+      <div className={cn('ft-picker-search', sequenceLocked && 'opacity-50 pointer-events-none')}>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground z-10" />
+          <input
+            className="ft-input !pl-10 !pr-10"
+            placeholder="Search exercises or variations (e.g. bench press, incline)…"
+            value={pickerSearch}
+            onChange={(e) => setPickerSearch(e.target.value)}
+            disabled={sequenceLocked}
+            aria-label="Search exercises and variations"
+            aria-expanded={pickerQuery ? searchDropdownItems.length > 0 : false}
+            aria-controls="picker-search-dropdown"
+            autoComplete="off"
+          />
+          {pickerSearch && (
+            <button
+              type="button"
+              onClick={() => setPickerSearch('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors z-10"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+
+          {pickerQuery && (
+            <div
+              id="picker-search-dropdown"
+              className="ft-picker-search-dropdown"
+              role="listbox"
+              aria-label="Search results"
+            >
+              {searchDropdownItems.length === 0 ? (
+                <p className="ft-picker-search-empty">
+                  No exercises or variations match &ldquo;{pickerSearch.trim()}&rdquo;
+                </p>
+              ) : (
+                <ul className="ft-picker-search-list">
+                  {searchDropdownItems.map((item) => (
+                    <li
+                      key={`${item.exerciseId}::${item.variation}`}
+                      className={cn(
+                        'ft-picker-search-item',
+                        item.isVariationMatch && 'ft-picker-search-item--match',
+                        item.isSelected && 'ft-picker-search-item--selected'
+                      )}
+                      role="option"
+                      aria-selected={item.isSelected}
+                    >
+                      <img
+                        src={item.imageUrl}
+                        alt=""
+                        className="ft-picker-search-thumb"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = defaultExerciseImageUrl(item.exerciseId);
+                        }}
+                      />
+                      <div className="ft-picker-search-item-text min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate">{item.exerciseName}</p>
+                        <p className="text-xs text-primary font-medium truncate">{item.variation}</p>
+                        <p className="text-[10px] text-muted-foreground">{item.muscle}</p>
+                      </div>
+                      <div className="ft-picker-search-item-actions shrink-0">
+                        <button
+                          type="button"
+                          className="ft-picker-search-view"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() =>
+                            openVariationPreview(item.imageUrl, `${item.exerciseName} — ${item.variation}`)
+                          }
+                          aria-label={`View image for ${item.exerciseName} — ${item.variation}`}
+                          title="View image"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          className={cn(
+                            'ft-btn ft-btn--sm',
+                            item.isSelected ? 'ft-btn--secondary' : 'ft-btn--primary'
+                          )}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() =>
+                            selectFromDropdown(item.exerciseId, item.variation, item.exerciseName)
+                          }
+                          disabled={item.isSelected}
+                        >
+                          {item.isSelected ? (
+                            <>
+                              <Check className="h-3.5 w-3.5" />
+                              Added
+                            </>
+                          ) : (
+                            'Select'
+                          )}
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
       <div className="flex gap-2 flex-wrap">
         <button
           type="button"
@@ -486,17 +673,28 @@ export function TodayExercisePicker({
         >
           Clear
         </button>
-        {onRepeatLastWorkout && hasLastWorkout && (
-          <button
-            type="button"
-            onClick={onRepeatLastWorkout}
-            disabled={sequenceLocked}
-            className="ft-btn ft-btn--ghost ft-btn--sm disabled:opacity-40 disabled:pointer-events-none"
-          >
-            Repeat Last Workout
-          </button>
-        )}
       </div>
+
+      {onRepeatSession && recentSessions.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+            Recent workouts
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            {recentSessions.map((session) => (
+              <button
+                key={session.id}
+                type="button"
+                onClick={() => onRepeatSession(session)}
+                disabled={sequenceLocked}
+                className="ft-btn ft-btn--ghost ft-btn--sm disabled:opacity-40 disabled:pointer-events-none"
+              >
+                {dayjs(session.date).format('ddd, MMM D')} · {session.exercises.length} ex
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {picks.length > 0 && (
         <div className="sticky top-4 z-[40] ft-card ft-card-padded !p-3 shadow-lg border-primary/20 bg-background/95 backdrop-blur-md flex items-center justify-between gap-3">
@@ -616,8 +814,8 @@ export function TodayExercisePicker({
               <input
                 className="ft-input !pl-10"
                 placeholder="Search exercises to add..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={addPanelSearch}
+                onChange={(e) => setAddPanelSearch(e.target.value)}
               />
             </div>
 
@@ -717,7 +915,7 @@ export function TodayExercisePicker({
               })()
             ) : addableExercises.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-2">
-                {search ? 'No matching exercises' : 'All library exercises are already listed above'}
+                {addPanelSearch ? 'No matching exercises' : 'All library exercises are already listed above'}
               </p>
             ) : (
               <ul className="space-y-1 max-h-48 overflow-y-auto">

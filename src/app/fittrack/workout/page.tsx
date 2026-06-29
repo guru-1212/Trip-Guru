@@ -25,6 +25,7 @@ import {
   Trash2,
   Share2,
   Sparkles,
+  Repeat2,
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { WorkoutShareCard } from '@/components/workout/WorkoutShareCard';
@@ -43,13 +44,16 @@ import { getHabitStreak } from '@/workout/analytics';
 import { SPLIT_DEFINITIONS, SPLIT_NAMES, MUSCLE_COLORS } from '@/workout/constants';
 import { getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
-import type { CustomExercise, SplitId, TodayExercisePick, WorkoutExercise, WorkoutSet, LibraryExercise, WeightUnit, DayKey } from '@/workout/types';
+import type { CustomExercise, SplitId, TodayExercisePick, WorkoutExercise, WorkoutSession, WorkoutSet, LibraryExercise, WeightUnit, DayKey } from '@/workout/types';
 import {
   generateId,
   getGreeting,
   getTodayDayKey,
   getTodaysSplit,
   getLastTrainedDate,
+  getLastSessionsForSplit,
+  buildRepeatDataFromSession,
+  repeatSessionPresetKey,
   isYesterday,
   getLastExerciseSession,
   isExerciseFullyDone,
@@ -187,8 +191,10 @@ export default function WorkoutPage() {
   const [pickerExercises, setPickerExercises] = useState<LibraryExercise[]>([]);
   const pickInitSplitRef = useRef<SplitId | null>(null);
   const todayPicksRef = useRef<TodayExercisePick[]>([]);
+  const selectedSplitRef = useRef<SplitId | null>(null);
   const picksPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiImportPresetsRef = useRef<Map<string, ImportedExercise>>(new Map());
+  const repeatSessionPresetsRef = useRef<Map<string, WorkoutSet[]>>(new Map());
   const [expandedEx, setExpandedEx] = useState<string | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [showSummary, setShowSummary] = useState(false);
@@ -201,8 +207,9 @@ export default function WorkoutPage() {
   const [pinError, setPinError] = useState(false);
   const [workoutDate, setWorkoutDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showReplaceDialog, setShowReplaceDialog] = useState(false);
   const [showAddExercise, setShowAddExercise] = useState(false);
-  const [removeConfirmId, setRemoveConfirmId] = useState<string | null>(null);
+  const [removeConfirmKey, setRemoveConfirmKey] = useState<string | null>(null);
   const [removePin, setRemovePin] = useState('');
   const [removePinError, setRemovePinError] = useState(false);
   const [sharingStory, setSharingStory] = useState(false);
@@ -371,6 +378,7 @@ export default function WorkoutPage() {
   const sequenceLocked = selectedSplit ? !!splitSequenceLocked[selectedSplit] : false;
 
   todayPicksRef.current = todayPicks;
+  selectedSplitRef.current = selectedSplit;
 
   const flushTodayPicks = useCallback(
     (splitId: SplitId, picks: TodayExercisePick[]) => {
@@ -413,21 +421,21 @@ export default function WorkoutPage() {
     onImportSuccess: handleAIImportSuccess,
   });
 
-  const handleRepeatLastWorkout = useCallback(() => {
-    if (!selectedSplit) return;
-    const lastSession = workouts.find((w) => w.splitId === selectedSplit);
-    if (!lastSession) {
-      toast.error('No previous workout found for this split');
-      return;
-    }
-    const picks: TodayExercisePick[] = lastSession.exercises.map((e) => ({
-      id: generateId(),
-      exerciseId: e.exerciseId,
-      variation: e.variation,
-    }));
-    handlePicksChange(picks);
-    toast.success('Restored last workout picks and sequence');
-  }, [selectedSplit, workouts, handlePicksChange]);
+  const handleRepeatSession = useCallback(
+    (session: WorkoutSession) => {
+      if (!selectedSplit) return;
+      const { picks, presets } = buildRepeatDataFromSession(session);
+      handlePicksChange(picks);
+      repeatSessionPresetsRef.current = presets;
+      toast.success(`Restored workout from ${dayjs(session.date).format('ddd, MMM D')}`);
+    },
+    [selectedSplit, handlePicksChange]
+  );
+
+  const recentSessions = useMemo(
+    () => (selectedSplit ? getLastSessionsForSplit(workouts, selectedSplit, 3) : []),
+    [workouts, selectedSplit]
+  );
 
   const handleSequenceLockedChange = useCallback(
     (locked: boolean) => {
@@ -444,16 +452,62 @@ export default function WorkoutPage() {
 
   useEffect(() => {
     return () => {
-      if (picksPersistTimerRef.current) clearTimeout(picksPersistTimerRef.current);
+      if (picksPersistTimerRef.current) {
+        clearTimeout(picksPersistTimerRef.current);
+        picksPersistTimerRef.current = null;
+      }
+      const splitId = selectedSplitRef.current;
+      if (splitId && todayPicksRef.current.length > 0) {
+        rememberTodayPicks(splitId, todayPicksRef.current);
+      }
     };
-  }, []);
+  }, [rememberTodayPicks]);
 
-  useEffect(() => {
-    if (!selectedSplit) return;
-    const remote = splitTodayPicks[selectedSplit];
-    if (!sequenceLocked || !remote?.length) return;
-    setTodayPicks((local) => (JSON.stringify(local) === JSON.stringify(remote) ? local : remote));
-  }, [selectedSplit, splitTodayPicks, sequenceLocked]);
+  const buildPickerListForSplit = useCallback(
+    (splitId: SplitId): LibraryExercise[] => {
+      const library = buildSplitExerciseLibrary(splitId, customExercises, splitExtras);
+      const byId = new Map(library.map((e) => [e.id, e]));
+      const extraIds = new Set<string>();
+      const saved = splitTodayPicks[splitId];
+      if (saved?.length) {
+        for (const item of saved) {
+          const id = typeof item === 'string' ? item : item.exerciseId;
+          if (!byId.has(id)) extraIds.add(id);
+        }
+      }
+      const lastSession = workouts.find((w) => w.splitId === splitId);
+      if (lastSession) {
+        for (const ex of lastSession.exercises) {
+          if (!byId.has(ex.exerciseId)) extraIds.add(ex.exerciseId);
+        }
+      }
+      const extras: LibraryExercise[] = [];
+      for (const id of Array.from(extraIds)) {
+        const lib = getExerciseById(id);
+        if (lib) {
+          extras.push(lib);
+          continue;
+        }
+        const custom = customExercises.find((c) => c.id === id);
+        if (custom) {
+          extras.push({
+            id: custom.id,
+            name: custom.name,
+            muscle: custom.muscle,
+            secondary: custom.secondary,
+            equipment: custom.equipment,
+            difficulty: custom.difficulty,
+            variations: custom.variations,
+            tips: custom.notes ? [custom.notes] : [],
+            splitIds: [splitId],
+            category: [custom.muscle],
+          });
+        }
+      }
+      return [...library, ...extras.filter((e) => !byId.has(e.id))];
+    },
+    [customExercises, splitExtras, splitTodayPicks, workouts]
+  );
 
   const splitExerciseLibrary = useMemo(() => {
     if (!selectedSplit) return [];
@@ -470,61 +524,30 @@ export default function WorkoutPage() {
     if (pickInitSplitRef.current === selectedSplit) return;
     pickInitSplitRef.current = selectedSplit;
 
-    const byId = new Map(splitExerciseLibrary.map((e) => [e.id, e]));
-    const extraIds = new Set<string>();
-    const saved = splitTodayPicks[selectedSplit];
-    if (saved?.length) {
-      for (const item of saved) {
-        const id = typeof item === 'string' ? item : item.exerciseId;
-        if (!byId.has(id)) extraIds.add(id);
-      }
-    }
-    const lastSession = workouts.find((w) => w.splitId === selectedSplit);
-    if (lastSession) {
-      for (const ex of lastSession.exercises) {
-        if (!byId.has(ex.exerciseId)) extraIds.add(ex.exerciseId);
-      }
-    }
-    const extras: LibraryExercise[] = [];
-    for (const id of Array.from(extraIds)) {
-      const lib = getExerciseById(id);
-      if (lib) {
-        extras.push(lib);
-        continue;
-      }
-      const custom = customExercises.find((c) => c.id === id);
-      if (custom) {
-        extras.push({
-          id: custom.id,
-          name: custom.name,
-          muscle: custom.muscle,
-          secondary: custom.secondary,
-          equipment: custom.equipment,
-          difficulty: custom.difficulty,
-          variations: custom.variations,
-          tips: custom.notes ? [custom.notes] : [],
-          splitIds: [selectedSplit],
-          category: [custom.muscle],
-        });
-      }
-    }
-    const pickerList = [...splitExerciseLibrary, ...extras.filter((e) => !byId.has(e.id))];
+    const pickerList = buildPickerListForSplit(selectedSplit);
     setPickerExercises(pickerList);
     const defaults = getDefaultTodayPicks(selectedSplit, workouts, splitTodayPicks, pickerList);
     setTodayPicks(defaults);
-  }, [selectedSplit, splitExerciseLibrary, workouts, splitTodayPicks, customExercises]);
+  }, [selectedSplit, splitExerciseLibrary, workouts, splitTodayPicks, customExercises, buildPickerListForSplit]);
+
+  useEffect(() => {
+    if (!selectedSplit) return;
+    if (pickInitSplitRef.current !== selectedSplit) return;
+    setPickerExercises(buildPickerListForSplit(selectedSplit));
+  }, [selectedSplit, customExercises, splitExtras, splitTodayPicks, workouts, buildPickerListForSplit]);
 
   const beginWorkout = useCallback(() => {
-    if (!selectedSplit || todayPicks.length === 0) return;
+    const picks = todayPicksRef.current;
+    if (!selectedSplit || picks.length === 0) return;
     const split = SPLIT_DEFINITIONS.find((s) => s.id === selectedSplit)!;
     const baseLibrary = buildSplitExerciseLibrary(selectedSplit, customExercises, splitExtras);
     const baseIds = new Set(baseLibrary.map((e) => e.id));
     const extraFromPicker = pickerExercises.filter((e) => !baseIds.has(e.id));
     const allExercises = [...baseLibrary, ...extraFromPicker];
-    const pickOrder = pickOrderFromPicks(todayPicks);
+    const pickOrder = pickOrderFromPicks(picks);
     let exercises = buildWorkoutExercisesInPickOrder(
       allExercises,
-      todayPicks,
+      picks,
       profile.prefs.defaultSets
     ).filter(isPickedToday);
 
@@ -548,7 +571,18 @@ export default function WorkoutPage() {
       aiImportPresetsRef.current = new Map();
     }
 
-    rememberTodayPicks(selectedSplit, todayPicks);
+    if (repeatSessionPresetsRef.current.size > 0) {
+      exercises = exercises.map((ex) => {
+        const presetSets = repeatSessionPresetsRef.current.get(
+          repeatSessionPresetKey(ex.exerciseId, ex.variation)
+        );
+        if (!presetSets?.length) return ex;
+        return patchExerciseSets(ex, presetSets);
+      });
+      repeatSessionPresetsRef.current = new Map();
+    }
+
+    rememberTodayPicks(selectedSplit, picks);
     const state = {
       splitId: selectedSplit,
       splitName: split.name,
@@ -564,7 +598,6 @@ export default function WorkoutPage() {
     setExpandedEx(pickOrder[0] ?? exercises[0]?.exerciseId ?? null);
   }, [
     selectedSplit,
-    todayPicks,
     pickerExercises,
     profile.prefs.defaultSets,
     profile.prefs.restTimer,
@@ -584,24 +617,49 @@ export default function WorkoutPage() {
   );
 
   const addExerciseToWorkout = useCallback(
-    (exerciseId: string, remember: boolean) => {
+    (exerciseId: string, variations: string[], remember: boolean) => {
       if (!activeWorkout) return;
-      if (activeWorkout.exercises.some((e) => e.exerciseId === exerciseId)) {
-        toast.error('Exercise already in workout');
+      const uniqueVariations = Array.from(new Set(variations.filter(Boolean)));
+      if (!uniqueVariations.length) {
+        toast.error('Select at least one variation');
         return;
       }
-      const item = resolveExerciseForWorkout(exerciseId, customExercises, profile.prefs.defaultSets);
-      if (!item) return;
+      const existingKeys = new Set(
+        activeWorkout.exercises.map((e) => `${e.exerciseId}::${e.variation}`)
+      );
+      const variationsToAdd = uniqueVariations.filter(
+        (variation) => !existingKeys.has(`${exerciseId}::${variation}`)
+      );
+      if (!variationsToAdd.length) {
+        toast.error('Selected variation is already in workout');
+        return;
+      }
+
+      const baseItem = resolveExerciseForWorkout(exerciseId, customExercises, profile.prefs.defaultSets);
+      if (!baseItem) return;
+      const additions = variationsToAdd.map((variation) => ({
+        ...baseItem,
+        variation,
+        setsByVariation: { [variation]: baseItem.sets },
+        pickedVariations: [variation],
+        pickedToday: true,
+      }));
+
       updateActiveWorkout({
         ...activeWorkout,
-        exercises: [...activeWorkout.exercises, { ...item, pickedToday: true }],
+        exercises: [...activeWorkout.exercises, ...additions],
         addedExerciseIds: [...(activeWorkout.addedExerciseIds ?? []), exerciseId],
-        pickOrder: [...(activeWorkout.pickOrder ?? []), exerciseId],
+        pickOrder: [
+          ...(activeWorkout.pickOrder ?? []),
+          ...variationsToAdd.map((variation) => `${exerciseId}::${variation}`),
+        ],
       });
       if (remember) rememberSplitExercise(activeWorkout.splitId, exerciseId);
-      setExpandedEx(exerciseId);
+      setExpandedEx(`${exerciseId}::${variationsToAdd[0]}`);
       setShowAddExercise(false);
-      toast.success(`${item.name} added`);
+      toast.success(
+        `${baseItem.name} added (${variationsToAdd.length} variation${variationsToAdd.length > 1 ? 's' : ''})`
+      );
     },
     [activeWorkout, customExercises, profile.prefs.defaultSets, updateActiveWorkout, rememberSplitExercise]
   );
@@ -609,7 +667,8 @@ export default function WorkoutPage() {
   const handleCreateCustomExercise = useCallback(
     (data: Omit<CustomExercise, 'id'>, remember: boolean) => {
       const created = addCustomExercise(data);
-      addExerciseToWorkout(created.id, remember);
+      const defaultVariation = created.variations[0] ?? 'Standard';
+      addExerciseToWorkout(created.id, [defaultVariation], remember);
     },
     [addCustomExercise, addExerciseToWorkout]
   );
@@ -732,15 +791,32 @@ export default function WorkoutPage() {
   );
 
   const openWarmupGate = useCallback(() => {
-    if (!selectedSplit || todayPicks.length === 0) return;
+    if (!selectedSplit) return;
+    if (picksPersistTimerRef.current) {
+      clearTimeout(picksPersistTimerRef.current);
+      picksPersistTimerRef.current = null;
+    }
+    const picks = todayPicksRef.current;
+    flushTodayPicks(selectedSplit, picks);
+    if (picks.length === 0) {
+      toast.error('Add at least one exercise variation to start');
+      return;
+    }
     setShowWarmupGate(true);
-  }, [selectedSplit, todayPicks.length]);
+  }, [selectedSplit, flushTodayPicks]);
 
   const discardWorkout = () => {
     clearActiveWorkout();
     releaseWakeLock();
     setShowCancelDialog(false);
     router.push('/fittrack/dashboard');
+  };
+
+  const replaceWorkout = () => {
+    clearActiveWorkout();
+    releaseWakeLock();
+    setShowReplaceDialog(false);
+    toast.success('Workout replaced. Pick your new plan.');
   };
 
   const confirmFinish = () => {
@@ -757,6 +833,7 @@ export default function WorkoutPage() {
 
     saveWorkout({
       date: workoutDate,
+      completedAt: Date.now(),
       splitId: activeWorkout.splitId,
       splitName: activeWorkout.splitName,
       duration: elapsed,
@@ -799,14 +876,14 @@ export default function WorkoutPage() {
     const [exerciseId, variation] = cardKey.split('::');
     removeExerciseFromActiveWorkout(exerciseId, variation);
     if (expandedEx === cardKey) setExpandedEx(null);
-    setRemoveConfirmId(null);
+    setRemoveConfirmKey(null);
     setRemovePin('');
     setRemovePinError(false);
     toast.success('Exercise removed from session');
   };
 
   const closeRemoveConfirm = () => {
-    setRemoveConfirmId(null);
+    setRemoveConfirmKey(null);
     setRemovePin('');
     setRemovePinError(false);
   };
@@ -862,8 +939,10 @@ export default function WorkoutPage() {
     const unpickedGroups = groupExercisesByMuscle(unpickedExercises, activeWorkout.splitId);
     const { done: pickedDone, total: pickedTotal } = countPickedVariationsDone(activeWorkout.exercises);
     const addedExerciseIds = activeWorkout.addedExerciseIds ?? [];
-    const removeTarget = removeConfirmId
-      ? activeWorkout.exercises.find((e) => e.exerciseId === removeConfirmId)
+    const removeTarget = removeConfirmKey
+      ? activeWorkout.exercises.find(
+          (e) => `${e.exerciseId}::${e.variation}` === removeConfirmKey
+        )
       : null;
 
     const renderExerciseCard = (ex: WorkoutExercise, sequenceIndex?: number) => {
@@ -990,7 +1069,7 @@ export default function WorkoutPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      setRemoveConfirmId(ex.exerciseId);
+                      setRemoveConfirmKey(cardKey);
                       setRemovePin('');
                       setRemovePinError(false);
                     }}
@@ -1159,7 +1238,7 @@ export default function WorkoutPage() {
 
     return (
       <PageTransition>
-        <div className="space-y-5 pb-36">
+        <div className="space-y-5 ft-workout-active-page">
           <header className="ft-card ft-card-padded sticky top-0 z-40 !py-4">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
@@ -1223,13 +1302,35 @@ export default function WorkoutPage() {
           </div>
 
           {/* Footer Controls */}
-          <div className="ft-action-bar">
-            <button type="button" onClick={() => setShowAddExercise(true)} className="ft-btn ft-btn--secondary flex-1">
-              <Plus className="h-4 w-4" />
-              Add Exercise
+          <div className="ft-action-bar ft-action-bar--workout">
+            <button
+              type="button"
+              onClick={() => setShowAddExercise(true)}
+              className="ft-btn ft-btn--secondary ft-action-bar-workout-btn"
+            >
+              <Plus className="h-4 w-4 shrink-0" />
+              <span className="ft-action-bar-label">
+                <span className="ft-action-bar-label-short">Add</span>
+                <span className="ft-action-bar-label-full">Add Workout</span>
+              </span>
             </button>
-            <button type="button" onClick={finishWorkout} className="ft-btn ft-btn--primary flex-1">
-              <Zap className="h-4 w-4" />
+            <button
+              type="button"
+              onClick={() => setShowReplaceDialog(true)}
+              className="ft-btn ft-btn--secondary ft-action-bar-workout-btn"
+            >
+              <Repeat2 className="h-4 w-4 shrink-0" />
+              <span className="ft-action-bar-label">
+                <span className="ft-action-bar-label-short">Replace</span>
+                <span className="ft-action-bar-label-full">Replace Workout</span>
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={finishWorkout}
+              className="ft-btn ft-btn--primary ft-action-bar-finish"
+            >
+              <Zap className="h-4 w-4 shrink-0" />
               Finish
             </button>
           </div>
@@ -1237,8 +1338,13 @@ export default function WorkoutPage() {
           {showAddExercise && activeWorkout && (
             <AddExerciseModal
               splitId={activeWorkout.splitId}
-              currentExerciseIds={activeWorkout.exercises.map((e) => e.exerciseId)}
+              currentSelections={activeWorkout.exercises.map((e) => ({
+                exerciseId: e.exerciseId,
+                variation: e.variation,
+              }))}
               customExercises={customExercises}
+              getVariationsForExercise={getVariationsForExercise}
+              getVariationImage={getVariationImage}
               onAdd={addExerciseToWorkout}
               onCreateCustom={handleCreateCustomExercise}
               onClose={() => setShowAddExercise(false)}
@@ -1367,7 +1473,46 @@ export default function WorkoutPage() {
               </div>
             )}
 
-            {removeConfirmId && removeTarget && (
+            {showReplaceDialog && (
+              <div className="ft-overlay" style={{ zIndex: 72 }}>
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="ft-modal space-y-6"
+                >
+                  <div className="text-center">
+                    <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 mx-auto mb-4">
+                      <AlertTriangle className="h-6 w-6" />
+                    </div>
+                    <h2 className="ft-title">Replace current workout?</h2>
+                    <p className="ft-subtitle mt-2">
+                      This closes the active session and returns you to today&apos;s picks for{' '}
+                      <strong>{activeWorkout.splitName}</strong>. You can only add exercises for this
+                      split&apos;s muscle groups.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <button
+                      type="button"
+                      className="ft-btn ft-btn--secondary ft-btn--block"
+                      onClick={() => setShowReplaceDialog(false)}
+                    >
+                      Keep Current Workout
+                    </button>
+                    <button
+                      type="button"
+                      className="ft-btn ft-btn--danger ft-btn--block"
+                      onClick={replaceWorkout}
+                    >
+                      Replace Workout
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {removeConfirmKey && removeTarget && (
               <div className="ft-overlay" style={{ zIndex: 75 }}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
@@ -1400,7 +1545,7 @@ export default function WorkoutPage() {
                     <button
                       type="button"
                       className="ft-btn ft-btn--danger ft-btn--block"
-                      onClick={() => handleRemoveExercise(removeConfirmId)}
+                      onClick={() => handleRemoveExercise(removeConfirmKey)}
                     >
                       Remove
                     </button>
@@ -1801,8 +1946,8 @@ export default function WorkoutPage() {
             getVariationImage={getVariationImage}
             sequenceLocked={sequenceLocked}
             onSequenceLockedChange={handleSequenceLockedChange}
-            onRepeatLastWorkout={handleRepeatLastWorkout}
-            hasLastWorkout={!!workouts.find((w) => w.splitId === selectedSplit)}
+            onRepeatSession={handleRepeatSession}
+            recentSessions={recentSessions}
           />
         )}
 

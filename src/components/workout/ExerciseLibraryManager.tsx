@@ -30,6 +30,7 @@ import {
   canRenameVariation,
   defaultExerciseImageUrl,
   exerciseHasMissingUploadedImage,
+  exerciseMatchesSearch,
   getVariationsMissingUploadedImage,
   groupLibraryExercisesByMuscleAll,
   toSubVariationLabel,
@@ -93,15 +94,9 @@ export function ExerciseLibraryManager({ search, bodyPart, imageFilter }: Exerci
   }, [customExercises]);
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim();
     return allExercises.filter((ex) => {
       const variations = getVariationsForExercise(ex.id, ex.variations);
-      const matchSearch =
-        !q ||
-        ex.name.toLowerCase().includes(q) ||
-        ex.muscle.toLowerCase().includes(q) ||
-        (ex.secondary?.toLowerCase().includes(q) ?? false) ||
-        variations.some((v) => v.toLowerCase().includes(q));
+      const matchSearch = exerciseMatchesSearch(ex, search, variations);
       const matchBodyPart = bodyPart === 'All' || ex.muscle === bodyPart;
       const matchImage =
         imageFilter === 'all' ||

@@ -56,6 +56,8 @@ export interface WorkoutExercise {
 export interface WorkoutSession {
   id: string;
   date: string;
+  /** Epoch milliseconds when workout was completed. */
+  completedAt?: number;
   splitId: SplitId;
   splitName: string;
   duration: number;

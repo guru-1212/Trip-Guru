@@ -136,7 +136,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
 
   const mergeActiveWorkoutFromRemote = useCallback((remote: ActiveWorkoutState | null) => {
     setActiveWorkout((local) => {
-      if (remote === null) return null;
+      if (remote === null) return local;
       if (local === null) return remote;
       if (local.startedAt !== remote.startedAt) return remote;
 
