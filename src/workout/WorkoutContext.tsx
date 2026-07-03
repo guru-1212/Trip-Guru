@@ -249,12 +249,19 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
         setHabits((h) => {
           const nextHabits = syncWorkoutHabits(nextWorkouts, h);
           if (currentUid) {
-            void fittrackDb.saveFitTrackWorkout(currentUid, full);
-            void fittrackDb.saveFitTrackState(currentUid, {
-              prs: nextPrs,
-              habits: nextHabits,
-              activeWorkout: null,
-            });
+            // Fire-and-forget: offline these stay pending in the local cache and
+            // sync on reconnect. Catch guards against unhandled rejections on a
+            // genuine (non-transient) write failure.
+            fittrackDb
+              .saveFitTrackWorkout(currentUid, full)
+              .catch((err) => console.error('[FitTrack] save workout failed:', err));
+            fittrackDb
+              .saveFitTrackState(currentUid, {
+                prs: nextPrs,
+                habits: nextHabits,
+                activeWorkout: null,
+              })
+              .catch((err) => console.error('[FitTrack] save state failed:', err));
           }
           return nextHabits;
         });

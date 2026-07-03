@@ -1,6 +1,12 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore } from 'firebase/firestore';
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  Firestore,
+} from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
 import { getFunctions, Functions } from 'firebase/functions';
 
@@ -95,7 +101,17 @@ function initFirebase(): FirebaseApp {
 
   app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   auth = getAuth(app);
-  db = getFirestore(app);
+  // Offline-first: IndexedDB-backed cache queues writes while offline and
+  // auto-syncs on reconnect; onSnapshot reads are served from cache offline.
+  try {
+    db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    });
+  } catch {
+    // Firestore already started, or IndexedDB unavailable (e.g. private mode /
+    // older browser) — fall back to the default in-memory cache so the app still loads.
+    db = getFirestore(app);
+  }
   storage = getStorage(app);
   firebaseFunctions = getFunctions(app);
   return app;

@@ -14,6 +14,7 @@ import {
   Droplets,
   Utensils,
   History,
+  CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppMode } from '@/hooks/useAppMode';
@@ -24,6 +25,7 @@ const navItems = [
   { href: '/fittrack/diet', label: 'Diet', icon: Utensils },
   { href: '/fittrack/workout', label: 'Workout', icon: Dumbbell },
   { href: '/fittrack/history', label: 'History', icon: History },
+  { href: '/fittrack/calendar', label: 'Calendar', icon: CalendarDays },
   { href: '/fittrack/exercises', label: 'Library', icon: BookOpen },
   { href: '/fittrack/progress', label: 'Progress', icon: TrendingUp },
   { href: '/fittrack/analytics', label: 'Analytics', icon: BarChart3 },

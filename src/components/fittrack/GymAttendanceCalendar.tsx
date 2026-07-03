@@ -28,9 +28,9 @@ type YearCell = {
   workoutCount: number;
 };
 
-const WEEKDAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+export const WEEKDAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
-function cellClass(kind: AttendanceKind): string {
+export function cellClass(kind: AttendanceKind): string {
   if (kind === 'early') return 'bg-amber-400 text-amber-950 shadow-sm shadow-amber-400/20';
   if (kind === 'regular') return 'bg-primary text-white shadow-md shadow-primary/25';
   return 'bg-muted/50 text-muted-foreground/40 border border-transparent';
