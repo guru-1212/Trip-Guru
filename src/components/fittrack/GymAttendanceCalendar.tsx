@@ -39,10 +39,14 @@ function cellClass(kind: AttendanceKind): string {
 export function GymAttendanceCalendar({ workouts, profile }: GymAttendanceCalendarProps) {
   const [mode, setMode] = useState<'month' | 'year'>('month');
   const [selectedYear, setSelectedYear] = useState(dayjs().year());
+  const [selectedMonth, setSelectedMonth] = useState(() => dayjs().startOf('month'));
+
+  // In month mode the attendance data must cover the selected month's year.
+  const activeYear = mode === 'month' ? selectedMonth.year() : selectedYear;
 
   const attendanceByYear = useMemo(
-    () => buildYearlyAttendanceMap(workouts, selectedYear, profile),
-    [workouts, selectedYear, profile]
+    () => buildYearlyAttendanceMap(workouts, activeYear, profile),
+    [workouts, activeYear, profile]
   );
 
   const workoutCountByDate = useMemo(() => {
@@ -54,8 +58,8 @@ export function GymAttendanceCalendar({ workouts, profile }: GymAttendanceCalend
   }, [workouts]);
 
   const monthCells = useMemo<CalendarCell[]>(() => {
-    const monthStart = dayjs().startOf('month');
-    const monthEnd = dayjs().endOf('month');
+    const monthStart = selectedMonth.startOf('month');
+    const monthEnd = selectedMonth.endOf('month');
     const startOffset = (monthStart.day() + 6) % 7;
     const endOffset = (7 - monthEnd.day()) % 7;
     const start = monthStart.subtract(startOffset, 'day');
@@ -73,7 +77,19 @@ export function GymAttendanceCalendar({ workouts, profile }: GymAttendanceCalend
       });
     }
     return cells;
-  }, [attendanceByYear]);
+  }, [attendanceByYear, selectedMonth]);
+
+  // Gym / early counts for the selected month (shown in the month header).
+  const monthSummary = useMemo(() => {
+    let gymDays = 0;
+    let earlyDays = 0;
+    for (const [date, kind] of Object.entries(attendanceByYear)) {
+      if (!dayjs(date).isSame(selectedMonth, 'month')) continue;
+      if (kind === 'regular' || kind === 'early') gymDays += 1;
+      if (kind === 'early') earlyDays += 1;
+    }
+    return { gymDays, earlyDays };
+  }, [attendanceByYear, selectedMonth]);
 
   const yearCells = useMemo<YearCell[]>(() => {
     const yearStart = dayjs(`${selectedYear}-01-01`);
@@ -149,9 +165,27 @@ export function GymAttendanceCalendar({ workouts, profile }: GymAttendanceCalend
         </div>
 
         {mode === 'month' ? (
-          <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-3 py-1.5 rounded-full border border-border bg-muted/40">
-            {dayjs().format('MMMM')}
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedMonth((month) => month.subtract(1, 'month'))}
+              className="p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+              aria-label="Previous month"
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+            </button>
+            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-3 py-1.5 rounded-full border border-border bg-muted/40">
+              {selectedMonth.format('MMMM YYYY')} - {monthSummary.gymDays} days - {monthSummary.earlyDays} early
+            </span>
+            <button
+              type="button"
+              onClick={() => setSelectedMonth((month) => month.add(1, 'month'))}
+              className="p-2 rounded-lg border border-border bg-muted/30 hover:bg-muted/50 transition-colors"
+              aria-label="Next month"
+            >
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         ) : (
           <div className="flex items-center gap-2">
             <button
