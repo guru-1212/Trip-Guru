@@ -1,13 +1,27 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useParams } from 'next/navigation';
 import { FileDown, Sheet } from 'lucide-react';
 import { TripPageShell } from '@/components/trips/TripPageShell';
 import { BudgetGauge } from '@/components/analytics/BudgetGauge';
-import { CategoryPieChart } from '@/components/analytics/CategoryPieChart';
-import { DailyBarChart } from '@/components/analytics/DailyBarChart';
-import { MemberContribution } from '@/components/analytics/MemberContribution';
+
+const chartLoading = () => (
+  <div className="h-64 rounded-2xl bg-muted/40 animate-pulse" />
+);
+const CategoryPieChart = dynamic(
+  () => import('@/components/analytics/CategoryPieChart').then((m) => m.CategoryPieChart),
+  { ssr: false, loading: chartLoading }
+);
+const DailyBarChart = dynamic(
+  () => import('@/components/analytics/DailyBarChart').then((m) => m.DailyBarChart),
+  { ssr: false, loading: chartLoading }
+);
+const MemberContribution = dynamic(
+  () => import('@/components/analytics/MemberContribution').then((m) => m.MemberContribution),
+  { ssr: false, loading: chartLoading }
+);
 import { Button } from '@/components/ui/button';
 import { useAppSelector } from '@/store';
 import { useExpenses } from '@/hooks/useExpenses';
@@ -36,11 +50,15 @@ function AnalyticsContent({ tripId }: { tripId: string }) {
   const expensesToDisplay = allExpenses.filter(e => (e.expenseType || 'actual') === viewType);
 
   const handleExportPDF = () => {
-    exportTripExpensesPDF(trip, allExpenses, members);
+    exportTripExpensesPDF(trip, allExpenses, members).catch((err) =>
+      console.error('PDF export failed:', err)
+    );
   };
 
   const handleExportExcel = () => {
-    exportTripExpensesExcel(trip, allExpenses, members);
+    exportTripExpensesExcel(trip, allExpenses, members).catch((err) =>
+      console.error('Excel export failed:', err)
+    );
   };
 
   return (

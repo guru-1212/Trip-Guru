@@ -43,12 +43,8 @@ export async function getTripsForUser(userId: string): Promise<Trip[]> {
     new Set(membersSnap.docs.map((d) => d.data().tripId as string))
   );
 
-  const trips: Trip[] = [];
-  for (const tripId of tripIds) {
-    const trip = await getTrip(tripId);
-    if (trip) trips.push(trip);
-  }
-  return trips;
+  const fetched = await Promise.all(tripIds.map((tripId) => getTrip(tripId)));
+  return fetched.filter((t): t is Trip => t !== null);
 }
 
 export async function getTripMembers(tripId: string): Promise<TripMember[]> {

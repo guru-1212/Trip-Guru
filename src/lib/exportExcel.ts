@@ -1,14 +1,14 @@
-import * as XLSX from 'xlsx';
 import { Expense } from '@/types/expense';
 import { Trip } from '@/types/trip';
 import { TripMember } from '@/types/member';
 import dayjs from 'dayjs';
 
-export function exportTripExpensesExcel(
+export async function exportTripExpensesExcel(
   trip: Trip,
   expenses: Expense[],
   members: TripMember[]
-): void {
+): Promise<void> {
+  const XLSX = await import('xlsx');
   const memberMap = new Map(
     members.map((m) => [m.userId ?? m.id, m.name])
   );

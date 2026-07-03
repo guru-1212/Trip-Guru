@@ -1,15 +1,17 @@
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { Expense } from '@/types/expense';
 import { Trip } from '@/types/trip';
 import { TripMember } from '@/types/member';
 import dayjs from 'dayjs';
 
-export function exportTripExpensesPDF(
+export async function exportTripExpensesPDF(
   trip: Trip,
   expenses: Expense[],
   members: TripMember[]
-): void {
+): Promise<void> {
+  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+    import('jspdf'),
+    import('jspdf-autotable'),
+  ]);
   const doc = new jsPDF();
   const memberMap = new Map(
     members.map((m) => [m.userId ?? m.id, m.name])

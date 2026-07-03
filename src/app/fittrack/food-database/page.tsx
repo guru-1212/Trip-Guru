@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import toast from 'react-hot-toast';
-import * as XLSX from 'xlsx';
 import Link from 'next/link';
 
 import { 
@@ -176,7 +175,7 @@ export default function FoodDatabasePage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const data = evt.target?.result;
         let items: any[] = [];
@@ -184,6 +183,7 @@ export default function FoodDatabasePage() {
         if (file.name.endsWith('.json')) {
           items = JSON.parse(data as string);
         } else {
+          const XLSX = await import('xlsx');
           const workbook = XLSX.read(data, { type: 'binary' });
           const sheetName = workbook.SheetNames[0];
           const sheet = workbook.Sheets[sheetName];

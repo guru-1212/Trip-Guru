@@ -1,5 +1,4 @@
 import dayjs from 'dayjs';
-import html2canvas from 'html2canvas';
 import type {
   PersonalRecord,
   SplitId,
@@ -214,6 +213,7 @@ export function buildShareCardDataFromSession(
 }
 
 export async function captureShareCardAsPng(element: HTMLElement): Promise<Blob> {
+  const { default: html2canvas } = await import('html2canvas');
   const canvas = await html2canvas(element, {
     scale: 1,
     useCORS: true,

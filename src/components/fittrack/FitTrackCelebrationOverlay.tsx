@@ -2,7 +2,6 @@
 
 import { useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import confetti from 'canvas-confetti';
 import {
   Trophy,
   CheckCircle2,
@@ -34,7 +33,8 @@ function useReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-function fireConfetti(intensity: 'pr' | 'workout_complete') {
+async function fireConfetti(intensity: 'pr' | 'workout_complete') {
+  const { default: confetti } = await import('canvas-confetti');
   const colors = ['#F59E0B', '#EAB308', '#10B981', '#34D399', '#FFFFFF'];
   const particleCount = intensity === 'workout_complete' ? 120 : 80;
 
@@ -77,7 +77,7 @@ export function FitTrackCelebrationOverlay({ event, onDismiss }: FitTrackCelebra
   useEffect(() => {
     if (!event) return;
     if (!reducedMotion) {
-      fireConfetti(event.variant);
+      fireConfetti(event.variant).catch(() => {});
     }
     if (typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([50, 30, 80]);

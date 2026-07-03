@@ -67,12 +67,17 @@ function DashboardContent() {
       const tripSpent: Record<string, number> = {};
       const userSpent: Record<string, number> = {};
       
-      for (const trip of trips) {
-        const expenses = await getExpenses(trip.tripId);
-        tripSpent[trip.tripId] = expenses
+      const results = await Promise.all(
+        trips.map(async (trip) => ({
+          tripId: trip.tripId,
+          expenses: await getExpenses(trip.tripId),
+        }))
+      );
+      for (const { tripId, expenses } of results) {
+        tripSpent[tripId] = expenses
           .filter((e) => (e.expenseType || 'actual') === 'actual')
           .reduce((s, e) => s + e.amount, 0);
-        userSpent[trip.tripId] = expenses
+        userSpent[tripId] = expenses
           .filter((e) => e.paidBy === uid && (e.expenseType || 'actual') === 'actual')
           .reduce((s, e) => s + e.amount, 0);
       }
