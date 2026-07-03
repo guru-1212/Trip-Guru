@@ -6,6 +6,7 @@ import { AnimatePresence, Reorder, motion } from 'framer-motion';
 import { Check, Eye, GripVertical, ListOrdered, Lock, LockOpen, Plus, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm';
+import { MuscleCoveragePanel } from '@/components/fittrack/MuscleCoveragePanel';
 import { EXERCISE_LIBRARY } from '@/workout/exerciseLibrary';
 import type {
   CustomExercise,
@@ -549,6 +550,27 @@ export function TodayExercisePicker({
           {pickedVariationCount} of {totalVariationCount} variations
         </span>
       </div>
+
+      <MuscleCoveragePanel
+        splitId={splitId}
+        picks={picks}
+        customExercises={customExercises}
+        disabled={sequenceLocked}
+        onAddExercise={(exerciseId) => {
+          if (sequenceLocked) return;
+          const lib =
+            EXERCISE_LIBRARY.find((e) => e.id === exerciseId) ??
+            customAsLibrary.find((e) => e.id === exerciseId);
+          if (!lib) return;
+          const alreadyPicked = picks.some((p) => p.exerciseId === exerciseId);
+          if (alreadyPicked) return;
+          onPicksChange([
+            ...picks,
+            { id: generateId(), exerciseId, variation: lib.variations[0] ?? 'Standard' },
+          ]);
+          toast.success(`Added ${lib.name}`);
+        }}
+      />
 
       <div className={cn('ft-picker-search', sequenceLocked && 'opacity-50 pointer-events-none')}>
         <div className="relative">
