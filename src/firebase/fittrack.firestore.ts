@@ -50,6 +50,8 @@ export interface FitTrackStateDoc {
   /** Per-split remembered mobility variation picks: mobilityId → variation name */
   splitMobilityPicks: Partial<Record<SplitId, Record<string, string>>>;
   activeWorkout: ActiveWorkoutState | null;
+  /** Dates (YYYY-MM-DD) the user explicitly marked as a rest day. */
+  restDays: string[];
   migratedFromLocal?: boolean;
   updatedAt?: unknown;
 }
@@ -107,6 +109,7 @@ export function defaultStateDoc(): FitTrackStateDoc {
     splitSequenceLocked: {},
     splitMobilityPicks: {},
     activeWorkout: null,
+    restDays: [],
   };
 }
 

@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design 2 — True 3D Sculpted</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0f1a; color: #e4e4e7; min-height: 100vh; padding: 20px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  .nav { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .nav a {
+    color: #94a3b8; text-decoration: none; font-size: 11px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 14px;
+    border: 1px solid #1e293b; border-radius: 12px; background: #0f172a;
+  }
+  .nav a.active { color: #22c55e; border-color: #22c55e55; }
+  h1 { font-size: 20px; font-weight: 900; margin-bottom: 4px; }
+  .sub { color: #94a3b8; font-size: 13px; margin-bottom: 20px; }
+  .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 24px; padding: 20px; margin-bottom: 16px; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 900; letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 5px 12px; border-radius: 999px;
+    background: #1e293b; color: #94a3b8; margin-bottom: 14px;
+  }
+  #stage { position: relative; height: 420px; border-radius: 18px; overflow: hidden; background: radial-gradient(ellipse at 50% 40%, #16203a 0%, #0b0f1a 75%); cursor: grab; touch-action: none; }
+  #stage:active { cursor: grabbing; }
+  .overlay-badge {
+    position: absolute; left: 10px; top: 10px; z-index: 5; pointer-events: none;
+    font-size: 9px; font-weight: 900; letter-spacing: 0.15em; text-transform: uppercase;
+    background: #0f172acc; border: 1px solid #1e293b; color: #94a3b8;
+    padding: 5px 11px; border-radius: 999px; backdrop-filter: blur(4px);
+  }
+  .zoombtns { position: absolute; right: 10px; top: 10px; z-index: 5; display: flex; flex-direction: column; gap: 6px; }
+  .zoombtns button, .views button {
+    font-family: inherit; width: 30px; height: 30px; border-radius: 10px; border: 1px solid #334155;
+    background: #0f172acc; color: #e4e4e7; font-size: 16px; cursor: pointer; backdrop-filter: blur(4px);
+  }
+  .zoombtns button:hover { background: #1e293b; }
+  .views { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; gap: 4px; background: #0f172acc; border: 1px solid #1e293b; padding: 4px; border-radius: 12px; backdrop-filter: blur(4px); }
+  .views button { width: auto; height: auto; padding: 6px 14px; font-size: 9px; font-weight: 900; letter-spacing: 0.12em; text-transform: uppercase; border: none; background: transparent; color: #94a3b8; border-radius: 8px; }
+  .views button.on { background: #22c55e; color: #052e16; }
+  .legend { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin-top: 14px; }
+  .legend span { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip {
+    font-family: inherit; font-size: 12px; font-weight: 700; padding: 9px 14px;
+    border-radius: 14px; border: 1px solid #334155; background: #1e293b;
+    color: #e4e4e7; cursor: pointer; transition: all 0.15s;
+  }
+  .chip:hover { border-color: #22c55e88; }
+  .chip.on { background: #22c55e22; border-color: #22c55e; color: #4ade80; }
+  .warn { color: #f87171; font-size: 12px; font-weight: 700; margin-top: 10px; }
+  .hint { font-size: 12px; color: #64748b; margin-top: 10px; }
+  #err { display: none; padding: 40px 20px; text-align: center; color: #f87171; font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a href="design-1-2d-svg.html">1 · 2D Anatomy Map</a>
+    <a href="design-2-3d-sculpted.html" class="active">2 · True 3D Sculpted</a>
+    <a href="design-3-flip-3d.html">3 · 3D-Flip Hybrid</a>
+  </div>
+  <h1>Design 2 — True 3D Sculpted</h1>
+  <p class="sub">One real 3D body (three.js). Drag to rotate freely, pinch/scroll/buttons to zoom. Needs internet for this preview (CDN); in the app it's bundled + lazy-loaded.</p>
+
+  <div class="card">
+    <span class="badge">Today: Chest + Triceps</span>
+    <div id="stage">
+      <span class="overlay-badge" id="facing">Front View</span>
+      <div class="zoombtns">
+        <button id="zin" aria-label="Zoom in">+</button>
+        <button id="zout" aria-label="Zoom out">−</button>
+      </div>
+      <div class="views">
+        <button id="vfront" class="on">Front</button>
+        <button id="vback">Back</button>
+      </div>
+      <div id="err">⚠ Could not load three.js from CDN — check your internet connection and reload.</div>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#ef4444"></i>To Hit</span>
+      <span><i class="dot" style="background:#22c55e"></i>Covered</span>
+      <span><i class="dot" style="background:#86efac"></i>Assisted</span>
+      <span><i class="dot" style="background:#8b93a1"></i>Not Today</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <span class="badge">Pick exercises — watch muscles turn green</span>
+    <div class="chips" id="chips"></div>
+    <p class="warn" id="suggest"></p>
+    <p class="hint">Drag the body to rotate · scroll or pinch to zoom.</p>
+  </div>
+</div>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// ───────────────────────── Demo coverage logic ─────────────────────────
+const SPLIT = ['chest-upper','chest-mid','chest-lower','triceps-long','triceps-lateral'];
+const EXERCISES = [
+  { name:'Incline DB Press', primary:['chest-upper'], secondary:['front-delts','triceps-lateral'] },
+  { name:'Flat Bench Press', primary:['chest-mid','chest-lower'], secondary:['triceps-lateral','front-delts'] },
+  { name:'Chest Fly',        primary:['chest-mid'], secondary:['chest-upper'] },
+  { name:'Skull Crushers',   primary:['triceps-long'], secondary:['triceps-lateral'] },
+  { name:'Rope Pushdown',    primary:['triceps-lateral'], secondary:['triceps-long'] },
+  { name:'Dips',             primary:['triceps-long','chest-lower'], secondary:['front-delts'] },
+];
+const picked = new Set();
+const COLORS = { covered:0x22c55e, secondary:0x86efac, pending:0xef4444, idle:0x8b93a1 };
+const EMISSIVE = { covered:0x14532d, secondary:0x166534, pending:0x7f1d1d, idle:0x000000 };
+
+function stateOf(id) {
+  const prim = new Set(), sec = new Set();
+  picked.forEach(i => {
+    EXERCISES[i].primary.forEach(m => prim.add(m));
+    EXERCISES[i].secondary.forEach(m => sec.add(m));
+  });
+  if (prim.has(id)) return 'covered';
+  if (sec.has(id)) return 'secondary';
+  if (SPLIT.includes(id)) return 'pending';
+  return 'idle';
+}
+
+// ───────────────────────── Scene ─────────────────────────
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(stage.clientWidth, stage.clientHeight);
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(38, stage.clientWidth / stage.clientHeight, 0.1, 50);
+camera.position.set(0, 0.1, 5.4);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const hemi = new THREE.HemisphereLight(0xffffff, 0x64748b, 0.5); scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffffff, 1.2); key.position.set(3, 5, 4); scene.add(key);
+const rim = new THREE.DirectionalLight(0x93c5fd, 0.6); rim.position.set(-4, 2, -4); scene.add(rim);
+
+const body = new THREE.Group();
+scene.add(body);
+
+const BODY_MAT = new THREE.MeshStandardMaterial({ color: 0xd7dade, roughness: 0.55, metalness: 0.03 });
+
+// Smooth torso via LatheGeometry (shoulders → chest → waist → hips)
+const profile = [
+  [0.00, 1.52],[0.14, 1.50],[0.30, 1.44],[0.44, 1.34],[0.47, 1.18],[0.45, 1.02],
+  [0.40, 0.86],[0.34, 0.70],[0.31, 0.56],[0.33, 0.42],[0.38, 0.30],[0.40, 0.20],[0.36, 0.10],[0.00, 0.06],
+].map(([x, y]) => new THREE.Vector2(x, y));
+const torso = new THREE.Mesh(new THREE.LatheGeometry(profile, 24), BODY_MAT);
+torso.scale.set(1, 1, 0.62);
+body.add(torso);
+
+function addMesh(geo, mat, pos, scale, rotZ = 0, mirror = false) {
+  const m = new THREE.Mesh(geo, mat);
+  m.position.set(...pos); m.scale.set(...scale); m.rotation.z = rotZ;
+  body.add(m);
+  if (mirror) {
+    const m2 = new THREE.Mesh(geo, mat);
+    m2.position.set(-pos[0], pos[1], pos[2]); m2.scale.set(...scale); m2.rotation.z = -rotZ;
+    body.add(m2);
+  }
+  return m;
+}
+
+const SPHERE = new THREE.SphereGeometry(1, 20, 14);
+const CAPSULE = new THREE.CapsuleGeometry(1, 2, 6, 14);
+
+// Head + neck
+addMesh(SPHERE, BODY_MAT, [0, 1.86, 0], [0.215, 0.265, 0.235]);
+addMesh(CAPSULE, BODY_MAT, [0, 1.58, 0], [0.085, 0.05, 0.085]);
+// Arms: shoulder ball, upper, forearm, hand
+addMesh(SPHERE, BODY_MAT, [0.50, 1.36, 0], [0.115, 0.12, 0.115], 0, true);
+addMesh(CAPSULE, BODY_MAT, [0.565, 1.06, 0], [0.078, 0.115, 0.078], -0.12, true);
+addMesh(CAPSULE, BODY_MAT, [0.63, 0.58, 0], [0.065, 0.115, 0.065], -0.08, true);
+addMesh(SPHERE, BODY_MAT, [0.665, 0.30, 0], [0.065, 0.095, 0.05], 0, true);
+// Pelvis
+addMesh(SPHERE, BODY_MAT, [0, 0.16, 0], [0.36, 0.24, 0.22]);
+// Legs: thigh, shin, foot
+addMesh(CAPSULE, BODY_MAT, [0.195, -0.38, 0], [0.125, 0.19, 0.115], 0.02, true);
+addMesh(CAPSULE, BODY_MAT, [0.20, -1.06, 0], [0.082, 0.175, 0.082], 0, true);
+addMesh(SPHERE, BODY_MAT, [0.20, -1.46, 0.07], [0.085, 0.055, 0.16], 0, true);
+// Ground shadow disc
+const shadow = new THREE.Mesh(
+  new THREE.CircleGeometry(0.85, 32),
+  new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35 })
+);
+shadow.rotation.x = -Math.PI / 2; shadow.position.y = -1.53;
+body.add(shadow);
+
+// Muscle regions: [id, pos, scale, rotZ, mirror]
+const REGION_DEFS = [
+  ['chest-upper',     [0.17, 1.26, 0.20], [0.145, 0.055, 0.075], 0.10, true],
+  ['chest-mid',       [0.18, 1.15, 0.225],[0.155, 0.07, 0.08],  0.05, true],
+  ['chest-lower',     [0.16, 1.04, 0.205],[0.135, 0.05, 0.075], 0,    true],
+  ['abs-upper',       [0, 0.84, 0.20],    [0.13, 0.12, 0.06],   0,    false],
+  ['abs-lower',       [0, 0.57, 0.19],    [0.11, 0.10, 0.06],   0,    false],
+  ['obliques',        [0.21, 0.72, 0.13], [0.06, 0.16, 0.07],   0.1,  true],
+  ['front-delts',     [0.44, 1.34, 0.10], [0.08, 0.085, 0.07],  0,    true],
+  ['side-delts',      [0.52, 1.34, 0],    [0.07, 0.095, 0.08],  0,    true],
+  ['rear-delts',      [0.44, 1.34, -0.10],[0.08, 0.085, 0.07],  0,    true],
+  ['biceps',          [0.55, 1.08, 0.075],[0.068, 0.13, 0.06],  -0.12, true],
+  ['forearms',        [0.625, 0.58, 0.02],[0.058, 0.15, 0.058], -0.08, true],
+  ['traps',           [0, 1.44, -0.10],   [0.20, 0.10, 0.07],   0,    false],
+  ['mid-back',        [0, 1.18, -0.175],  [0.155, 0.10, 0.05],  0,    false],
+  ['lats',            [0.23, 1.00, -0.14],[0.105, 0.17, 0.06],  0.22, true],
+  ['lower-back',      [0, 0.72, -0.155],  [0.10, 0.10, 0.045],  0,    false],
+  ['triceps-long',    [0.545, 1.06, -0.08],[0.062, 0.135, 0.058], -0.12, true],
+  ['triceps-lateral', [0.615, 1.10, -0.04],[0.045, 0.105, 0.045], -0.12, true],
+  ['glutes',          [0.13, 0.10, -0.155],[0.12, 0.11, 0.085], 0,    true],
+  ['hamstrings',      [0.195, -0.42, -0.095],[0.095, 0.22, 0.065], 0.02, true],
+  ['quads',           [0.195, -0.38, 0.095],[0.105, 0.24, 0.075], 0.02, true],
+  ['adductors',       [0.09, -0.26, 0.02],[0.055, 0.17, 0.06],  0,    true],
+  ['calves',          [0.20, -1.02, -0.075],[0.072, 0.185, 0.06], 0,   true],
+];
+
+const regionMats = {};
+REGION_DEFS.forEach(([id, pos, scale, rotZ, mirror]) => {
+  if (!regionMats[id]) {
+    regionMats[id] = new THREE.MeshStandardMaterial({ roughness: 0.45, metalness: 0.05 });
+  }
+  addMesh(SPHERE, regionMats[id], pos, scale, rotZ, mirror);
+});
+
+function applyColors() {
+  for (const id in regionMats) {
+    const s = stateOf(id);
+    regionMats[id].color.setHex(COLORS[s]);
+    regionMats[id].emissive.setHex(EMISSIVE[s]);
+    regionMats[id].emissiveIntensity = s === 'idle' ? 0 : 0.35;
+  }
+  needsRender = true;
+}
+
+// ───────────────────────── Controls: drag rotate, zoom, snap ─────────────────────────
+let rotY = 0, targetRot = 0, zoom = 1, targetZoom = 1, needsRender = true;
+const pointers = new Map();
+let pinchDist = 0;
+
+stage.addEventListener('pointerdown', e => {
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) pinchDist = getPinch();
+  stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove', e => {
+  const prev = pointers.get(e.pointerId);
+  if (!prev) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (pointers.size === 2) {
+    const d = getPinch();
+    if (pinchDist > 0 && d > 0) targetZoom = clampZoom(targetZoom * d / pinchDist);
+    pinchDist = d;
+  } else if (pointers.size === 1) {
+    targetRot += (e.clientX - prev.x) * 0.011;
+  }
+  needsRender = true;
+});
+const release = e => { pointers.delete(e.pointerId); pinchDist = 0; };
+stage.addEventListener('pointerup', release);
+stage.addEventListener('pointercancel', release);
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  targetZoom = clampZoom(targetZoom * (e.deltaY < 0 ? 1.1 : 0.9));
+  needsRender = true;
+}, { passive: false });
+
+function getPinch() {
+  const p = [...pointers.values()];
+  return p.length < 2 ? 0 : Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y);
+}
+const clampZoom = z => Math.min(2.4, Math.max(0.6, z));
+
+document.getElementById('zin').onclick = () => { targetZoom = clampZoom(targetZoom * 1.2); needsRender = true; };
+document.getElementById('zout').onclick = () => { targetZoom = clampZoom(targetZoom / 1.2); needsRender = true; };
+document.getElementById('vfront').onclick = () => snapTo(0);
+document.getElementById('vback').onclick = () => snapTo(Math.PI);
+function snapTo(angle) {
+  // rotate the short way from current position
+  const norm = ((targetRot % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  targetRot += ((angle - norm + 3 * Math.PI) % (2 * Math.PI)) - Math.PI;
+  needsRender = true;
+}
+
+const facingEl = document.getElementById('facing');
+const vf = document.getElementById('vfront'), vb = document.getElementById('vback');
+function updateFacing() {
+  const norm = ((rotY % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+  const back = norm > Math.PI / 2 && norm < Math.PI * 1.5;
+  facingEl.textContent = back ? 'Back View' : 'Front View';
+  vf.classList.toggle('on', !back);
+  vb.classList.toggle('on', back);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const rd = targetRot - rotY, zd = targetZoom - zoom;
+  if (Math.abs(rd) > 0.0005 || Math.abs(zd) > 0.0005 || needsRender) {
+    rotY += rd * 0.18;
+    zoom += zd * 0.18;
+    body.rotation.y = rotY;
+    body.scale.setScalar(zoom);
+    body.position.y = -0.12;
+    updateFacing();
+    renderer.render(scene, camera);
+    needsRender = false;
+  }
+}
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = stage.clientWidth / stage.clientHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(stage.clientWidth, stage.clientHeight);
+  needsRender = true;
+});
+
+// ───────────────────────── Exercise chips ─────────────────────────
+const chipsBox = document.getElementById('chips');
+EXERCISES.forEach((ex, i) => {
+  const b = document.createElement('button');
+  b.className = 'chip';
+  b.textContent = ex.name;
+  b.onclick = () => {
+    picked.has(i) ? picked.delete(i) : picked.add(i);
+    b.classList.toggle('on');
+    applyColors(); refreshSuggest();
+  };
+  chipsBox.appendChild(b);
+});
+const names = { 'chest-upper':'Upper Chest','chest-mid':'Mid Chest','chest-lower':'Lower Chest','triceps-long':'Triceps (Long)','triceps-lateral':'Triceps (Lateral)' };
+function refreshSuggest() {
+  const un = SPLIT.filter(m => stateOf(m) !== 'covered');
+  const s = document.getElementById('suggest');
+  s.textContent = un.length ? '⚠ Not hit yet: ' + un.map(m => names[m]).join(', ') : '✅ All split muscles covered!';
+  s.style.color = un.length ? '#f87171' : '#4ade80';
+}
+applyColors(); refreshSuggest();
+</script>
+<script>
+  // CDN failure fallback message
+  setTimeout(() => {
+    if (!document.querySelector('#stage canvas')) document.getElementById('err').style.display = 'block';
+  }, 4000);
+</script>
+</body>
+</html>

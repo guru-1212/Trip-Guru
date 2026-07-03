@@ -50,6 +50,7 @@ export interface FitTrackSyncCallbacks {
   setSplitTodayPicks: (p: Partial<Record<SplitId, TodayExercisePick[]>>) => void;
   setSplitSequenceLocked: (l: Partial<Record<SplitId, boolean>>) => void;
   setSplitMobilityPicks: (p: Partial<Record<SplitId, Record<string, string>>>) => void;
+  setRestDays: (d: string[]) => void;
   setHydrated: (h: boolean) => void;
   setSyncing: (s: boolean) => void;
 }
@@ -137,6 +138,7 @@ export function useFitTrackSync(
           const cloudMobilityPicks = data.splitMobilityPicks ?? {};
           cb().setSplitMobilityPicks(cloudMobilityPicks);
           saveSplitMobilityPicks(cloudMobilityPicks);
+          cb().setRestDays(data.restDays ?? []);
 
           if (!migratedLocalPlanRef.current.locks) {
             const localLocks = loadSplitSequenceLocked();

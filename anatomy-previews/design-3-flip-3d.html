@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design 3 — 3D-Flip Hybrid</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0f1a; color: #e4e4e7; min-height: 100vh; padding: 20px;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  .nav { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .nav a {
+    color: #94a3b8; text-decoration: none; font-size: 11px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 14px;
+    border: 1px solid #1e293b; border-radius: 12px; background: #0f172a;
+  }
+  .nav a.active { color: #22c55e; border-color: #22c55e55; }
+  h1 { font-size: 20px; font-weight: 900; margin-bottom: 4px; }
+  .sub { color: #94a3b8; font-size: 13px; margin-bottom: 20px; }
+  .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 24px; padding: 20px; margin-bottom: 16px; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 900; letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 5px 12px; border-radius: 999px;
+    background: #1e293b; color: #94a3b8; margin-bottom: 14px;
+  }
+  .stage {
+    position: relative;
+    background: linear-gradient(180deg, #f4f5f7 0%, #e9ebef 100%);
+    border-radius: 18px; padding: 14px 8px 44px;
+    display: flex; justify-content: center;
+    perspective: 1200px; overflow: hidden;
+    touch-action: pan-y; cursor: grab; user-select: none;
+  }
+  .stage:active { cursor: grabbing; }
+  .flip {
+    position: relative; width: min(58vw, 250px);
+    transform-style: preserve-3d;
+    transition: transform 0.6s cubic-bezier(0.4, 0.05, 0.2, 1);
+  }
+  .face { backface-visibility: hidden; }
+  .face.back {
+    position: absolute; inset: 0;
+    transform: rotateY(180deg);
+  }
+  svg { width: 100%; height: auto; display: block; }
+  .muscle { transition: fill 0.25s ease; }
+  .facing {
+    position: absolute; left: 12px; top: 12px; z-index: 5; pointer-events: none;
+    font-size: 9px; font-weight: 900; letter-spacing: 0.15em; text-transform: uppercase;
+    background: #ffffffd9; border: 1px solid #d3d8de; color: #5b6570;
+    padding: 5px 11px; border-radius: 999px;
+  }
+  .zoombtns { position: absolute; right: 12px; top: 12px; z-index: 5; display: flex; flex-direction: column; gap: 6px; }
+  .zoombtns button {
+    width: 30px; height: 30px; border-radius: 10px; border: 1px solid #d3d8de;
+    background: #ffffffd9; color: #33404d; font-size: 16px; font-weight: 700; cursor: pointer;
+  }
+  .views {
+    position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); z-index: 5;
+    display: flex; gap: 4px; background: #ffffffd9; border: 1px solid #d3d8de;
+    padding: 4px; border-radius: 12px;
+  }
+  .views button {
+    font-family: inherit; padding: 6px 16px; font-size: 9px; font-weight: 900;
+    letter-spacing: 0.12em; text-transform: uppercase; border: none;
+    background: transparent; color: #5b6570; border-radius: 8px; cursor: pointer;
+  }
+  .views button.on { background: #22c55e; color: #052e16; }
+  .legend { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin-top: 14px; }
+  .legend span { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip {
+    font-family: inherit; font-size: 12px; font-weight: 700; padding: 9px 14px;
+    border-radius: 14px; border: 1px solid #334155; background: #1e293b;
+    color: #e4e4e7; cursor: pointer; transition: all 0.15s;
+  }
+  .chip:hover { border-color: #22c55e88; }
+  .chip.on { background: #22c55e22; border-color: #22c55e; color: #4ade80; }
+  .warn { color: #f87171; font-size: 12px; font-weight: 700; margin-top: 10px; }
+  .hint { font-size: 12px; color: #64748b; margin-top: 10px; }
+  .credit { font-size: 10px; color: #475569; margin-top: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a href="design-1-2d-svg.html">1 · 2D Anatomy Map</a>
+    <a href="design-2-3d-sculpted.html">2 · True 3D Sculpted</a>
+    <a href="design-3-flip-3d.html" class="active">3 · 3D-Flip Hybrid</a>
+  </div>
+  <h1>Design 3 — 3D-Flip Hybrid</h1>
+  <p class="sub">ONE body, same professional artwork as Design 1 — swipe (or tap Front/Back) and it flips in 3D. Feels dimensional, but zero 3D libraries, zero lag. Zoom with the + / − buttons.</p>
+
+  <div class="card">
+    <span class="badge">Today: Chest + Triceps</span>
+    <div class="stage" id="stage">
+      <span class="facing" id="facing">Front View</span>
+      <div class="zoombtns">
+        <button id="zin" aria-label="Zoom in">+</button>
+        <button id="zout" aria-label="Zoom out">−</button>
+      </div>
+      <div class="flip" id="flip">
+        <div class="face front"><svg id="front" viewBox="0 0 724 1448"></svg></div>
+        <div class="face back"><svg id="back" viewBox="724 0 724 1448"></svg></div>
+      </div>
+      <div class="views">
+        <button id="vfront" class="on">Front</button>
+        <button id="vback">Back</button>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#ef4444"></i>To Hit</span>
+      <span><i class="dot" style="background:#22c55e"></i>Covered</span>
+      <span><i class="dot" style="background:#86efac"></i>Assisted</span>
+      <span><i class="dot" style="background:#cdd2d9"></i>Not Today</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <span class="badge">Pick exercises — watch muscles turn green</span>
+    <div class="chips" id="chips"></div>
+    <p class="warn" id="suggest"></p>
+    <p class="hint">Swipe the body left/right to flip · Incline DB Press lights only the upper chest band.</p>
+  </div>
+
+  <p class="credit">Anatomy artwork: react-native-body-highlighter · MIT License · © ELABBASSI Hicham</p>
+</div>
+
+<script src="assets/body-data.js"></script>
+<script>
+// ───────────────────────── Demo coverage logic (same as Design 1) ─────────────────────────
+const SPLIT = ['chest-upper','chest-mid','chest-lower','triceps'];
+const EXERCISES = [
+  { name:'Incline DB Press', primary:['chest-upper'], secondary:['deltoids-front','triceps'] },
+  { name:'Flat Bench Press', primary:['chest-mid','chest-lower'], secondary:['triceps','deltoids-front'] },
+  { name:'Chest Fly',        primary:['chest-mid'], secondary:['chest-upper','chest-lower'] },
+  { name:'Skull Crushers',   primary:['triceps'], secondary:[] },
+  { name:'Rope Pushdown',    primary:['triceps'], secondary:[] },
+  { name:'Dips',             primary:['triceps','chest-lower'], secondary:['deltoids-front'] },
+];
+const picked = new Set();
+const COLORS = { covered:'#22c55e', secondary:'#86efac', pending:'#ef4444', idle:'#cdd2d9' };
+const NICE = {
+  'chest-upper':'Upper Chest','chest-mid':'Mid Chest','chest-lower':'Lower Chest','triceps':'Triceps',
+};
+
+function stateOf(key) {
+  const prim = new Set(), sec = new Set();
+  picked.forEach(i => {
+    EXERCISES[i].primary.forEach(m => prim.add(m));
+    EXERCISES[i].secondary.forEach(m => sec.add(m));
+  });
+  if (prim.has(key)) return 'covered';
+  if (sec.has(key)) return 'secondary';
+  if (SPLIT.includes(key)) return 'pending';
+  return 'idle';
+}
+
+// ───────────────────────── Build the SVGs ─────────────────────────
+const NS = 'http://www.w3.org/2000/svg';
+const NEUTRAL = new Set(['head','hair','neck','hands','ankles','feet','knees']);
+const regionEls = {};
+const register = (key, elm) => (regionEls[key] = regionEls[key] || []).push(elm);
+const el = (tag, attrs) => {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+};
+
+['front','back'].forEach(view => {
+  const svg = document.getElementById(view);
+  BODY_DATA[view].forEach(part => {
+    const isNeutral = NEUTRAL.has(part.slug);
+    const g = el('g', {});
+    part.paths.forEach(d => {
+      g.appendChild(el('path', {
+        d,
+        fill: isNeutral ? (part.slug === 'hair' ? '#c3c9d1' : '#e9ebee') : COLORS.idle,
+        stroke: '#9aa2ad', 'stroke-width': '1.5',
+        class: isNeutral ? '' : 'muscle',
+      }));
+    });
+    svg.appendChild(g);
+    if (!isNeutral) {
+      const key = part.slug === 'deltoids' ? `deltoids-${view}` : part.slug;
+      if (part.slug === 'chest') g.setAttribute('id', 'chestGroup');
+      else register(key, g);
+    }
+  });
+});
+
+// Chest sub-bands via clipPath (same trick as Design 1)
+(function () {
+  const chest = document.getElementById('chestGroup');
+  if (!chest) return;
+  const svg = document.getElementById('front');
+  const bb = chest.getBBox();
+  const defs = el('defs', {});
+  svg.appendChild(defs);
+  [
+    { key:'chest-upper', from:0, to:0.38 },
+    { key:'chest-mid', from:0.38, to:0.72 },
+    { key:'chest-lower', from:0.72, to:1 },
+  ].forEach((band, i) => {
+    const clip = el('clipPath', { id:`band${i}` });
+    clip.appendChild(el('rect', {
+      x: bb.x - 4, width: bb.width + 8,
+      y: bb.y + bb.height * band.from,
+      height: bb.height * (band.to - band.from),
+    }));
+    defs.appendChild(clip);
+    const copy = chest.cloneNode(true);
+    copy.removeAttribute('id');
+    copy.setAttribute('clip-path', `url(#band${i})`);
+    svg.appendChild(copy);
+    register(band.key, copy);
+  });
+})();
+
+function render() {
+  for (const key in regionEls) {
+    const color = COLORS[stateOf(key)];
+    regionEls[key].forEach(g =>
+      g.querySelectorAll('path').forEach(p => p.setAttribute('fill', color))
+    );
+  }
+  const un = SPLIT.filter(m => stateOf(m) !== 'covered');
+  const s = document.getElementById('suggest');
+  s.textContent = un.length
+    ? '⚠ Not hit yet: ' + un.map(m => NICE[m]).join(', ')
+    : '✅ All split muscles covered!';
+  s.style.color = un.length ? '#f87171' : '#4ade80';
+}
+
+// ───────────────────────── Flip + zoom controls ─────────────────────────
+const flip = document.getElementById('flip');
+const facingEl = document.getElementById('facing');
+const vf = document.getElementById('vfront'), vb = document.getElementById('vback');
+let showingBack = false, zoom = 1;
+
+function apply() {
+  flip.style.transform = `scale(${zoom}) rotateY(${showingBack ? 180 : 0}deg)`;
+  facingEl.textContent = showingBack ? 'Back View' : 'Front View';
+  vf.classList.toggle('on', !showingBack);
+  vb.classList.toggle('on', showingBack);
+}
+vf.onclick = () => { showingBack = false; apply(); };
+vb.onclick = () => { showingBack = true; apply(); };
+document.getElementById('zin').onclick = () => { zoom = Math.min(2, zoom * 1.2); apply(); };
+document.getElementById('zout').onclick = () => { zoom = Math.max(0.6, zoom / 1.2); apply(); };
+
+// Swipe to flip
+let startX = null;
+const stage = document.getElementById('stage');
+stage.addEventListener('pointerdown', e => { startX = e.clientX; });
+stage.addEventListener('pointerup', e => {
+  if (startX === null) return;
+  if (Math.abs(e.clientX - startX) > 40) { showingBack = !showingBack; apply(); }
+  startX = null;
+});
+
+// ───────────────────────── Exercise chips ─────────────────────────
+const chipsBox = document.getElementById('chips');
+EXERCISES.forEach((ex, i) => {
+  const b = document.createElement('button');
+  b.className = 'chip';
+  b.textContent = ex.name;
+  b.onclick = () => {
+    picked.has(i) ? picked.delete(i) : picked.add(i);
+    b.classList.toggle('on');
+    render();
+  };
+  chipsBox.appendChild(b);
+});
+render();
+apply();
+</script>
+</body>
+</html>

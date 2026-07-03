@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Design 1 — 2D Anatomy Map (Pro)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0f1a; color: #e4e4e7; min-height: 100vh; padding: 20px;
+  }
+  .wrap { max-width: 940px; margin: 0 auto; }
+  .nav { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+  .nav a {
+    color: #94a3b8; text-decoration: none; font-size: 11px; font-weight: 800;
+    text-transform: uppercase; letter-spacing: 0.1em; padding: 8px 14px;
+    border: 1px solid #1e293b; border-radius: 12px; background: #0f172a;
+  }
+  .nav a.active { color: #22c55e; border-color: #22c55e55; }
+  h1 { font-size: 20px; font-weight: 900; margin-bottom: 4px; }
+  .sub { color: #94a3b8; font-size: 13px; margin-bottom: 20px; }
+  .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 24px; padding: 20px; margin-bottom: 16px; }
+  .badge {
+    display: inline-block; font-size: 10px; font-weight: 900; letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 5px 12px; border-radius: 999px;
+    background: #1e293b; color: #94a3b8; margin-bottom: 14px;
+  }
+  .stage {
+    background: linear-gradient(180deg, #f4f5f7 0%, #e9ebef 100%);
+    border-radius: 18px; padding: 18px 8px 10px; display: flex; justify-content: center; gap: 4px;
+  }
+  .bodyCol { text-align: center; flex: 1; max-width: 240px; }
+  .bodyCol p {
+    font-size: 10px; font-weight: 900; text-transform: uppercase;
+    letter-spacing: 0.18em; color: #7c8694; margin-bottom: 4px;
+  }
+  svg { width: 100%; height: auto; }
+  .muscle { transition: fill 0.25s ease; cursor: pointer; }
+  .muscle:hover { filter: brightness(1.12); }
+  .legend { display: flex; justify-content: center; gap: 18px; flex-wrap: wrap; margin-top: 14px; }
+  .legend span { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .chip {
+    font-family: inherit; font-size: 12px; font-weight: 700; padding: 9px 14px;
+    border-radius: 14px; border: 1px solid #334155; background: #1e293b;
+    color: #e4e4e7; cursor: pointer; transition: all 0.15s;
+  }
+  .chip:hover { border-color: #22c55e88; }
+  .chip.on { background: #22c55e22; border-color: #22c55e; color: #4ade80; }
+  .warn { color: #f87171; font-size: 12px; font-weight: 700; margin-top: 10px; }
+  .hint { font-size: 12px; color: #64748b; margin-top: 10px; }
+  #tip {
+    position: fixed; pointer-events: none; background: #1e293b; color: #e4e4e7;
+    font-size: 11px; font-weight: 700; padding: 5px 10px; border-radius: 8px;
+    opacity: 0; transition: opacity 0.1s; z-index: 50; border: 1px solid #334155;
+  }
+  .credit { font-size: 10px; color: #475569; margin-top: 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="nav">
+    <a href="design-1-2d-svg.html" class="active">1 · 2D Anatomy Map</a>
+    <a href="design-2-3d-sculpted.html">2 · True 3D Sculpted</a>
+    <a href="design-3-flip-3d.html">3 · 3D-Flip Hybrid</a>
+  </div>
+  <h1>Design 1 — 2D Anatomy Map</h1>
+  <p class="sub">Professional anatomical illustration (front &amp; back always visible). Crisp like a reference chart — zero lag, zero 3D libraries. Supports sub-regions: try <b>Incline DB Press</b> → only the <b>upper chest</b> band turns green.</p>
+
+  <div class="card">
+    <span class="badge">Today: Chest + Triceps</span>
+    <div class="stage">
+      <div class="bodyCol"><p>Front</p><svg id="front" viewBox="0 0 724 1448"></svg></div>
+      <div class="bodyCol"><p>Back</p><svg id="back" viewBox="724 0 724 1448"></svg></div>
+    </div>
+    <div class="legend">
+      <span><i class="dot" style="background:#ef4444"></i>To Hit</span>
+      <span><i class="dot" style="background:#22c55e"></i>Covered</span>
+      <span><i class="dot" style="background:#86efac"></i>Assisted</span>
+      <span><i class="dot" style="background:#cdd2d9"></i>Not Today</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <span class="badge">Pick exercises — watch muscles turn green</span>
+    <div class="chips" id="chips"></div>
+    <p class="warn" id="suggest"></p>
+    <p class="hint">Hover any muscle to see its name. Upper / mid / lower chest are separate zones.</p>
+  </div>
+
+  <p class="credit">Anatomy artwork: react-native-body-highlighter · MIT License · © ELABBASSI Hicham</p>
+</div>
+<div id="tip"></div>
+
+<script src="assets/body-data.js"></script>
+<script>
+// ───────────────────────── Demo coverage logic ─────────────────────────
+// Region keys: chest-upper / chest-mid / chest-lower (clip bands), triceps,
+// deltoids-front, deltoids-back, plus every other slug as itself.
+const SPLIT = ['chest-upper','chest-mid','chest-lower','triceps'];
+const EXERCISES = [
+  { name:'Incline DB Press', primary:['chest-upper'], secondary:['deltoids-front','triceps'] },
+  { name:'Flat Bench Press', primary:['chest-mid','chest-lower'], secondary:['triceps','deltoids-front'] },
+  { name:'Chest Fly',        primary:['chest-mid'], secondary:['chest-upper','chest-lower'] },
+  { name:'Skull Crushers',   primary:['triceps'], secondary:[] },
+  { name:'Rope Pushdown',    primary:['triceps'], secondary:[] },
+  { name:'Dips',             primary:['triceps','chest-lower'], secondary:['deltoids-front'] },
+];
+const picked = new Set();
+const COLORS = { covered:'#22c55e', secondary:'#86efac', pending:'#ef4444', idle:'#cdd2d9' };
+
+function stateOf(key) {
+  const prim = new Set(), sec = new Set();
+  picked.forEach(i => {
+    EXERCISES[i].primary.forEach(m => prim.add(m));
+    EXERCISES[i].secondary.forEach(m => sec.add(m));
+  });
+  if (prim.has(key)) return 'covered';
+  if (sec.has(key)) return 'secondary';
+  if (SPLIT.includes(key)) return 'pending';
+  return 'idle';
+}
+
+// ───────────────────────── Build the SVGs ─────────────────────────
+const NS = 'http://www.w3.org/2000/svg';
+const NEUTRAL = new Set(['head','hair','neck','hands','ankles','feet','knees']);
+const NICE = {
+  'chest':'Chest','obliques':'Obliques','abs':'Abs','biceps':'Biceps','triceps':'Triceps',
+  'trapezius':'Traps','deltoids':'Deltoids','adductors':'Adductors','quadriceps':'Quads',
+  'tibialis':'Tibialis','calves':'Calves','forearm':'Forearms','upper-back':'Upper Back (Lats)',
+  'lower-back':'Lower Back','gluteal':'Glutes','hamstring':'Hamstrings',
+  'chest-upper':'Upper Chest','chest-mid':'Mid Chest','chest-lower':'Lower Chest',
+};
+const tip = document.getElementById('tip');
+
+function el(tag, attrs) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function hover(elm, name) {
+  elm.addEventListener('pointermove', ev => {
+    tip.textContent = name;
+    tip.style.opacity = 1;
+    tip.style.left = (ev.clientX + 12) + 'px';
+    tip.style.top = (ev.clientY - 8) + 'px';
+  });
+  elm.addEventListener('pointerleave', () => tip.style.opacity = 0);
+}
+
+// regionKey → array of <path>/<g> elements to recolor
+const regionEls = {};
+function register(key, elm) { (regionEls[key] = regionEls[key] || []).push(elm); }
+
+['front','back'].forEach(view => {
+  const svg = document.getElementById(view);
+  BODY_DATA[view].forEach(part => {
+    const isNeutral = NEUTRAL.has(part.slug);
+    const g = el('g', {});
+    part.paths.forEach(d => {
+      const p = el('path', {
+        d,
+        fill: isNeutral ? (part.slug === 'hair' ? '#c3c9d1' : '#e9ebee') : COLORS.idle,
+        stroke: '#9aa2ad', 'stroke-width': '1.5',
+        class: isNeutral ? '' : 'muscle',
+      });
+      g.appendChild(p);
+    });
+    svg.appendChild(g);
+
+    if (!isNeutral) {
+      // deltoids differ by view: front = front delts, back = rear delts
+      const key = part.slug === 'deltoids' ? `deltoids-${view}` : part.slug;
+      if (part.slug === 'chest') {
+        g.setAttribute('id', 'chestGroup'); // banded separately below
+      } else {
+        register(key, g);
+        hover(g, NICE[part.slug] || part.slug);
+      }
+    } else {
+      g.setAttribute('pointer-events', 'none');
+    }
+  });
+});
+
+// ── Chest sub-bands (upper / mid / lower) via clipPath over the pro artwork ──
+(function buildChestBands() {
+  const chest = document.getElementById('chestGroup');
+  if (!chest) return;
+  const svg = document.getElementById('front');
+  const bb = chest.getBBox();
+  const defs = el('defs', {});
+  svg.appendChild(defs);
+  const bands = [
+    { key:'chest-upper', from:0, to:0.38 },
+    { key:'chest-mid', from:0.38, to:0.72 },
+    { key:'chest-lower', from:0.72, to:1 },
+  ];
+  bands.forEach((band, i) => {
+    const clip = el('clipPath', { id:`chestBand${i}` });
+    clip.appendChild(el('rect', {
+      x: bb.x - 4, width: bb.width + 8,
+      y: bb.y + bb.height * band.from,
+      height: bb.height * (band.to - band.from),
+    }));
+    defs.appendChild(clip);
+
+    const copy = chest.cloneNode(true);
+    copy.removeAttribute('id');
+    copy.setAttribute('clip-path', `url(#chestBand${i})`);
+    svg.appendChild(copy);
+    register(band.key, copy);
+    hover(copy, NICE[band.key]);
+  });
+  chest.setAttribute('pointer-events', 'none'); // bands take over interaction
+})();
+
+// ───────────────────────── Rendering ─────────────────────────
+function render() {
+  for (const key in regionEls) {
+    const color = COLORS[stateOf(key)];
+    regionEls[key].forEach(g =>
+      g.querySelectorAll('path').forEach(p => p.setAttribute('fill', color))
+    );
+  }
+  const un = SPLIT.filter(m => stateOf(m) !== 'covered');
+  const s = document.getElementById('suggest');
+  s.textContent = un.length
+    ? '⚠ Not hit yet: ' + un.map(m => NICE[m] || m).join(', ')
+    : '✅ All split muscles covered!';
+  s.style.color = un.length ? '#f87171' : '#4ade80';
+}
+
+const chipsBox = document.getElementById('chips');
+EXERCISES.forEach((ex, i) => {
+  const b = document.createElement('button');
+  b.className = 'chip';
+  b.textContent = ex.name;
+  b.onclick = () => {
+    picked.has(i) ? picked.delete(i) : picked.add(i);
+    b.classList.toggle('on');
+    render();
+  };
+  chipsBox.appendChild(b);
+});
+render();
+</script>
+</body>
+</html>

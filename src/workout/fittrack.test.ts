@@ -14,13 +14,17 @@ import {
   exerciseMatchesSearch,
   getMatchingVariations,
   exerciseBelongsToSplit,
+  getDefaultProfile,
+  getRotationQueue,
+  getNextRotationSplit,
+  getScheduledSplitForDate,
 } from './utils';
 import {
   filterByRange,
   calcTrainingOverview,
 } from './analytics';
 import { normalizeChecklist } from '../firebase/fittrack.firestore';
-import type { WorkoutSession, WorkoutExercise, WorkoutSet, ChecklistData, LibraryExercise } from './types';
+import type { WorkoutSession, WorkoutExercise, WorkoutSet, ChecklistData, LibraryExercise, SplitId } from './types';
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(`Assertion Failed: ${message}`);
@@ -336,6 +340,68 @@ function testSplitExerciseFilter() {
   assert(exerciseBelongsToSplit(legEx, 'legs'), 'Leg exercise belongs to legs split');
 }
 
+function testRotationScheduling() {
+  console.log('Testing Rotation Scheduling...');
+
+  const session = (date: string, splitId: SplitId): WorkoutSession => ({
+    id: date + splitId,
+    date,
+    splitId,
+    splitName: splitId,
+    duration: 0,
+    exercises: [],
+    totalSets: 0,
+    totalVolume: 0,
+  });
+
+  const profile = getDefaultProfile(); // Mon ct, Tue bb, Wed sh, Thu core, Fri ctbb, Sat legs, Sun coresh
+  const queue = getRotationQueue(profile);
+  assert(
+    JSON.stringify(queue) === JSON.stringify(['ct', 'bb', 'sh', 'core', 'ctbb', 'legs', 'coresh']),
+    'Rotation queue follows weekday order excluding rest'
+  );
+
+  // getNextRotationSplit
+  assert(getNextRotationSplit(null, queue) === 'ct', 'No last split → first in queue');
+  assert(getNextRotationSplit('ct', queue) === 'bb', 'ct → bb');
+  assert(getNextRotationSplit('coresh', queue) === 'ct', 'last split wraps to first');
+  assert(getNextRotationSplit('rest', queue) === 'ct', 'unknown split → first');
+
+  // Dates: 2025-01-06 Mon, 07 Tue, 08 Wed, 09 Thu
+  // No history → first workout in rotation.
+  assert(getScheduledSplitForDate('2025-01-06', profile, [], []) === 'ct', 'Empty history → ct');
+
+  // Did ct Monday → Tuesday should be bb.
+  const afterCt = [session('2025-01-06', 'ct')];
+  assert(getScheduledSplitForDate('2025-01-07', profile, afterCt, []) === 'bb', 'After ct → bb');
+
+  // CARRY-OVER: skipped Tuesday (no log) → Wednesday still shows bb.
+  assert(
+    getScheduledSplitForDate('2025-01-08', profile, afterCt, []) === 'bb',
+    'Skipped day carries the same split forward'
+  );
+
+  // Did bb on Wednesday → Thursday advances to sh.
+  const afterBb = [session('2025-01-06', 'ct'), session('2025-01-08', 'bb')];
+  assert(getScheduledSplitForDate('2025-01-09', profile, afterBb, []) === 'sh', 'After bb → sh');
+
+  // Explicit rest marker → that date is rest regardless of rotation.
+  assert(
+    getScheduledSplitForDate('2025-01-07', profile, afterCt, ['2025-01-07']) === 'rest',
+    'Explicitly-rested date is a rest anchor'
+  );
+
+  // Planned rest weekday anchor is honored (set Wednesday to rest).
+  const restWed = { ...profile, weekSchedule: { ...profile.weekSchedule, Wed: 'rest' as SplitId } };
+  assert(
+    getScheduledSplitForDate('2025-01-08', restWed, [], []) === 'rest',
+    'Planned rest weekday stays rest'
+  );
+  // ...and that planned rest is excluded from the rotation queue.
+  assert(!getRotationQueue(restWed).includes('sh') || restWed.weekSchedule.Wed === 'rest',
+    'Rotation queue reflects the schedule');
+}
+
 function runTests() {
   try {
     testVolumeCalculations();
@@ -349,6 +415,7 @@ function runTests() {
     testRepeatSessionHelpers();
     testExerciseSearchHelpers();
     testSplitExerciseFilter();
+    testRotationScheduling();
     console.log('\nAll FitTrack tests passed! ✅');
   } catch (error) {
     console.error('\nTests failed! ❌');

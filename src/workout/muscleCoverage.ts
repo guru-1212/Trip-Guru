@@ -1,7 +1,7 @@
 import anatomy from './muscleAnatomy.json';
 import { EXERCISE_LIBRARY } from './exerciseLibrary';
 import { SPLIT_DEFINITIONS } from './constants';
-import type { CustomExercise, SplitId, TodayExercisePick } from './types';
+import type { CustomExercise, LibraryExercise, SplitId, TodayExercisePick } from './types';
 
 /** A fine-grained muscle region id from muscleAnatomy.json (e.g. 'chest-upper'). */
 export type SubMuscleId = string;
@@ -110,6 +110,46 @@ function exercisesForSplit(splitId: SplitId) {
     return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes('core') || e.splitIds.includes('sh'));
   }
   return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes(splitId));
+}
+
+export interface MuscleExerciseMatch {
+  exercise: LibraryExercise;
+  /** How the exercise hits the tapped muscle(s). */
+  role: 'primary' | 'secondary';
+  /** Whether the exercise belongs to today's split. */
+  inSplit: boolean;
+}
+
+/**
+ * All library exercises that hit any of the given muscles, for the
+ * tap-a-muscle popup. Sorted: today's split first, primary before secondary,
+ * then by name.
+ */
+export function getExercisesForMuscles(
+  muscleIds: SubMuscleId[],
+  splitId: SplitId
+): MuscleExerciseMatch[] {
+  const splitIds = new Set(exercisesForSplit(splitId).map((e) => e.id));
+  const wanted = new Set(muscleIds);
+  const matches: MuscleExerciseMatch[] = [];
+
+  for (const exercise of EXERCISE_LIBRARY) {
+    const targets = EXERCISE_TARGETS[exercise.id];
+    if (!targets) continue;
+    const role = targets.primary.some((m) => wanted.has(m))
+      ? 'primary'
+      : targets.secondary.some((m) => wanted.has(m))
+        ? 'secondary'
+        : null;
+    if (!role) continue;
+    matches.push({ exercise, role, inSplit: splitIds.has(exercise.id) });
+  }
+
+  return matches.sort((a, b) => {
+    if (a.inSplit !== b.inSplit) return a.inSplit ? -1 : 1;
+    if (a.role !== b.role) return a.role === 'primary' ? -1 : 1;
+    return a.exercise.name.localeCompare(b.exercise.name);
+  });
 }
 
 /**

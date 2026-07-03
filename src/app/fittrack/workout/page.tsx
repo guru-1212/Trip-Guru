@@ -26,6 +26,8 @@ import {
   Share2,
   Sparkles,
   Repeat2,
+  Moon,
+  RotateCcw,
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { WorkoutShareCard } from '@/components/workout/WorkoutShareCard';
@@ -49,7 +51,7 @@ import {
   generateId,
   getGreeting,
   getTodayDayKey,
-  getTodaysSplit,
+  getScheduledSplitForDate,
   getLastTrainedDate,
   getLastSessionsForSplit,
   buildRepeatDataFromSession,
@@ -181,6 +183,8 @@ export default function WorkoutPage() {
     setMobilityImage,
     uploadMobilityImageFromFile,
     removeMobilityImage,
+    restDays,
+    setRestDay,
   } = useWorkoutStore();
 
   const { celebratePR, celebrateWorkoutComplete, resetPRSession } = useFitTrackCelebration();
@@ -311,15 +315,24 @@ export default function WorkoutPage() {
   };
 
   const preselected = searchParams.get('split') as SplitId | null;
-  const todaySplit = useMemo(() => getTodaysSplit(profile), [profile]);
+  const todayStr = dayjs().format('YYYY-MM-DD');
+  const tomorrowStr = dayjs().add(1, 'day').format('YYYY-MM-DD');
 
-  const { hasTrainedToday, tomorrowSplit } = useMemo(() => {
-    const todayStr = dayjs().format('YYYY-MM-DD');
-    const hasTrainedToday = workouts.some((w) => dayjs(w.date).isSame(dayjs(), 'day'));
-    const map: DayKey[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const tomorrowSplit = profile.weekSchedule[map[(dayjs().day() + 1) % 7]];
-    return { hasTrainedToday, tomorrowSplit };
-  }, [profile.weekSchedule, workouts]);
+  // Rotation-aware: today's split is the next in the cycle after the last
+  // logged workout, carrying over across skipped/rest days.
+  const todaySplit = useMemo(
+    () => getScheduledSplitForDate(todayStr, profile, workouts, restDays),
+    [todayStr, profile, workouts, restDays]
+  );
+  const tomorrowSplit = useMemo(
+    () => getScheduledSplitForDate(tomorrowStr, profile, workouts, restDays),
+    [tomorrowStr, profile, workouts, restDays]
+  );
+  const hasTrainedToday = useMemo(
+    () => workouts.some((w) => dayjs(w.date).isSame(dayjs(), 'day')),
+    [workouts]
+  );
+  const restedToday = restDays.includes(todayStr);
 
   useEffect(() => {
     if (activeWorkout) return;
@@ -328,13 +341,14 @@ export default function WorkoutPage() {
       return;
     }
     if (hydrated) {
-      if (hasTrainedToday && tomorrowSplit !== 'rest') {
+      const doneForToday = hasTrainedToday || restedToday;
+      if (doneForToday && tomorrowSplit !== 'rest') {
         setSelectedSplit(tomorrowSplit);
-      } else if (!hasTrainedToday && todaySplit !== 'rest') {
+      } else if (!doneForToday && todaySplit !== 'rest') {
         setSelectedSplit(todaySplit);
       }
     }
-  }, [preselected, todaySplit, hydrated, activeWorkout, hasTrainedToday, tomorrowSplit]);
+  }, [preselected, todaySplit, hydrated, activeWorkout, hasTrainedToday, restedToday, tomorrowSplit]);
 
   useEffect(() => {
     if (activeWorkout) {
@@ -594,6 +608,8 @@ export default function WorkoutPage() {
       pickOrder,
     };
     startActiveWorkout(state);
+    // Training on a day clears any explicit "rest" mark for that date.
+    setRestDay(workoutDate, false);
     requestWakeLock();
     setExpandedEx(pickOrder[0] ?? exercises[0]?.exerciseId ?? null);
   }, [
@@ -605,6 +621,8 @@ export default function WorkoutPage() {
     splitExtras,
     startActiveWorkout,
     rememberTodayPicks,
+    setRestDay,
+    workoutDate,
   ]);
 
   const handlePickerCreateCustom = useCallback(
@@ -1875,8 +1893,12 @@ export default function WorkoutPage() {
           <p className="ft-subtitle mt-1">
             {hasTrainedToday
               ? `Workout recorded for ${getTodayDayKey()}. Great job!`
+              : restedToday
+              ? tomorrowSplit !== 'rest'
+                ? `Resting today — next up tomorrow: ${SPLIT_NAMES[tomorrowSplit]}`
+                : `Resting today — tomorrow is a rest day too`
               : todaySplit !== 'rest'
-              ? `${getTodayDayKey()} — scheduled: ${SPLIT_NAMES[todaySplit]}`
+              ? `${getTodayDayKey()} — next up: ${SPLIT_NAMES[todaySplit]}`
               : `${getTodayDayKey()} — rest day on your plan`}
           </p>
         </header>
@@ -1893,17 +1915,52 @@ export default function WorkoutPage() {
               </p>
             </div>
           </div>
+        ) : restedToday ? (
+          <div className="ft-today-banner bg-muted/30">
+            <div className="w-10 h-10 rounded-lg bg-slate-500 flex items-center justify-center text-white shrink-0">
+              <Moon className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground">Resting today</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {tomorrowSplit !== 'rest' ? (
+                  <>Your plan carries over — tomorrow: <span className="font-medium text-primary">{SPLIT_NAMES[tomorrowSplit]}</span>.</>
+                ) : (
+                  <>Tomorrow is a planned rest day too.</>
+                )}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRestDay(todayStr, false)}
+              className="ft-btn ft-btn--ghost shrink-0 inline-flex items-center gap-1.5 text-sm"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              Undo
+            </button>
+          </div>
         ) : todaySplit !== 'rest' ? (
-          <div className="ft-today-banner">
+          <div className="ft-today-banner flex-wrap">
             <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shrink-0">
               <Target className="h-5 w-5" />
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold text-foreground">Today&apos;s workout</p>
               <p className="text-sm text-muted-foreground mt-0.5">
                 <span className="font-medium text-primary">{SPLIT_NAMES[todaySplit]}</span> is highlighted below — tap Start when you&apos;re ready.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                setRestDay(todayStr, true);
+                toast.success(`Resting today — ${SPLIT_NAMES[todaySplit]} moves to your next session`);
+              }}
+              className="ft-btn ft-btn--ghost shrink-0 inline-flex items-center gap-1.5 text-sm"
+            >
+              <Moon className="h-3.5 w-3.5" />
+              Rest today
+            </button>
           </div>
         ) : (
           <div className="ft-card ft-card-padded flex items-start gap-3 bg-muted/30">

@@ -57,6 +57,7 @@ interface WorkoutContextValue {
   splitTodayPicks: Partial<Record<SplitId, TodayExercisePick[]>>;
   splitSequenceLocked: Partial<Record<SplitId, boolean>>;
   splitMobilityPicks: SplitMobilityPicks;
+  restDays: string[];
   hydrated: boolean;
   syncing: boolean;
   fittrackOwnerId: string | null;
@@ -105,6 +106,8 @@ interface WorkoutContextValue {
   rememberTodayPicks: (splitId: SplitId, picks: TodayExercisePick[]) => void;
   rememberSequenceLocked: (splitId: SplitId, locked: boolean) => void;
   rememberMobilityPicks: (splitId: SplitId, picks: Record<string, string>) => void;
+  /** Mark or unmark a date (YYYY-MM-DD) as an explicit rest day. */
+  setRestDay: (date: string, resting: boolean) => void;
 }
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
@@ -131,6 +134,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [splitTodayPicks, setSplitTodayPicks] = useState<Partial<Record<SplitId, TodayExercisePick[]>>>({});
   const [splitSequenceLocked, setSplitSequenceLocked] = useState<Partial<Record<SplitId, boolean>>>({});
   const [splitMobilityPicks, setSplitMobilityPicks] = useState<SplitMobilityPicks>({});
+  const [restDays, setRestDays] = useState<string[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [syncing, setSyncing] = useState(true);
 
@@ -168,6 +172,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setSplitTodayPicks,
     setSplitSequenceLocked,
     setSplitMobilityPicks,
+    setRestDays,
     setHydrated,
     setSyncing,
   }, { migrateUid: isFitTrackPartner ? null : uid });
@@ -384,6 +389,16 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const updateChecklist = useCallback((data: ChecklistData) => {
     setChecklist(data);
     persistState({ checklist: data });
+  }, [persistState]);
+
+  const setRestDay = useCallback((date: string, resting: boolean) => {
+    setRestDays((prev) => {
+      const has = prev.includes(date);
+      if (resting === has) return prev;
+      const next = resting ? [...prev, date] : prev.filter((d) => d !== date);
+      persistState({ restDays: next });
+      return next;
+    });
   }, [persistState]);
 
   const markChecklistItemDone = useCallback((id: string) => {
@@ -831,6 +846,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitTodayPicks,
       splitSequenceLocked,
       splitMobilityPicks,
+      restDays,
       hydrated,
       syncing,
       fittrackOwnerId: effectiveUid,
@@ -874,6 +890,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       rememberTodayPicks,
       rememberSequenceLocked,
       rememberMobilityPicks,
+      setRestDay,
     }),
     [
       profile,
@@ -891,6 +908,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitTodayPicks,
       splitSequenceLocked,
       splitMobilityPicks,
+      restDays,
       hydrated,
       syncing,
       effectiveUid,
@@ -934,6 +952,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       rememberTodayPicks,
       rememberSequenceLocked,
       rememberMobilityPicks,
+      setRestDay,
     ]
   );
 

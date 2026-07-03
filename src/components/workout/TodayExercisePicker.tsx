@@ -570,6 +570,23 @@ export function TodayExercisePicker({
           ]);
           toast.success(`Added ${lib.name}`);
         }}
+        onRemoveExercise={(exerciseId) => {
+          if (sequenceLocked) return;
+          onPicksChange(picks.filter((p) => p.exerciseId !== exerciseId));
+        }}
+        onToggleVariation={(exerciseId, variation) => {
+          if (sequenceLocked) return;
+          const idx = picks.findIndex(
+            (p) => p.exerciseId === exerciseId && p.variation === variation
+          );
+          if (idx >= 0) {
+            onPicksChange(picks.filter((_, i) => i !== idx));
+          } else {
+            onPicksChange([...picks, { id: generateId(), exerciseId, variation }]);
+          }
+        }}
+        getVariations={getVariationsForExercise}
+        getVariationImage={getVariationImage}
       />
 
       <div className={cn('ft-picker-search', sequenceLocked && 'opacity-50 pointer-events-none')}>

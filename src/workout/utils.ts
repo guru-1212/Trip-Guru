@@ -28,6 +28,11 @@ export function getTodayDayKey(): DayKey {
   return map[day];
 }
 
+export function getDayKeyForDate(dateStr: string): DayKey {
+  const map: DayKey[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return map[dayjs(dateStr).day()];
+}
+
 export function getGreeting(): string {
   const hour = dayjs().hour();
   if (hour < 12) return 'Good morning';
@@ -159,6 +164,61 @@ export function isYesterday(date: string): boolean {
 export function getTodaysSplit(profile: UserProfile): SplitId {
   const dayKey = getTodayDayKey();
   return profile.weekSchedule[dayKey];
+}
+
+/**
+ * The ordered rotation cycle of workout splits, derived from the weekly plan
+ * (weekday order, rest days excluded, duplicates collapsed). This is the
+ * sequence the app advances through as you train.
+ */
+export function getRotationQueue(profile: UserProfile): SplitId[] {
+  const seen = new Set<SplitId>();
+  const queue: SplitId[] = [];
+  for (const day of DAY_KEYS) {
+    const split = profile.weekSchedule[day];
+    if (split !== 'rest' && !seen.has(split)) {
+      seen.add(split);
+      queue.push(split);
+    }
+  }
+  return queue;
+}
+
+/** The split that follows `lastSplit` in the rotation (wraps; null → first). */
+export function getNextRotationSplit(lastSplit: SplitId | null, queue: SplitId[]): SplitId | null {
+  if (queue.length === 0) return null;
+  if (!lastSplit) return queue[0];
+  const idx = queue.indexOf(lastSplit);
+  if (idx === -1) return queue[0];
+  return queue[(idx + 1) % queue.length];
+}
+
+/**
+ * Rotation-aware scheduled split for a date, tolerant of skipped days.
+ * - A planned rest weekday OR an explicitly-rested date is a rest anchor → 'rest'.
+ * - Otherwise it's the next split in the rotation after the most recent workout
+ *   logged strictly BEFORE this date. Because a skipped day logs no workout, the
+ *   "next" split simply carries over to the following training day.
+ */
+export function getScheduledSplitForDate(
+  dateStr: string,
+  profile: UserProfile,
+  workouts: WorkoutSession[],
+  restDays: string[] = []
+): SplitId {
+  const dayKey = getDayKeyForDate(dateStr);
+  if (profile.weekSchedule[dayKey] === 'rest') return 'rest';
+  if (restDays.includes(dateStr)) return 'rest';
+
+  const queue = getRotationQueue(profile);
+  if (queue.length === 0) return 'rest';
+
+  const target = dayjs(dateStr);
+  const lastBefore = workouts
+    .filter((w) => dayjs(w.date).isBefore(target, 'day') && queue.includes(w.splitId))
+    .sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf())[0];
+
+  return getNextRotationSplit(lastBefore?.splitId ?? null, queue) ?? 'rest';
 }
 
 /** Training days in the weekly split (non-rest days). */
