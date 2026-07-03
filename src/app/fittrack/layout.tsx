@@ -11,6 +11,7 @@ import { GlobalWorkoutTimer } from '@/components/workout/GlobalWorkoutTimer';
 import { Navbar } from '@/components/layout/Navbar';
 import { FitTrackSharedBanner } from '@/components/workout/FitTrackSharedBanner';
 import { FitTrackCelebrationProvider } from '@/components/fittrack/FitTrackCelebrationProvider';
+import { WeeklyWeighInPopup } from '@/components/fittrack/WeeklyWeighInPopup';
 import '@/fittrack/fittrack.css';
 
 function FitTrackShell({ children }: { children: React.ReactNode }) {
@@ -49,6 +50,7 @@ export default function FitTrackLayout({ children }: { children: React.ReactNode
       <WorkoutProvider>
         <FitTrackCelebrationProvider>
           <FitTrackShell>{children}</FitTrackShell>
+          <WeeklyWeighInPopup />
           <Toaster
             position="top-center"
             toastOptions={{
