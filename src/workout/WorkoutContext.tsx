@@ -73,6 +73,7 @@ interface WorkoutContextValue {
   updateCustomExercise: (id: string, ex: Partial<CustomExercise>) => void;
   deleteCustomExercise: (id: string) => void;
   addBodyStat: (stat: BodyStat) => void;
+  deleteBodyStat: (date: string) => void;
   toggleHabit: (date: string, key: keyof HabitDay) => void;
   updateWeeklyGoals: (goals: Partial<WeeklyGoals>) => void;
   updateChecklist: (data: ChecklistData) => void;
@@ -366,6 +367,15 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       fittrackDb.saveFitTrackBodyStat(currentUid, stat).catch(() => toast.error('Failed to save body stat'));
     }
     toast.success('Body stat saved');
+  }, []);
+
+  const deleteBodyStat = useCallback((date: string) => {
+    setBodyStats((prev) => prev.filter((s) => s.date !== date));
+    const currentUid = uidRef.current;
+    if (currentUid) {
+      fittrackDb.deleteFitTrackBodyStat(currentUid, date).catch(() => toast.error('Failed to delete measurement'));
+    }
+    toast.success('Measurement deleted');
   }, []);
 
   const toggleHabit = useCallback((date: string, key: keyof HabitDay) => {
@@ -862,6 +872,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       updateCustomExercise,
       deleteCustomExercise,
       addBodyStat,
+      deleteBodyStat,
       toggleHabit,
       updateWeeklyGoals,
       updateChecklist,
@@ -924,6 +935,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       updateCustomExercise,
       deleteCustomExercise,
       addBodyStat,
+      deleteBodyStat,
       toggleHabit,
       updateWeeklyGoals,
       updateChecklist,

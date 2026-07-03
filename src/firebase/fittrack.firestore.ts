@@ -190,6 +190,10 @@ export async function getFitTrackBodyStats(uid: string): Promise<BodyStat[]> {
   return snap.docs.map((d) => d.data() as BodyStat);
 }
 
+export async function deleteFitTrackBodyStat(uid: string, date: string): Promise<void> {
+  await deleteDoc(doc(bodyStatsCol(uid), date));
+}
+
 export async function saveFitTrackBodyStat(uid: string, stat: BodyStat): Promise<void> {
   await setDoc(doc(bodyStatsCol(uid), stat.date), { ...stat, updatedAt: serverTimestamp() });
 }
