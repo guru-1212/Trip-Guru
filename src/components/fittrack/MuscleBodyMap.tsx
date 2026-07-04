@@ -233,28 +233,175 @@ export interface MuscleBodyMapProps {
   onMuscleClick?: (muscles: SubMuscleId[], label: string) => void;
 }
 
+const MIN_ZOOM = 0.6;
+const MAX_ZOOM = 3;
+const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+
 export function MuscleBodyMap({ states, highlight = [], onMuscleClick }: MuscleBodyMapProps) {
   const [showingBack, setShowingBack] = useState(false);
   const [zoom, setZoom] = useState(1);
-  const swipeStartX = useRef<number | null>(null);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [gesturing, setGesturing] = useState(false);
   const highlightSet = useMemo(() => new Set(highlight), [highlight]);
+
+  // Refs mirror the transform state so gesture handlers always read current
+  // values (avoids stale closures during rapid pointermove events).
+  const containerRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const zoomRef = useRef(1);
+  const panRef = useRef({ x: 0, y: 0 });
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const gesture = useRef({
+    startX: 0,
+    startY: 0,
+    startPanX: 0,
+    startPanY: 0,
+    startDist: 0,
+    startZoom: 1,
+    moved: false,
+    mode: 'none' as 'none' | 'pan' | 'pinch' | 'swipe',
+  });
+  const movedRef = useRef(false); // suppress the click that follows a drag/pinch
+
+  const applyZoom = (z: number) => {
+    zoomRef.current = z;
+    setZoom(z);
+  };
+  const applyPan = (p: { x: number; y: number }) => {
+    panRef.current = p;
+    setPan(p);
+  };
+
+  /** Keep the (translated) figure within reach — but let the head/feet edges be
+   *  pannable once it overflows, so zooming no longer traps you in the middle. */
+  const clampPan = (x: number, y: number, z: number) => {
+    const container = containerRef.current;
+    const body = bodyRef.current;
+    if (!container || !body) return { x, y };
+    const overflowX = Math.max(0, (body.offsetWidth * z - container.clientWidth) / 2);
+    const overflowY = Math.max(0, (body.offsetHeight * z - container.clientHeight) / 2);
+    const maxX = overflowX > 0 ? overflowX + 24 : 0;
+    const maxY = overflowY > 0 ? overflowY + 32 : 0;
+    return {
+      x: Math.min(maxX, Math.max(-maxX, x)),
+      y: Math.min(maxY, Math.max(-maxY, y)),
+    };
+  };
+
+  const zoomBy = (factor: number) => {
+    const z = clampZoom(zoomRef.current * factor);
+    applyZoom(z);
+    applyPan(clampPan(panRef.current.x, panRef.current.y, z));
+  };
+
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Clear any stale "was a drag" flag from a previous gesture that never
+    // emitted a click — otherwise it would swallow this fresh tap.
+    movedRef.current = false;
+    // Let the on-screen controls (zoom / front-back) handle their own taps.
+    if ((e.target as HTMLElement).closest('button')) return;
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current;
+    if (pointers.current.size === 2) {
+      const [p1, p2] = Array.from(pointers.current.values());
+      g.startDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      g.startZoom = zoomRef.current;
+      g.mode = 'pinch';
+      g.moved = true;
+      setGesturing(true);
+    } else {
+      g.startX = e.clientX;
+      g.startY = e.clientY;
+      g.startPanX = panRef.current.x;
+      g.startPanY = panRef.current.y;
+      g.moved = false;
+      g.mode = zoomRef.current > 1 ? 'pan' : 'swipe';
+    }
+  };
+
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const g = gesture.current;
+
+    // Two fingers → pinch zoom.
+    if (pointers.current.size >= 2 && g.mode === 'pinch') {
+      const [p1, p2] = Array.from(pointers.current.values());
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      if (g.startDist > 0) {
+        const z = clampZoom(g.startZoom * (dist / g.startDist));
+        applyZoom(z);
+        applyPan(clampPan(panRef.current.x, panRef.current.y, z));
+      }
+      return;
+    }
+
+    // One finger.
+    const dx = e.clientX - g.startX;
+    const dy = e.clientY - g.startY;
+    if (!g.moved && Math.hypot(dx, dy) > 8) {
+      g.moved = true;
+      if (g.mode === 'pan') setGesturing(true);
+    }
+    if (g.mode === 'pan' && g.moved) {
+      applyPan(clampPan(g.startPanX + dx, g.startPanY + dy, zoomRef.current));
+    }
+  };
+
+  const onPointerEnd = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointers.current.has(e.pointerId)) return;
+    const g = gesture.current;
+    const wasMulti = pointers.current.size >= 2;
+    pointers.current.delete(e.pointerId);
+
+    // Swipe left/right to flip — only when not zoomed in.
+    if (g.mode === 'swipe' && zoomRef.current <= 1 && !wasMulti) {
+      const dx = e.clientX - g.startX;
+      const dy = e.clientY - g.startY;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) {
+        setShowingBack((b) => !b);
+        g.moved = true;
+      }
+    }
+    movedRef.current = g.moved;
+
+    if (pointers.current.size === 0) {
+      g.mode = 'none';
+      setGesturing(false);
+    } else if (pointers.current.size === 1) {
+      // Lifting one finger of a pinch → continue as a single-finger pan.
+      const remaining = Array.from(pointers.current.values())[0];
+      g.startX = remaining.x;
+      g.startY = remaining.y;
+      g.startPanX = panRef.current.x;
+      g.startPanY = panRef.current.y;
+      g.mode = zoomRef.current > 1 ? 'pan' : 'swipe';
+      g.moved = false;
+    }
+  };
 
   return (
     <div
+      ref={containerRef}
       className="relative flex justify-center overflow-hidden rounded-2xl px-2 pb-12 pt-4"
       style={{
         background: 'linear-gradient(180deg, #f4f5f7 0%, #e9ebef 100%)',
         perspective: '1200px',
-        touchAction: 'pan-y',
+        // Give ourselves full control of touch once zoomed; otherwise let the
+        // page scroll vertically (horizontal swipe-to-flip still reaches us).
+        touchAction: zoom > 1 ? 'none' : 'pan-y',
       }}
-      onPointerDown={(e) => {
-        swipeStartX.current = e.clientX;
-      }}
-      onPointerUp={(e) => {
-        if (swipeStartX.current !== null && Math.abs(e.clientX - swipeStartX.current) > 40) {
-          setShowingBack((b) => !b);
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
+      onClickCapture={(e) => {
+        if (movedRef.current) {
+          e.stopPropagation();
+          e.preventDefault();
+          movedRef.current = false;
         }
-        swipeStartX.current = null;
       }}
     >
       {/* View indicator */}
@@ -266,7 +413,7 @@ export function MuscleBodyMap({ states, highlight = [], onMuscleClick }: MuscleB
       <div className="absolute right-3 top-3 z-10 flex flex-col gap-1.5">
         <button
           type="button"
-          onClick={() => setZoom((z) => Math.min(2, z * 1.2))}
+          onClick={() => zoomBy(1.2)}
           className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#d3d8de] bg-white/85 text-[#33404d] transition-colors hover:bg-white"
           aria-label="Zoom in"
         >
@@ -274,7 +421,7 @@ export function MuscleBodyMap({ states, highlight = [], onMuscleClick }: MuscleB
         </button>
         <button
           type="button"
-          onClick={() => setZoom((z) => Math.max(0.6, z / 1.2))}
+          onClick={() => zoomBy(1 / 1.2)}
           className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#d3d8de] bg-white/85 text-[#33404d] transition-colors hover:bg-white"
           aria-label="Zoom out"
         >
@@ -282,13 +429,15 @@ export function MuscleBodyMap({ states, highlight = [], onMuscleClick }: MuscleB
         </button>
       </div>
 
-      {/* Flipping body */}
+      {/* Flipping body — pinch to zoom, drag to pan */}
       <div
+        ref={bodyRef}
         className="relative w-44 select-none sm:w-52"
         style={{
           transformStyle: 'preserve-3d',
-          transform: `scale(${zoom}) rotateY(${showingBack ? 180 : 0}deg)`,
-          transition: 'transform 0.6s cubic-bezier(0.4, 0.05, 0.2, 1)',
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom}) rotateY(${showingBack ? 180 : 0}deg)`,
+          transition: gesturing ? 'none' : 'transform 0.6s cubic-bezier(0.4, 0.05, 0.2, 1)',
+          willChange: 'transform',
         }}
       >
         <div style={{ backfaceVisibility: 'hidden' }}>

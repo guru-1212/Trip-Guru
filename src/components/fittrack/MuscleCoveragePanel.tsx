@@ -133,7 +133,7 @@ export function MuscleCoveragePanel({
         }
       />
       <p className="text-center text-[10px] font-medium text-muted-foreground">
-        Tap a muscle to see its exercises · swipe or tap Front/Back to flip
+        Tap a muscle for exercises · pinch or drag to zoom &amp; pan · swipe or tap Front/Back to flip
       </p>
 
       <div className="flex flex-wrap items-center justify-center gap-3">
