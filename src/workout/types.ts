@@ -1,6 +1,6 @@
 export type DayKey = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 
-export type SplitId = 'ct' | 'bb' | 'sh' | 'ctbb' | 'legs' | 'core' | 'coresh' | 'rest';
+export type SplitId = 'ct' | 'bb' | 'sh' | 'ctbb' | 'legs' | 'core' | 'coresh' | 'legsh' | 'rest';
 
 export type MuscleGroup =
   | 'Chest'
@@ -129,14 +129,16 @@ export interface UserPrefs {
   sound: boolean;
 }
 
+export type WeekScheduleValue = SplitId | SplitId[];
+
 export interface WeekSchedule {
-  Mon: SplitId;
-  Tue: SplitId;
-  Wed: SplitId;
-  Thu: SplitId;
-  Fri: SplitId;
-  Sat: SplitId;
-  Sun: SplitId;
+  Mon: WeekScheduleValue;
+  Tue: WeekScheduleValue;
+  Wed: WeekScheduleValue;
+  Thu: WeekScheduleValue;
+  Fri: WeekScheduleValue;
+  Sat: WeekScheduleValue;
+  Sun: WeekScheduleValue;
 }
 
 export type FitTrackReminderType = 'pre_meal' | 'get_ready' | 'protein';

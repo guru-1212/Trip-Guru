@@ -52,7 +52,8 @@ import {
   formatDuration,
   formatWeight,
   getMuscleFromSplit,
-  getTodaysSplit,
+  getScheduledSplitsForDay,
+  normalizeScheduleValue,
   getTodayDayKey,
   getGreeting,
   getWorkoutsInRange,
@@ -66,6 +67,7 @@ import { FitTrackInvitations } from '@/components/workout/FitTrackInvitations';
 import { WaterDashboardWidget } from '@/components/water/WaterDashboardWidget';
 import { NutritionDashboardWidget } from '@/components/nutrition/NutritionDashboardWidget';
 import { getWeeklyMuscleTrainingCounts } from '@/workout/analytics';
+import { computeMuscleRecovery } from '@/workout/recovery';
 import { MuscleRecoveryMap } from '@/components/fittrack/MuscleRecoveryMap';
 import { GymAttendanceCalendar } from '@/components/fittrack/GymAttendanceCalendar';
 import { cn } from '@/lib/utils';
@@ -84,48 +86,25 @@ export default function DashboardPage() {
   const [shareCardData, setShareCardData] = useState<WorkoutShareCardData | null>(null);
   const shareCardRef = useRef<HTMLDivElement>(null);
 
-  const todaySplit = getTodaysSplit(profile);
-  const splitName = SPLIT_NAMES[todaySplit];
+  const todaySplits = getScheduledSplitsForDay(profile, getTodayDayKey());
+  const todaySplit = todaySplits[0] ?? 'rest';
+  const splitName = todaySplits.length
+    ? todaySplits.map((s) => SPLIT_NAMES[s]).join(' + ')
+    : SPLIT_NAMES.rest;
 
-  const { hasTrainedToday, tomorrowSplit } = useMemo(() => {
+  const { hasTrainedToday, tomorrowSplitName } = useMemo(() => {
     const hasTrainedToday = workouts.some((w) => dayjs(w.date).isSame(dayjs(), 'day'));
     const map: DayKey[] = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    const tomorrowSplit = profile.weekSchedule[map[(dayjs().day() + 1) % 7]];
-    return { hasTrainedToday, tomorrowSplit };
+    const tomorrowSplits = normalizeScheduleValue(
+      profile.weekSchedule[map[(dayjs().day() + 1) % 7]]
+    ).filter((s) => s !== 'rest');
+    const tomorrowSplitName = tomorrowSplits.length
+      ? tomorrowSplits.map((s) => SPLIT_NAMES[s]).join(' + ')
+      : SPLIT_NAMES.rest;
+    return { hasTrainedToday, tomorrowSplitName };
   }, [profile.weekSchedule, workouts]);
 
-  const recoveryData = useMemo(() => {
-    const data: Record<string, any> = {};
-    const muscles = [
-      'Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 
-      'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Abs', 'Forearms'
-    ];
-
-    muscles.forEach((m) => {
-      const lastSession = workouts
-        .filter((w) => getMuscleFromSplit(w.splitId).includes(m))
-        .sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf())[0];
-
-      if (!lastSession) {
-        data[m] = { name: m, status: 'recovered' };
-        return;
-      }
-
-      const diffHours = dayjs().diff(dayjs(lastSession.date), 'hour');
-      let status: 'fatigued' | 'recovering' | 'recovered' = 'recovered';
-      
-      if (diffHours < 24) status = 'fatigued';
-      else if (diffHours < 72) status = 'recovering';
-
-      data[m] = { 
-        name: m, 
-        status, 
-        lastTrained: dayjs(lastSession.date).fromNow() 
-      };
-    });
-
-    return data;
-  }, [workouts]);
+  const recoveryData = useMemo(() => computeMuscleRecovery(workouts), [workouts]);
 
   const metrics = useMemo(() => {
     const monthStart = dayjs().startOf('month');
@@ -301,8 +280,8 @@ export default function DashboardPage() {
             {getGreeting()}, {profile.name.split(' ')[0]}
           </h1>
           <p className="ft-subtitle mt-1">
-            {hasTrainedToday 
-              ? `Workout done for today! Let's plan for tomorrow: ${SPLIT_NAMES[tomorrowSplit]}`
+            {hasTrainedToday
+              ? `Workout done for today! Let's plan for tomorrow: ${tomorrowSplitName}`
               : `Today is ${getTodayDayKey()}. Ready to train?`}
           </p>
         </motion.div>

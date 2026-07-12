@@ -16,7 +16,7 @@ import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workou
 import { VariationSelector } from '@/components/workout/VariationSelector';
 import { SessionSetRow } from '@/components/workout/SessionSetRow';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
-import { SPLIT_DEFINITIONS } from '@/workout/constants';
+import { SPLIT_DEFINITIONS, SPLIT_ICONS } from '@/workout/constants';
 import { getExercisesForSplit, getExerciseById } from '@/workout/exerciseLibrary';
 import type { CustomExercise, SplitId, WorkoutExercise, WorkoutSet, WeightUnit } from '@/workout/types';
 import {
@@ -34,16 +34,6 @@ import {
   createWorkoutExercises,
 } from '@/workout/utils';
 import toast from 'react-hot-toast';
-
-const SPLIT_ICONS: Record<string, string> = {
-  chest: '💪',
-  back: '🏋️',
-  shoulders: '🎯',
-  upper: '⚡',
-  legs: '🦵',
-  core: '🧘',
-  coresh: '⚡',
-};
 
 export default function WorkoutPage() {
   const router = useRouter();

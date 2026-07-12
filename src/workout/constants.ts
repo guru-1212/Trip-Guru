@@ -61,7 +61,23 @@ export const SPLIT_DEFINITIONS: SplitDefinition[] = [
     muscles: ['Core', 'Shoulders'],
     icon: 'coresh',
   },
+  {
+    id: 'legsh',
+    name: 'Legs + Shoulders',
+    muscles: ['Quads', 'Hamstrings', 'Glutes', 'Calves', 'Shoulders'],
+    icon: 'legsh',
+  },
 ];
+
+/**
+ * Combined splits merge two base splits into a single session. Exercise and
+ * coverage pools are the union of the component splits' pools.
+ */
+export const COMBINED_SPLIT_COMPONENTS: Partial<Record<SplitId, SplitId[]>> = {
+  ctbb: ['ct', 'bb'],
+  coresh: ['core', 'sh'],
+  legsh: ['legs', 'sh'],
+};
 
 export const DEFAULT_WEEK_SCHEDULE: WeekSchedule = {
   Mon: 'ct',
@@ -75,6 +91,18 @@ export const DEFAULT_WEEK_SCHEDULE: WeekSchedule = {
 
 export const DAY_KEYS: DayKey[] = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
+/** Emoji per SplitDefinition.icon key. */
+export const SPLIT_ICONS: Record<string, string> = {
+  chest: '💪',
+  back: '🏋️',
+  shoulders: '🎯',
+  upper: '⚡',
+  legs: '🦵',
+  core: '🧘',
+  coresh: '⚡',
+  legsh: '🔥',
+};
+
 export const SPLIT_NAMES: Record<SplitId, string> = {
   ct: 'Chest + Triceps',
   bb: 'Back + Biceps',
@@ -83,6 +111,7 @@ export const SPLIT_NAMES: Record<SplitId, string> = {
   legs: 'Legs',
   core: 'Core',
   coresh: 'Core + Shoulders',
+  legsh: 'Legs + Shoulders',
   rest: 'Rest',
 };
 
@@ -94,6 +123,14 @@ export const MUSCLE_COLORS: Record<string, string> = {
   Biceps: '#EC4899',
   Legs: '#F97316',
   Core: '#14B8A6',
+  // Fine-grained groups used by the recovery map (RECOVERY_MUSCLES). Legs
+  // splits into its four heads; Core → Abs; Biceps → Forearms.
+  Quads: '#F97316',
+  Hamstrings: '#FB923C',
+  Glutes: '#EA580C',
+  Calves: '#FDBA74',
+  Abs: '#14B8A6',
+  Forearms: '#F472B6',
 };
 
 export const REST_TIMER_OPTIONS = [30, 60, 90, 120] as const;

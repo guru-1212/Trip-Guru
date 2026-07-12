@@ -1,6 +1,6 @@
 import anatomy from './muscleAnatomy.json';
 import { EXERCISE_LIBRARY } from './exerciseLibrary';
-import { SPLIT_DEFINITIONS } from './constants';
+import { COMBINED_SPLIT_COMPONENTS, SPLIT_DEFINITIONS } from './constants';
 import type { CustomExercise, LibraryExercise, SplitId, TodayExercisePick } from './types';
 
 /** A fine-grained muscle region id from muscleAnatomy.json (e.g. 'chest-upper'). */
@@ -103,11 +103,9 @@ export interface CoverageSuggestion {
 
 /** Split-aware library pool (mirrors getExercisesForSplit's combined-split logic). */
 function exercisesForSplit(splitId: SplitId) {
-  if (splitId === 'ctbb') {
-    return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes('ct') || e.splitIds.includes('bb'));
-  }
-  if (splitId === 'coresh') {
-    return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes('core') || e.splitIds.includes('sh'));
+  const components = COMBINED_SPLIT_COMPONENTS[splitId];
+  if (components) {
+    return EXERCISE_LIBRARY.filter((e) => components.some((c) => e.splitIds.includes(c)));
   }
   return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes(splitId));
 }

@@ -90,7 +90,9 @@ export function getTodayDateKey(timezone: string): string {
 }
 
 export function isGymDay(weekSchedule: WeekSchedule, dayKey: DayKey): boolean {
-  return weekSchedule[dayKey] !== 'rest';
+  const value = weekSchedule[dayKey];
+  if (Array.isArray(value)) return value.some((s) => s !== 'rest');
+  return value !== 'rest';
 }
 
 export function getDailyGoal(

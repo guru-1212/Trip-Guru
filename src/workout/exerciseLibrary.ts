@@ -1,4 +1,5 @@
-import type { LibraryExercise } from './types';
+import type { LibraryExercise, SplitId } from './types';
+import { COMBINED_SPLIT_COMPONENTS } from './constants';
 
 export const EXERCISE_LIBRARY: LibraryExercise[] = [
   // CHEST + TRICEPS
@@ -610,13 +611,9 @@ export const EXERCISE_LIBRARY: LibraryExercise[] = [
 ];
 
 export function getExercisesForSplit(splitId: string): LibraryExercise[] {
-  if (splitId === 'ctbb') {
-    return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes('ct') || e.splitIds.includes('bb'));
-  }
-  if (splitId === 'coresh') {
-    return EXERCISE_LIBRARY.filter(
-      (e) => e.splitIds.includes('core') || e.splitIds.includes('sh')
-    );
+  const components = COMBINED_SPLIT_COMPONENTS[splitId as SplitId];
+  if (components) {
+    return EXERCISE_LIBRARY.filter((e) => components.some((c) => e.splitIds.includes(c)));
   }
   return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes(splitId as 'ct'));
 }

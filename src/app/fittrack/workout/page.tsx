@@ -43,7 +43,7 @@ import type { ImportedExercise } from '@/types/aiImport';
 import { useFitTrackCelebration } from '@/components/fittrack/FitTrackCelebrationProvider';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { getHabitStreak } from '@/workout/analytics';
-import { SPLIT_DEFINITIONS, SPLIT_NAMES, MUSCLE_COLORS } from '@/workout/constants';
+import { SPLIT_DEFINITIONS, SPLIT_NAMES, SPLIT_ICONS, MUSCLE_COLORS } from '@/workout/constants';
 import { getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
 import type { CustomExercise, SplitId, TodayExercisePick, WorkoutExercise, WorkoutSession, WorkoutSet, LibraryExercise, WeightUnit, DayKey } from '@/workout/types';
@@ -52,6 +52,8 @@ import {
   getGreeting,
   getTodayDayKey,
   getScheduledSplitForDate,
+  getScheduledSplitsForDay,
+  getRemainingSplitsForDate,
   getLastTrainedDate,
   getLastSessionsForSplit,
   buildRepeatDataFromSession,
@@ -95,16 +97,6 @@ import {
 } from '@/workout/shareCard';
 import { cn } from '@/lib/utils';
 import { requestWakeLock, releaseWakeLock } from '@/lib/wakeLock';
-
-const SPLIT_ICONS: Record<string, string> = {
-  chest: '💪',
-  back: '🏋️',
-  shoulders: '🎯',
-  upper: '⚡',
-  legs: '🦵',
-  core: '🧘',
-  coresh: '⚡',
-};
 
 function resolveExerciseInfo(
   exerciseId: string,
@@ -334,6 +326,21 @@ export default function WorkoutPage() {
   );
   const restedToday = restDays.includes(todayStr);
 
+  // Multi-session days: schedule more than one split on a weekday and the
+  // remaining ones queue up after each finished session.
+  const todayScheduledSplits = useMemo(
+    () => getScheduledSplitsForDay(profile, getTodayDayKey()),
+    [profile]
+  );
+  const remainingTodaySplits = useMemo(
+    () =>
+      todayScheduledSplits.length > 1
+        ? getRemainingSplitsForDate(todayStr, profile, workouts, restDays)
+        : [],
+    [todayScheduledSplits, todayStr, profile, workouts, restDays]
+  );
+  const todaySessionsDone = todayScheduledSplits.length - remainingTodaySplits.length;
+
   useEffect(() => {
     if (activeWorkout) return;
     if (preselected && SPLIT_DEFINITIONS.some((s) => s.id === preselected)) {
@@ -341,14 +348,16 @@ export default function WorkoutPage() {
       return;
     }
     if (hydrated) {
-      const doneForToday = hasTrainedToday || restedToday;
-      if (doneForToday && tomorrowSplit !== 'rest') {
+      const doneForToday = (hasTrainedToday && remainingTodaySplits.length === 0) || restedToday;
+      if (hasTrainedToday && !restedToday && remainingTodaySplits.length > 0) {
+        setSelectedSplit(remainingTodaySplits[0]);
+      } else if (doneForToday && tomorrowSplit !== 'rest') {
         setSelectedSplit(tomorrowSplit);
       } else if (!doneForToday && todaySplit !== 'rest') {
         setSelectedSplit(todaySplit);
       }
     }
-  }, [preselected, todaySplit, hydrated, activeWorkout, hasTrainedToday, restedToday, tomorrowSplit]);
+  }, [preselected, todaySplit, hydrated, activeWorkout, hasTrainedToday, restedToday, tomorrowSplit, remainingTodaySplits]);
 
   useEffect(() => {
     if (activeWorkout) {
@@ -1878,9 +1887,11 @@ export default function WorkoutPage() {
   }
 
   const startButtonLabel =
-    selectedSplit === todaySplit && todaySplit !== 'rest' && !hasTrainedToday
+    selectedSplit && hasTrainedToday && remainingTodaySplits.includes(selectedSplit)
+      ? `Start ${SPLIT_NAMES[selectedSplit]}`
+      : selectedSplit === todaySplit && todaySplit !== 'rest' && !hasTrainedToday
       ? `Start ${SPLIT_NAMES[todaySplit]}`
-      : selectedSplit === tomorrowSplit && hasTrainedToday && tomorrowSplit !== 'rest'
+      : selectedSplit === tomorrowSplit && hasTrainedToday && remainingTodaySplits.length === 0 && tomorrowSplit !== 'rest'
       ? `Start ${SPLIT_NAMES[tomorrowSplit]} (Tomorrow)`
       : 'Start Workout';
 
@@ -1892,7 +1903,9 @@ export default function WorkoutPage() {
           <h1 className="ft-title-lg">{getGreeting()}, {profile.name.split(' ')[0]}</h1>
           <p className="ft-subtitle mt-1">
             {hasTrainedToday
-              ? `Workout recorded for ${getTodayDayKey()}. Great job!`
+              ? remainingTodaySplits.length > 0
+                ? `${todaySessionsDone} of ${todayScheduledSplits.length} sessions done today — next: ${SPLIT_NAMES[remainingTodaySplits[0]]}`
+                : `Workout recorded for ${getTodayDayKey()}. Great job!`
               : restedToday
               ? tomorrowSplit !== 'rest'
                 ? `Resting today — next up tomorrow: ${SPLIT_NAMES[tomorrowSplit]}`
@@ -1903,13 +1916,29 @@ export default function WorkoutPage() {
           </p>
         </header>
 
-        {hasTrainedToday ? (
+        {hasTrainedToday && !restedToday && remainingTodaySplits.length > 0 ? (
+          <div className="ft-today-banner flex-wrap">
+            <div className="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-primary-foreground shrink-0">
+              <Zap className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground">
+                Session {todaySessionsDone} of {todayScheduledSplits.length} done today
+              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Next up: <span className="font-medium text-primary">{SPLIT_NAMES[remainingTodaySplits[0]]}</span> — tap Start when you&apos;re ready.
+              </p>
+            </div>
+          </div>
+        ) : hasTrainedToday ? (
           <div className="ft-today-banner bg-emerald-500/10 border-emerald-500/20">
             <div className="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center text-white shrink-0">
               <CheckCircle2 className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-400">Workout recorded!</p>
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-400">
+                {todayScheduledSplits.length > 1 ? 'All sessions recorded!' : 'Workout recorded!'}
+              </p>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Let&apos;s plan for tomorrow: <span className="font-medium text-emerald-700 dark:text-emerald-400">{SPLIT_NAMES[tomorrowSplit]}</span>.
               </p>
@@ -1945,9 +1974,24 @@ export default function WorkoutPage() {
               <Target className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-foreground">Today&apos;s workout</p>
+              <p className="text-sm font-semibold text-foreground">
+                {todayScheduledSplits.length > 1
+                  ? `Today's plan · ${todayScheduledSplits.length} sessions`
+                  : "Today's workout"}
+              </p>
               <p className="text-sm text-muted-foreground mt-0.5">
-                <span className="font-medium text-primary">{SPLIT_NAMES[todaySplit]}</span> is highlighted below — tap Start when you&apos;re ready.
+                {todayScheduledSplits.length > 1 ? (
+                  <>
+                    <span className="font-medium text-primary">
+                      {todayScheduledSplits.map((s) => SPLIT_NAMES[s]).join(' → ')}
+                    </span>{' '}
+                    — start with {SPLIT_NAMES[todaySplit]}; the next session queues up after you finish.
+                  </>
+                ) : (
+                  <>
+                    <span className="font-medium text-primary">{SPLIT_NAMES[todaySplit]}</span> is highlighted below — tap Start when you&apos;re ready.
+                  </>
+                )}
               </p>
             </div>
             <button
@@ -2012,7 +2056,9 @@ export default function WorkoutPage() {
           {SPLIT_DEFINITIONS.map((split) => {
             const last = getLastTrainedDate(workouts, split.id);
             const selected = selectedSplit === split.id;
-            const isTodayPlan = todaySplit === split.id;
+            const isTodayPlan =
+              (!hasTrainedToday && todaySplit === split.id) ||
+              remainingTodaySplits.includes(split.id);
             return (
               <div
                 key={split.id}

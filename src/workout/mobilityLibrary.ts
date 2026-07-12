@@ -541,23 +541,27 @@ export function groupMobilityByMuscle(
     .map((muscle) => ({ muscle, exercises: groups.get(muscle)! }));
 }
 
-/** ctbb merges ct + bb routines without duplicates */
+/**
+ * Combined splits without their own mobility tags merge their components'
+ * routines without duplicates (coresh has explicit tags in the library).
+ */
+const MERGED_MOBILITY_SPLITS: Partial<Record<SplitId, SplitId[]>> = {
+  ctbb: ['ct', 'bb'],
+  legsh: ['legs', 'sh'],
+};
+
 export function getWarmupForSplitMerged(splitId: SplitId): MobilityExercise[] {
-  if (splitId === 'ctbb') {
-    return dedupeById([
-      ...getWarmupForSplit('ct'),
-      ...getWarmupForSplit('bb'),
-    ]);
+  const components = MERGED_MOBILITY_SPLITS[splitId];
+  if (components) {
+    return dedupeById(components.flatMap((c) => getWarmupForSplit(c)));
   }
   return getWarmupForSplit(splitId);
 }
 
 export function getStretchForSplitMerged(splitId: SplitId): MobilityExercise[] {
-  if (splitId === 'ctbb') {
-    return dedupeById([
-      ...getStretchForSplit('ct'),
-      ...getStretchForSplit('bb'),
-    ]);
+  const components = MERGED_MOBILITY_SPLITS[splitId];
+  if (components) {
+    return dedupeById(components.flatMap((c) => getStretchForSplit(c)));
   }
   return getStretchForSplit(splitId);
 }

@@ -18,7 +18,12 @@ import {
   getRotationQueue,
   getNextRotationSplit,
   getScheduledSplitForDate,
+  getScheduledSplitsForDay,
+  getRemainingSplitsForDate,
+  getMuscleFromSplit,
 } from './utils';
+import { getExercisesForSplit } from './exerciseLibrary';
+import { getWarmupForSplitMerged, getStretchForSplitMerged } from './mobilityLibrary';
 import {
   filterByRange,
   calcTrainingOverview,
@@ -402,6 +407,101 @@ function testRotationScheduling() {
     'Rotation queue reflects the schedule');
 }
 
+function testMultiSplitScheduling() {
+  console.log('Testing Multi-split Scheduling...');
+
+  const profile = getDefaultProfile();
+  const multiSplitProfile = {
+    ...profile,
+    weekSchedule: {
+      ...profile.weekSchedule,
+      Wed: ['legs', 'sh'] as SplitId[],
+    },
+  };
+
+  const splits = getScheduledSplitsForDay(multiSplitProfile, 'Wed');
+  assert(JSON.stringify(splits) === JSON.stringify(['legs', 'sh']), 'Wednesday exposes both configured splits');
+  assert(getRotationQueue(multiSplitProfile).includes('legs') && getRotationQueue(multiSplitProfile).includes('sh'), 'Multi-split days contribute both splits to rotation');
+  assert(getScheduledSplitForDate('2025-01-08', multiSplitProfile, [], []) === 'legs', 'First configured split is used for scheduling fallback');
+
+  // Remaining sessions on a multi-split day (2025-01-08 is a Wednesday).
+  const session = (date: string, splitId: SplitId): WorkoutSession => ({
+    id: date + splitId,
+    date,
+    splitId,
+    splitName: splitId,
+    duration: 0,
+    exercises: [],
+    totalSets: 0,
+    totalVolume: 0,
+  });
+
+  assert(
+    JSON.stringify(getRemainingSplitsForDate('2025-01-08', multiSplitProfile, [], [])) ===
+      JSON.stringify(['legs', 'sh']),
+    'Nothing trained yet → both sessions remain'
+  );
+  assert(
+    JSON.stringify(
+      getRemainingSplitsForDate('2025-01-08', multiSplitProfile, [session('2025-01-08', 'legs')], [])
+    ) === JSON.stringify(['sh']),
+    'After the first session only the second remains'
+  );
+  assert(
+    getRemainingSplitsForDate(
+      '2025-01-08',
+      multiSplitProfile,
+      [session('2025-01-08', 'legs'), session('2025-01-08', 'sh')],
+      []
+    ).length === 0,
+    'Both sessions logged → nothing remains'
+  );
+  assert(
+    getRemainingSplitsForDate('2025-01-08', multiSplitProfile, [], ['2025-01-08']).length === 0,
+    'Explicit rest day → nothing remains'
+  );
+}
+
+function testCombinedLegShouldersSplit() {
+  console.log('Testing Legs + Shoulders combined split...');
+
+  assert(
+    JSON.stringify(getMuscleFromSplit('legsh')) === JSON.stringify(['Legs', 'Shoulders']),
+    'legsh targets Legs and Shoulders'
+  );
+
+  const pool = getExercisesForSplit('legsh');
+  assert(
+    pool.some((e) => e.splitIds.includes('legs')) && pool.some((e) => e.splitIds.includes('sh')),
+    'legsh exercise pool merges legs and shoulder exercises'
+  );
+
+  const legEx = { muscle: 'Legs', splitIds: ['legs'] } as Pick<
+    LibraryExercise,
+    'muscle' | 'secondary' | 'splitIds'
+  >;
+  const shEx = { muscle: 'Shoulders', splitIds: ['sh'] } as Pick<
+    LibraryExercise,
+    'muscle' | 'secondary' | 'splitIds'
+  >;
+  const chestEx = { muscle: 'Chest', splitIds: ['ct'] } as Pick<
+    LibraryExercise,
+    'muscle' | 'secondary' | 'splitIds'
+  >;
+  assert(exerciseBelongsToSplit(legEx, 'legsh'), 'Leg exercise belongs to legsh');
+  assert(exerciseBelongsToSplit(shEx, 'legsh'), 'Shoulder exercise belongs to legsh');
+  assert(!exerciseBelongsToSplit(chestEx, 'legsh'), 'Chest exercise does not belong to legsh');
+
+  const warmups = getWarmupForSplitMerged('legsh');
+  const stretches = getStretchForSplitMerged('legsh');
+  assert(warmups.length > 0, 'legsh has merged warmups');
+  assert(stretches.length > 0, 'legsh has merged stretches');
+  assert(
+    new Set(warmups.map((w) => w.id)).size === warmups.length,
+    'Merged legsh warmups have no duplicates'
+  );
+}
+
 function runTests() {
   try {
     testVolumeCalculations();
@@ -416,6 +516,8 @@ function runTests() {
     testExerciseSearchHelpers();
     testSplitExerciseFilter();
     testRotationScheduling();
+    testMultiSplitScheduling();
+    testCombinedLegShouldersSplit();
     console.log('\nAll FitTrack tests passed! ✅');
   } catch (error) {
     console.error('\nTests failed! ❌');

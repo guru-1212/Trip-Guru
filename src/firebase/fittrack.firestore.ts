@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import {
   collection,
   deleteDoc,
@@ -114,7 +115,8 @@ export function defaultStateDoc(): FitTrackStateDoc {
 }
 
 export function normalizeChecklist(stored: ChecklistData | undefined): ChecklistData {
-  const today = new Date().toISOString().slice(0, 10);
+  // Local date (not UTC) so the daily checklist rolls over at local midnight.
+  const today = dayjs().format('YYYY-MM-DD');
   if (!stored || stored.date !== today) {
     return {
       date: today,

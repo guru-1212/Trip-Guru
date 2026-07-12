@@ -15,7 +15,7 @@ import type {
   WorkoutSet,
   VariationImageMap,
 } from './types';
-import { DAY_KEYS } from './constants';
+import { COMBINED_SPLIT_COMPONENTS, DAY_KEYS } from './constants';
 import { getExerciseById, getExercisesForSplit } from './exerciseLibrary';
 
 export function generateId(): string {
@@ -161,9 +161,20 @@ export function isYesterday(date: string): boolean {
   return dayjs(date).isSame(dayjs().subtract(1, 'day'), 'day');
 }
 
+export function normalizeScheduleValue(value: UserProfile['weekSchedule'][DayKey] | undefined): SplitId[] {
+  if (!value) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+export function getScheduledSplitsForDay(profile: UserProfile, dayKey: DayKey): SplitId[] {
+  const values = normalizeScheduleValue(profile.weekSchedule[dayKey]);
+  return values.filter((value) => value !== 'rest');
+}
+
 export function getTodaysSplit(profile: UserProfile): SplitId {
   const dayKey = getTodayDayKey();
-  return profile.weekSchedule[dayKey];
+  const values = getScheduledSplitsForDay(profile, dayKey);
+  return values[0] ?? 'rest';
 }
 
 /**
@@ -175,10 +186,12 @@ export function getRotationQueue(profile: UserProfile): SplitId[] {
   const seen = new Set<SplitId>();
   const queue: SplitId[] = [];
   for (const day of DAY_KEYS) {
-    const split = profile.weekSchedule[day];
-    if (split !== 'rest' && !seen.has(split)) {
-      seen.add(split);
-      queue.push(split);
+    const splits = getScheduledSplitsForDay(profile, day);
+    for (const split of splits) {
+      if (split !== 'rest' && !seen.has(split)) {
+        seen.add(split);
+        queue.push(split);
+      }
     }
   }
   return queue;
@@ -207,8 +220,8 @@ export function getScheduledSplitForDate(
   restDays: string[] = []
 ): SplitId {
   const dayKey = getDayKeyForDate(dateStr);
-  if (profile.weekSchedule[dayKey] === 'rest') return 'rest';
-  if (restDays.includes(dateStr)) return 'rest';
+  const daySplits = getScheduledSplitsForDay(profile, dayKey);
+  if (daySplits.length === 0 || restDays.includes(dateStr)) return 'rest';
 
   const queue = getRotationQueue(profile);
   if (queue.length === 0) return 'rest';
@@ -218,12 +231,37 @@ export function getScheduledSplitForDate(
     .filter((w) => dayjs(w.date).isBefore(target, 'day') && queue.includes(w.splitId))
     .sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf())[0];
 
-  return getNextRotationSplit(lastBefore?.splitId ?? null, queue) ?? 'rest';
+  const fallbackSplit = daySplits[0] ?? null;
+  if (!lastBefore) return fallbackSplit ?? 'rest';
+  return getNextRotationSplit(lastBefore.splitId, queue) ?? fallbackSplit ?? 'rest';
+}
+
+/** Split IDs of workouts logged on the given date. */
+export function getSplitsTrainedOnDate(workouts: WorkoutSession[], dateStr: string): SplitId[] {
+  return workouts.filter((w) => isSameDay(w.date, dateStr)).map((w) => w.splitId);
+}
+
+/**
+ * Splits still to train on a date: the weekday's scheduled splits minus those
+ * already logged that date. On multi-split days this is what drives the
+ * "session 2 of 2" flow after the first workout is saved.
+ */
+export function getRemainingSplitsForDate(
+  dateStr: string,
+  profile: UserProfile,
+  workouts: WorkoutSession[],
+  restDays: string[] = []
+): SplitId[] {
+  if (restDays.includes(dateStr)) return [];
+  const scheduled = getScheduledSplitsForDay(profile, getDayKeyForDate(dateStr));
+  if (!scheduled.length) return [];
+  const trained = new Set(getSplitsTrainedOnDate(workouts, dateStr));
+  return scheduled.filter((s) => !trained.has(s));
 }
 
 /** Training days in the weekly split (non-rest days). */
 export function countScheduledWorkoutDays(profile: UserProfile): number {
-  return DAY_KEYS.filter((day) => profile.weekSchedule[day] !== 'rest').length;
+  return DAY_KEYS.reduce((count, day) => count + getScheduledSplitsForDay(profile, day).length, 0);
 }
 
 export function getLastTrainedDate(workouts: WorkoutSession[], splitId: SplitId): string | null {
@@ -1182,6 +1220,7 @@ export function getMuscleFromSplit(splitId: SplitId): string[] {
     legs: ['Legs'],
     core: ['Core'],
     coresh: ['Core', 'Shoulders'],
+    legsh: ['Legs', 'Shoulders'],
     rest: [],
   };
   return map[splitId];
@@ -1196,11 +1235,9 @@ export function exerciseBelongsToSplit(
   const splitMuscles = getMuscleFromSplit(splitId);
   if (splitMuscles.includes(ex.muscle)) return true;
   if (ex.secondary && splitMuscles.includes(ex.secondary)) return true;
-  if (splitId === 'ctbb') {
-    return ex.splitIds.includes('ct') || ex.splitIds.includes('bb');
-  }
-  if (splitId === 'coresh') {
-    return ex.splitIds.includes('core') || ex.splitIds.includes('sh');
+  const components = COMBINED_SPLIT_COMPONENTS[splitId];
+  if (components) {
+    return components.some((c) => ex.splitIds.includes(c));
   }
   return ex.splitIds.includes(splitId);
 }
@@ -1214,6 +1251,7 @@ export function getMuscleOrderForSplit(splitId: SplitId): MuscleGroup[] {
     legs: ['Legs'],
     core: ['Core'],
     coresh: ['Core', 'Shoulders'],
+    legsh: ['Legs', 'Shoulders'],
     rest: [],
   };
   return map[splitId] ?? [];

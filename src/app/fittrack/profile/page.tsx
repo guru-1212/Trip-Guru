@@ -3,14 +3,15 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import dayjs from 'dayjs';
-import { Pencil, Upload, Download, Trash2, AlertTriangle, Bell, BellOff } from 'lucide-react';
+import { Pencil, Upload, Download, Trash2, AlertTriangle, Bell, BellOff, Moon } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { useAuth } from '@/hooks/useAuth';
-import { DAY_KEYS, SPLIT_DEFINITIONS } from '@/workout/constants';
+import { DAY_KEYS, SPLIT_DEFINITIONS, SPLIT_ICONS } from '@/workout/constants';
+import { cn } from '@/lib/utils';
 import { getFavouriteSplit, getFavouriteExercise } from '@/workout/analytics';
-import { formatWeight, formatDuration, countScheduledWorkoutDays, getBrowserTimezone } from '@/workout/utils';
-import type { DayKey, FitnessGoal, SplitId, ThemePref } from '@/workout/types';
+import { formatWeight, formatDuration, countScheduledWorkoutDays, getBrowserTimezone, getScheduledSplitsForDay } from '@/workout/utils';
+import type { DayKey, FitnessGoal, SplitId, ThemePref, WeekScheduleValue } from '@/workout/types';
 import { TrainingPartnersSection } from '@/components/workout/TrainingPartnersSection';
 
 export default function ProfilePage() {
@@ -135,37 +136,118 @@ export default function ProfilePage() {
         <section className="ft-card ft-card-padded">
           <h2 className="ft-title font-semibold mb-1">Weekly Split Schedule</h2>
           <p className="text-sm text-muted-foreground mb-4">
-            Training days here set your dashboard weekly goal ({countScheduledWorkoutDays(editing ? form : profile)} sessions/week).
+            {editing
+              ? `Tap to toggle splits — select more than one to train them as separate sessions that day (${countScheduledWorkoutDays(form)} sessions/week).`
+              : `Training days here set your dashboard weekly goal (${countScheduledWorkoutDays(profile)} sessions/week).`}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {DAY_KEYS.map((day) => (
-              <div key={day} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border">
-                <span className="font-medium">{day}</span>
-                {editing ? (
-                  <select
-                    className="ft-input w-auto text-sm py-1"
-                    value={form.weekSchedule[day]}
-                    onChange={(e) =>
-                      setForm({
-                        ...form,
-                        weekSchedule: { ...form.weekSchedule, [day]: e.target.value as SplitId },
-                      })
-                    }
-                  >
-                    {SPLIT_DEFINITIONS.map((s) => (
-                      <option key={s.id} value={s.id}>{s.name}</option>
-                    ))}
-                    <option value="rest">Rest</option>
-                  </select>
-                ) : (
-                  <span className="text-sm text-muted-foreground">
-                    {form.weekSchedule[day] === 'rest'
-                      ? 'Rest'
-                      : SPLIT_DEFINITIONS.find((s) => s.id === form.weekSchedule[day])?.name}
-                  </span>
-                )}
-              </div>
-            ))}
+            {DAY_KEYS.map((day) => {
+              const selectedSplits = getScheduledSplitsForDay(form, day);
+              const isRest = selectedSplits.length === 0;
+
+              const setDaySplits = (next: SplitId[]) => {
+                const nextValue: WeekScheduleValue =
+                  next.length === 0 ? 'rest' : next.length === 1 ? next[0] : next;
+                setForm({
+                  ...form,
+                  weekSchedule: { ...form.weekSchedule, [day]: nextValue },
+                });
+              };
+
+              return (
+                <div
+                  key={day}
+                  className={cn(
+                    'flex flex-col gap-2.5 p-3 rounded-lg border transition-colors',
+                    isRest ? 'bg-muted/10 border-border/60' : 'bg-muted/30 border-border'
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium">{day}</span>
+                    <span
+                      className={cn(
+                        'text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full',
+                        isRest ? 'bg-muted text-muted-foreground' : 'bg-primary/10 text-primary'
+                      )}
+                    >
+                      {isRest
+                        ? 'Rest'
+                        : selectedSplits.length === 1
+                        ? '1 session'
+                        : `${selectedSplits.length} sessions`}
+                    </span>
+                  </div>
+
+                  {editing ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {SPLIT_DEFINITIONS.map((split) => {
+                        const active = selectedSplits.includes(split.id);
+                        return (
+                          <button
+                            key={split.id}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() =>
+                              setDaySplits(
+                                active
+                                  ? selectedSplits.filter((s) => s !== split.id)
+                                  : [...selectedSplits, split.id]
+                              )
+                            }
+                            className={cn(
+                              'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors',
+                              active
+                                ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                : 'border-border bg-background/60 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                            )}
+                          >
+                            <span aria-hidden>{SPLIT_ICONS[split.icon]}</span>
+                            {split.name}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        aria-pressed={isRest}
+                        onClick={() => setDaySplits([])}
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors',
+                          isRest
+                            ? 'border-slate-500 bg-slate-500 text-white shadow-sm'
+                            : 'border-border bg-background/60 text-muted-foreground hover:border-slate-400 hover:text-foreground'
+                        )}
+                      >
+                        <Moon className="h-3 w-3" aria-hidden />
+                        Rest
+                      </button>
+                    </div>
+                  ) : isRest ? (
+                    <span className="text-sm text-muted-foreground inline-flex items-center gap-1.5">
+                      <Moon className="h-3.5 w-3.5" aria-hidden />
+                      Rest day
+                    </span>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {selectedSplits.map((splitId, idx) => {
+                        const split = SPLIT_DEFINITIONS.find((s) => s.id === splitId);
+                        return (
+                          <span
+                            key={splitId}
+                            className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary border border-primary/20 px-2.5 py-1 text-xs font-semibold"
+                          >
+                            {selectedSplits.length > 1 && (
+                              <span className="tabular-nums opacity-70">{idx + 1}.</span>
+                            )}
+                            <span aria-hidden>{split ? SPLIT_ICONS[split.icon] : ''}</span>
+                            {split?.name ?? splitId}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </section>
 
