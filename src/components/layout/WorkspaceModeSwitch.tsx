@@ -3,21 +3,26 @@
 import { Plane, Home, Dumbbell, Flower2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppMode } from '@/hooks/useAppMode';
-import { AppMode } from '@/lib/appMode';
+import { AppMode, resolveEnabledWorkspaces } from '@/lib/appMode';
+import { useAppSelector } from '@/store';
 import { useRouter } from 'next/navigation';
 
 export function WorkspaceModeSwitch({ className }: { className?: string }) {
   const { mode, canSwitch, switchMode } = useAppMode();
+  const user = useAppSelector((s) => s.auth.user);
   const router = useRouter();
 
-  if (!canSwitch) return null;
-
-  const options: { id: AppMode; label: string; icon: typeof Plane }[] = [
+  const enabled = resolveEnabledWorkspaces(user?.enabledWorkspaces);
+  const allOptions: { id: AppMode; label: string; icon: typeof Plane }[] = [
     { id: 'trip', label: 'Trips', icon: Plane },
     { id: 'room', label: 'Rooms', icon: Home },
     { id: 'gym', label: 'GYM', icon: Dumbbell },
     { id: 'yoga', label: 'YOGA', icon: Flower2 },
   ];
+  const options = allOptions.filter((o) => enabled.includes(o.id));
+
+  // Nothing to switch between when a user has hidden all but one workspace.
+  if (!canSwitch || options.length <= 1) return null;
 
   const handleSwitch = (id: AppMode) => {
     switchMode(id);

@@ -90,6 +90,29 @@ export interface BodyStat {
   notes?: string;
 }
 
+export type ProgressMediaKind = 'image' | 'video';
+
+/** A daily/weekly progress photo or video, stored in Firebase Storage. */
+export interface ProgressPhoto {
+  id: string;
+  /** Firebase Storage download URL for the media. */
+  url: string;
+  /** Full storage path — kept so the file can be deleted from Storage. */
+  storagePath: string;
+  kind: ProgressMediaKind;
+  /** Original MIME type, e.g. image/webp, image/svg+xml, video/mp4. */
+  contentType: string;
+  fileName: string;
+  /** File size in bytes. */
+  size: number;
+  /** Logged date (YYYY-MM-DD) — drives daily/weekly grouping. */
+  date: string;
+  /** Epoch milliseconds the media was captured/uploaded. */
+  capturedAt: number;
+  /** Optional caption. */
+  note?: string;
+}
+
 export interface HabitDay {
   workout: boolean;
   water: boolean;

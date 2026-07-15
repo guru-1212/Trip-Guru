@@ -18,7 +18,9 @@ export function Navbar() {
   const [open, setOpen] = useState(false);
   const inFitTrack = pathname.startsWith('/fittrack');
   const inYoga = pathname.startsWith('/yoga');
-  const profileHref = (inFitTrack || inYoga) ? `/${inFitTrack ? 'fittrack' : 'yoga'}/profile` : '/profile';
+  // FitTrack has its own profile page; every other mode (trip/room/yoga) uses
+  // the shared account page, which is reachable regardless of active workspace.
+  const profileHref = inFitTrack ? '/fittrack/profile' : '/profile';
 
   useEffect(() => {
     const isDark = document.documentElement.classList.contains('dark');

@@ -1,4 +1,4 @@
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { getFirebaseStorage } from '@/firebase/config';
 
 export async function uploadFile(
@@ -8,6 +8,16 @@ export async function uploadFile(
   const storageRef = ref(getFirebaseStorage(), path);
   await uploadBytes(storageRef, file);
   return getDownloadURL(storageRef);
+}
+
+/** Delete a file at a full storage path. Resolves even if it was already gone. */
+export async function deleteFileAtPath(path: string): Promise<void> {
+  try {
+    await deleteObject(ref(getFirebaseStorage(), path));
+  } catch (err) {
+    if ((err as { code?: string }).code === 'storage/object-not-found') return;
+    throw err;
+  }
 }
 
 export async function uploadReceipt(
@@ -68,6 +78,24 @@ export async function uploadFitTrackVariationImage(
   const safeExerciseId = sanitizeStorageSegment(exerciseId);
   const safeVariation = sanitizeStorageSegment(variation);
   return uploadFile(`users/${uid}/fittrack/variations/${safeExerciseId}/${safeVariation}.jpg`, file);
+}
+
+/**
+ * Upload a progress photo/video, preserving the original file (and thus its
+ * format — gif animation, svg, webp, video all stay intact). Returns both the
+ * download URL and the storage path (needed to delete the file later).
+ */
+export async function uploadFitTrackProgressPhoto(
+  uid: string,
+  photoId: string,
+  ext: string,
+  file: File | Blob
+): Promise<{ url: string; path: string }> {
+  const safeId = sanitizeStorageSegment(photoId);
+  const safeExt = sanitizeStorageSegment(ext) || 'bin';
+  const path = `users/${uid}/fittrack/progress/${safeId}.${safeExt}`;
+  const url = await uploadFile(path, file);
+  return { url, path };
 }
 
 export async function uploadYogaPosturePhoto(

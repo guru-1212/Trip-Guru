@@ -2,7 +2,39 @@ import { PrimaryUseCase } from '@/types/user';
 
 export type AppMode = 'trip' | 'room' | 'gym' | 'yoga';
 
+/** Every workspace the app ships with, in display order. */
+export const ALL_WORKSPACES: AppMode[] = ['trip', 'room', 'gym', 'yoga'];
+
 const STORAGE_PREFIX = 'tripmate_app_mode_';
+
+/**
+ * The workspaces a user has chosen to see, normalized to display order.
+ * Undefined/empty (existing accounts) or an all-disabled list falls back to
+ * every workspace, so a user can never lock themselves out of the whole app.
+ */
+export function resolveEnabledWorkspaces(enabled?: AppMode[] | null): AppMode[] {
+  if (!enabled || enabled.length === 0) return [...ALL_WORKSPACES];
+  const set = new Set(enabled);
+  const filtered = ALL_WORKSPACES.filter((w) => set.has(w));
+  return filtered.length > 0 ? filtered : [...ALL_WORKSPACES];
+}
+
+/** Whether a given workspace is visible for this user's preferences. */
+export function isWorkspaceEnabled(
+  mode: AppMode,
+  enabled?: AppMode[] | null
+): boolean {
+  return resolveEnabledWorkspaces(enabled).includes(mode);
+}
+
+/** Snap a resolved mode to one the user still has enabled (first enabled otherwise). */
+export function clampModeToEnabled(
+  mode: AppMode,
+  enabled?: AppMode[] | null
+): AppMode {
+  const list = resolveEnabledWorkspaces(enabled);
+  return list.includes(mode) ? mode : list[0];
+}
 
 export function storageKey(uid: string): string {
   return `${STORAGE_PREFIX}${uid}`;

@@ -22,6 +22,7 @@ import type {
   FitTrackReminderType,
   HabitDay,
   PersonalRecord,
+  ProgressPhoto,
   SplitId,
   TodayExercisePick,
   UserProfile,
@@ -75,6 +76,10 @@ function customExercisesCol(uid: string) {
 
 function bodyStatsCol(uid: string) {
   return collection(db(), 'users', uid, 'fittrackBodyStats');
+}
+
+function progressPhotosCol(uid: string) {
+  return collection(db(), 'users', uid, 'fittrackProgressPhotos');
 }
 
 function remindersCol(uid: string) {
@@ -198,6 +203,20 @@ export async function deleteFitTrackBodyStat(uid: string, date: string): Promise
 
 export async function saveFitTrackBodyStat(uid: string, stat: BodyStat): Promise<void> {
   await setDoc(doc(bodyStatsCol(uid), stat.date), { ...stat, updatedAt: serverTimestamp() });
+}
+
+export async function getFitTrackProgressPhotos(uid: string): Promise<ProgressPhoto[]> {
+  const q = query(progressPhotosCol(uid), orderBy('capturedAt', 'desc'));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ProgressPhoto, 'id'>) }));
+}
+
+export async function saveFitTrackProgressPhoto(uid: string, photo: ProgressPhoto): Promise<void> {
+  await setDoc(doc(progressPhotosCol(uid), photo.id), { ...photo, updatedAt: serverTimestamp() });
+}
+
+export async function deleteFitTrackProgressPhoto(uid: string, id: string): Promise<void> {
+  await deleteDoc(doc(progressPhotosCol(uid), id));
 }
 
 export async function migrateLocalStorageToFirebase(uid: string): Promise<boolean> {

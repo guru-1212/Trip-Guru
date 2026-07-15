@@ -7,8 +7,9 @@ import { fetchUserTrips } from '@/features/trips/tripsThunks';
 import { fetchUserRooms } from '@/features/rooms/roomsThunks';
 import {
   resolveAppMode,
-  canSwitchWorkspace,
   writeStoredMode,
+  resolveEnabledWorkspaces,
+  clampModeToEnabled,
 } from '@/lib/appMode';
 
 export function AppModeProvider({ children }: { children: React.ReactNode }) {
@@ -31,15 +32,19 @@ export function AppModeProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    const mode = resolveAppMode(uid, user.primaryUseCase, user.activeMode);
-    const canSwitch = canSwitchWorkspace(user.primaryUseCase, {
-      hasTrips: trips.length > 0,
-      hasRooms: rooms.length > 0,
-    });
+    // Honor the user's per-account workspace visibility. A resolved mode that
+    // points at a workspace they've hidden is snapped back to an enabled one,
+    // and the switcher is only offered when more than one workspace is visible.
+    const enabled = resolveEnabledWorkspaces(user.enabledWorkspaces);
+    const mode = clampModeToEnabled(
+      resolveAppMode(uid, user.primaryUseCase, user.activeMode),
+      user.enabledWorkspaces
+    );
+    const canSwitch = enabled.length > 1;
 
     writeStoredMode(uid, mode);
     dispatch(setAppModeState({ mode, canSwitch }));
-  }, [uid, user, user?.primaryUseCase, user?.activeMode, trips.length, rooms.length, dispatch]);
+  }, [uid, user, user?.primaryUseCase, user?.activeMode, user?.enabledWorkspaces, trips.length, rooms.length, dispatch]);
 
   return <>{children}</>;
 }

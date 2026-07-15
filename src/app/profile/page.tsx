@@ -26,6 +26,7 @@ import { PrimaryUseCase, AppMode } from '@/types/user';
 import { setAppMode } from '@/features/appMode/appModeSlice';
 import { writeStoredMode } from '@/lib/appMode';
 import { LogOut, Bell, Camera, User as UserIcon, ChevronLeft, Calendar } from 'lucide-react';
+import { WorkspacesSettingsCard } from '@/components/profile/WorkspacesSettingsCard';
 import Link from 'next/link';
 import { ImageCropper } from '@/components/profile/ImageCropper';
 import toast from 'react-hot-toast';
@@ -446,6 +447,8 @@ function ProfileContent() {
           ))}
         </CardContent>
       </Card>
+
+      <WorkspacesSettingsCard />
 
       <Card className="rounded-[32px] border-border/40 shadow-sm bg-white dark:bg-slate-900/50">
         <CardHeader className="px-8 pt-8 flex flex-row items-center justify-between">

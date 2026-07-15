@@ -16,6 +16,7 @@ import type {
   CustomExercise,
   HabitDay,
   PersonalRecord,
+  ProgressPhoto,
   SplitId,
   TodayExercisePick,
   UserProfile,
@@ -51,6 +52,7 @@ export interface FitTrackSyncCallbacks {
   setSplitSequenceLocked: (l: Partial<Record<SplitId, boolean>>) => void;
   setSplitMobilityPicks: (p: Partial<Record<SplitId, Record<string, string>>>) => void;
   setRestDays: (d: string[]) => void;
+  setProgressPhotos: (p: ProgressPhoto[]) => void;
   setHydrated: (h: boolean) => void;
   setSyncing: (s: boolean) => void;
 }
@@ -208,6 +210,19 @@ export function useFitTrackSync(
           cb().setHydrated(true);
           cb().setSyncing(false);
         }
+      )
+    );
+
+    unsubs.push(
+      onSnapshot(
+        query(collection(db(), 'users', uid, 'fittrackProgressPhotos'), orderBy('capturedAt', 'desc')),
+        (snap) => {
+          if (cancelled) return;
+          cb().setProgressPhotos(
+            snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ProgressPhoto, 'id'>) }))
+          );
+        },
+        (err) => console.error('[FitTrack] progress photos listener:', err)
       )
     );
 

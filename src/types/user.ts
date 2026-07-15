@@ -18,6 +18,12 @@ export interface User {
   primaryUseCase?: PrimaryUseCase;
   /** Active Trip vs Room UI mode (for "both" and legacy multi-use accounts). */
   activeMode?: AppMode;
+  /**
+   * Workspaces this user has chosen to see in the app (Trips/Rooms/GYM/YOGA).
+   * Personal preference only — affects this account's UI, never other users.
+   * Undefined or empty means "all enabled" (backward compatible for existing accounts).
+   */
+  enabledWorkspaces?: AppMode[];
   /** When set, FitTrack reads/writes use this owner's data instead of own uid. */
   fittrackLinkedOwnerId?: string;
   googleCalendarLinked?: boolean;

@@ -13,6 +13,7 @@ import { getFavouriteSplit, getFavouriteExercise } from '@/workout/analytics';
 import { formatWeight, formatDuration, countScheduledWorkoutDays, getBrowserTimezone, getScheduledSplitsForDay } from '@/workout/utils';
 import type { DayKey, FitnessGoal, SplitId, ThemePref, WeekScheduleValue } from '@/workout/types';
 import { TrainingPartnersSection } from '@/components/workout/TrainingPartnersSection';
+import { WorkspacesSettingsCard } from '@/components/profile/WorkspacesSettingsCard';
 
 export default function ProfilePage() {
   const {
@@ -369,6 +370,9 @@ export default function ProfilePage() {
         </section>
 
         <TrainingPartnersSection />
+
+        {/* Workspaces visibility */}
+        <WorkspacesSettingsCard />
 
         {/* Data Management */}
         <section className="ft-card ft-card-padded">

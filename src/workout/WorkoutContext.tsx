@@ -6,7 +6,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFitTrackSync } from '@/hooks/useFitTrackSync';
 import { getFitTrackOwnerId } from '@/firebase/fittrackPartners.firestore';
 import * as fittrackDb from '@/firebase/fittrack.firestore';
-import { uploadFitTrackVariationImage } from '@/firebase/storage';
+import {
+  uploadFitTrackVariationImage,
+  uploadFitTrackProgressPhoto,
+  deleteFileAtPath,
+} from '@/firebase/storage';
 import type {
   ActiveWorkoutState,
   BodyStat,
@@ -14,6 +18,7 @@ import type {
   CustomExercise,
   HabitDay,
   PersonalRecord,
+  ProgressPhoto,
   UserProfile,
   VariationImageMap,
   WeeklyGoals,
@@ -22,6 +27,7 @@ import type {
   TodayExercisePick,
   SplitMobilityPicks,
 } from './types';
+import { validateProgressFile } from './progressPhotos';
 import {
   generateId,
   getWeekStart,
@@ -58,6 +64,7 @@ interface WorkoutContextValue {
   splitSequenceLocked: Partial<Record<SplitId, boolean>>;
   splitMobilityPicks: SplitMobilityPicks;
   restDays: string[];
+  progressPhotos: ProgressPhoto[];
   hydrated: boolean;
   syncing: boolean;
   fittrackOwnerId: string | null;
@@ -109,6 +116,10 @@ interface WorkoutContextValue {
   rememberMobilityPicks: (splitId: SplitId, picks: Record<string, string>) => void;
   /** Mark or unmark a date (YYYY-MM-DD) as an explicit rest day. */
   setRestDay: (date: string, resting: boolean) => void;
+  /** Upload a daily/weekly progress photo or video. Validates format + size. */
+  addProgressPhoto: (file: File, meta: { date: string; note?: string }) => Promise<void>;
+  /** Delete a progress photo (Firestore doc + Storage file). */
+  deleteProgressPhoto: (photo: ProgressPhoto) => Promise<void>;
 }
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
@@ -136,6 +147,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [splitSequenceLocked, setSplitSequenceLocked] = useState<Partial<Record<SplitId, boolean>>>({});
   const [splitMobilityPicks, setSplitMobilityPicks] = useState<SplitMobilityPicks>({});
   const [restDays, setRestDays] = useState<string[]>([]);
+  const [progressPhotos, setProgressPhotos] = useState<ProgressPhoto[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [syncing, setSyncing] = useState(true);
 
@@ -174,6 +186,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setSplitSequenceLocked,
     setSplitMobilityPicks,
     setRestDays,
+    setProgressPhotos,
     setHydrated,
     setSyncing,
   }, { migrateUid: isFitTrackPartner ? null : uid });
@@ -839,6 +852,67 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     });
   }, [persistState]);
 
+  const addProgressPhoto = useCallback(
+    async (file: File, meta: { date: string; note?: string }) => {
+      const currentUid = uidRef.current;
+      if (!currentUid) {
+        toast.error('Sign in to upload progress photos');
+        return;
+      }
+      const validation = validateProgressFile(file);
+      if (!validation.ok) {
+        toast.error(validation.error);
+        return;
+      }
+      const id = generateId();
+      const toastId = toast.loading('Uploading…');
+      try {
+        const { url, path } = await uploadFitTrackProgressPhoto(currentUid, id, validation.ext, file);
+        const note = meta.note?.trim();
+        const photo: ProgressPhoto = {
+          id,
+          url,
+          storagePath: path,
+          kind: validation.kind,
+          contentType: file.type || validation.kind,
+          fileName: file.name,
+          size: file.size,
+          date: meta.date,
+          capturedAt: Date.now(),
+          ...(note ? { note } : {}),
+        };
+        await fittrackDb.saveFitTrackProgressPhoto(currentUid, photo);
+        setProgressPhotos((prev) => [photo, ...prev.filter((p) => p.id !== id)]);
+        toast.dismiss(toastId);
+        toast.success('Progress photo added');
+      } catch (err) {
+        console.error('[FitTrack] progress photo upload failed:', err);
+        toast.dismiss(toastId);
+        toast.error('Upload failed. Check your connection and try again.');
+      }
+    },
+    []
+  );
+
+  const deleteProgressPhoto = useCallback(async (photo: ProgressPhoto) => {
+    const currentUid = uidRef.current;
+    if (!currentUid) return;
+    // Optimistic removal; the snapshot listener restores it if the write fails.
+    setProgressPhotos((prev) => prev.filter((p) => p.id !== photo.id));
+    try {
+      await fittrackDb.deleteFitTrackProgressPhoto(currentUid, photo.id);
+      if (photo.storagePath) {
+        await deleteFileAtPath(photo.storagePath).catch((err) =>
+          console.error('[FitTrack] progress photo storage delete failed:', err)
+        );
+      }
+      toast.success('Photo deleted');
+    } catch (err) {
+      console.error('[FitTrack] progress photo delete failed:', err);
+      toast.error('Failed to delete photo');
+    }
+  }, []);
+
   const value = useMemo(
     () => ({
       profile,
@@ -857,6 +931,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitSequenceLocked,
       splitMobilityPicks,
       restDays,
+      progressPhotos,
       hydrated,
       syncing,
       fittrackOwnerId: effectiveUid,
@@ -902,6 +977,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       rememberSequenceLocked,
       rememberMobilityPicks,
       setRestDay,
+      addProgressPhoto,
+      deleteProgressPhoto,
     }),
     [
       profile,
@@ -920,6 +997,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitSequenceLocked,
       splitMobilityPicks,
       restDays,
+      progressPhotos,
       hydrated,
       syncing,
       effectiveUid,
@@ -965,6 +1043,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       rememberSequenceLocked,
       rememberMobilityPicks,
       setRestDay,
+      addProgressPhoto,
+      deleteProgressPhoto,
     ]
   );
 
