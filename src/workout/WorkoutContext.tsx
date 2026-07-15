@@ -27,7 +27,7 @@ import type {
   TodayExercisePick,
   SplitMobilityPicks,
 } from './types';
-import { validateProgressFile } from './progressPhotos';
+import { prepareProgressUpload, type UploadProgress } from './progressPhotos';
 import {
   generateId,
   getWeekStart,
@@ -116,8 +116,16 @@ interface WorkoutContextValue {
   rememberMobilityPicks: (splitId: SplitId, picks: Record<string, string>) => void;
   /** Mark or unmark a date (YYYY-MM-DD) as an explicit rest day. */
   setRestDay: (date: string, resting: boolean) => void;
-  /** Upload a daily/weekly progress photo or video. Validates format + size. */
-  addProgressPhoto: (file: File, meta: { date: string; note?: string }) => Promise<void>;
+  /**
+   * Upload a daily/weekly progress photo or video. Auto-compresses raster
+   * images to fit the size cap and reports compress/upload progress. Resolves
+   * to true on success.
+   */
+  addProgressPhoto: (
+    file: File,
+    meta: { date: string; note?: string },
+    onProgress?: (p: UploadProgress) => void
+  ) => Promise<boolean>;
   /** Delete a progress photo (Firestore doc + Storage file). */
   deleteProgressPhoto: (photo: ProgressPhoto) => Promise<void>;
 }
@@ -853,42 +861,60 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   }, [persistState]);
 
   const addProgressPhoto = useCallback(
-    async (file: File, meta: { date: string; note?: string }) => {
+    async (
+      file: File,
+      meta: { date: string; note?: string },
+      onProgress?: (p: UploadProgress) => void
+    ): Promise<boolean> => {
       const currentUid = uidRef.current;
       if (!currentUid) {
         toast.error('Sign in to upload progress photos');
-        return;
+        return false;
       }
-      const validation = validateProgressFile(file);
-      if (!validation.ok) {
-        toast.error(validation.error);
-        return;
-      }
-      const id = generateId();
-      const toastId = toast.loading('Uploading…');
       try {
-        const { url, path } = await uploadFitTrackProgressPhoto(currentUid, id, validation.ext, file);
+        onProgress?.({ stage: 'compressing' });
+        const prepared = await prepareProgressUpload(file);
+        if (!prepared.ok) {
+          toast.error(prepared.error);
+          return false;
+        }
+        const { blob, kind, ext, contentType, compressed, width, height } = prepared.data;
+
+        const id = generateId();
+        onProgress?.({ stage: 'uploading', percent: 0 });
+        const { url, path } = await uploadFitTrackProgressPhoto(
+          currentUid,
+          id,
+          ext,
+          blob,
+          (fraction) => onProgress?.({ stage: 'uploading', percent: Math.round(fraction * 100) })
+        );
+
+        onProgress?.({ stage: 'saving' });
         const note = meta.note?.trim();
         const photo: ProgressPhoto = {
           id,
           url,
           storagePath: path,
-          kind: validation.kind,
-          contentType: file.type || validation.kind,
+          kind,
+          contentType,
           fileName: file.name,
-          size: file.size,
+          size: blob.size,
           date: meta.date,
           capturedAt: Date.now(),
+          compressed,
           ...(note ? { note } : {}),
+          ...(width ? { width } : {}),
+          ...(height ? { height } : {}),
         };
         await fittrackDb.saveFitTrackProgressPhoto(currentUid, photo);
         setProgressPhotos((prev) => [photo, ...prev.filter((p) => p.id !== id)]);
-        toast.dismiss(toastId);
-        toast.success('Progress photo added');
+        toast.success(compressed ? 'Photo compressed & added' : 'Progress photo added');
+        return true;
       } catch (err) {
         console.error('[FitTrack] progress photo upload failed:', err);
-        toast.dismiss(toastId);
         toast.error('Upload failed. Check your connection and try again.');
+        return false;
       }
     },
     []

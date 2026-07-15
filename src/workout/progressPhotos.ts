@@ -48,30 +48,223 @@ export function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export type ProgressValidation =
-  | { ok: true; kind: ProgressMediaKind; ext: string }
-  | { ok: false; error: string };
+/** Raster formats we can safely re-encode/compress with a canvas. */
+const RASTER_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+const RASTER_MIME = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
 
-/** Validate format + size against the allowed types and per-kind size caps. */
-export function validateProgressFile(file: File): ProgressValidation {
+function isRasterImage(file: File): boolean {
+  const type = (file.type || '').toLowerCase();
+  if (RASTER_MIME.includes(type)) return true;
+  return RASTER_EXTENSIONS.includes(fileExtension(file));
+}
+
+/** Multi-stage progress for the upload UI. */
+export type UploadProgress =
+  | { stage: 'compressing' }
+  | { stage: 'uploading'; percent: number }
+  | { stage: 'saving' };
+
+export interface PreparedUpload {
+  blob: Blob;
+  kind: ProgressMediaKind;
+  ext: string;
+  contentType: string;
+  compressed: boolean;
+  width?: number;
+  height?: number;
+}
+
+export type PrepareResult = { ok: true; data: PreparedUpload } | { ok: false; error: string };
+
+/**
+ * Instant, synchronous check on file pick. Only rejects things compression
+ * can't fix: unsupported formats, oversized videos, oversized GIF/SVG.
+ * Raster images always pass here — they get compressed at upload time.
+ */
+export function precheckProgressFile(
+  file: File
+): { ok: true; kind: ProgressMediaKind } | { ok: false; error: string } {
   const kind = detectKind(file);
   if (!kind) {
+    return { ok: false, error: 'Unsupported format. Allowed: JPG, PNG, WEBP, GIF, SVG or video.' };
+  }
+  if (kind === 'video' && file.size > MAX_VIDEO_BYTES) {
+    return { ok: false, error: `Video is ${formatBytes(file.size)} — max is 3 MB.` };
+  }
+  if (kind === 'image' && !isRasterImage(file) && file.size > MAX_IMAGE_BYTES) {
     return {
       ok: false,
-      error: 'Unsupported format. Allowed: JPG, PNG, WEBP, GIF, SVG or video.',
+      error: `${fileExtension(file).toUpperCase()} is ${formatBytes(
+        file.size
+      )} and can't be compressed — max is 100 KB.`,
     };
   }
-  const limit = kind === 'video' ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
-  if (file.size > limit) {
+  return { ok: true, kind };
+}
+
+// ── Client-side image compression (canvas) ──────────────────────────
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageEl(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Could not load image'));
+    img.src = src;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), type, quality));
+}
+
+function supportsWebpEncode(): boolean {
+  try {
+    const c = document.createElement('canvas');
+    c.width = 1;
+    c.height = 1;
+    return c.toDataURL('image/webp').startsWith('data:image/webp');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Downscale + re-encode a raster image until it fits under `maxBytes`.
+ * Prefers WEBP (smaller, keeps alpha) and falls back to JPEG.
+ */
+export async function compressRasterImage(
+  file: File,
+  maxBytes: number
+): Promise<PreparedUpload | null> {
+  const img = await loadImageEl(await readFileAsDataUrl(file));
+  const useWebp = supportsWebpEncode();
+  const type = useWebp ? 'image/webp' : 'image/jpeg';
+  const ext = useWebp ? 'webp' : 'jpg';
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const scales = [1, 0.85, 0.7, 0.55, 0.45, 0.35, 0.25];
+  const qualities = [0.82, 0.72, 0.62, 0.5, 0.4];
+  let smallest: PreparedUpload | null = null;
+
+  for (const scale of scales) {
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    canvas.width = w;
+    canvas.height = h;
+    ctx.clearRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+    for (const q of qualities) {
+      const blob = await canvasToBlob(canvas, type, q);
+      if (!blob) continue;
+      const candidate: PreparedUpload = {
+        blob,
+        kind: 'image',
+        ext,
+        contentType: type,
+        compressed: true,
+        width: w,
+        height: h,
+      };
+      if (!smallest || blob.size < smallest.blob.size) smallest = candidate;
+      if (blob.size <= maxBytes) return candidate;
+    }
+  }
+  return smallest && smallest.blob.size <= maxBytes ? smallest : null;
+}
+
+/**
+ * Prepare a file for upload: validate, and auto-compress raster images to fit
+ * the 100 KB cap. GIF/SVG/video are passed through unchanged.
+ */
+export async function prepareProgressUpload(file: File): Promise<PrepareResult> {
+  const kind = detectKind(file);
+  if (!kind) {
+    return { ok: false, error: 'Unsupported format. Allowed: JPG, PNG, WEBP, GIF, SVG or video.' };
+  }
+
+  if (kind === 'video') {
+    if (file.size > MAX_VIDEO_BYTES) {
+      return { ok: false, error: `Video is ${formatBytes(file.size)} — max is 3 MB.` };
+    }
     return {
-      ok: false,
-      error:
-        kind === 'video'
-          ? `Video is ${formatBytes(file.size)} — max is 3 MB.`
-          : `Image is ${formatBytes(file.size)} — max is 100 KB.`,
+      ok: true,
+      data: {
+        blob: file,
+        kind,
+        ext: fileExtension(file),
+        contentType: file.type || 'video/mp4',
+        compressed: false,
+      },
     };
   }
-  return { ok: true, kind, ext: fileExtension(file) };
+
+  // GIF / SVG can't be canvas-compressed without losing animation/vector data.
+  if (!isRasterImage(file)) {
+    if (file.size > MAX_IMAGE_BYTES) {
+      return {
+        ok: false,
+        error: `${fileExtension(file).toUpperCase()} is ${formatBytes(
+          file.size
+        )} and can't be compressed — max is 100 KB.`,
+      };
+    }
+    return {
+      ok: true,
+      data: {
+        blob: file,
+        kind: 'image',
+        ext: fileExtension(file),
+        contentType: file.type || 'image/*',
+        compressed: false,
+      },
+    };
+  }
+
+  // Raster image → always compress (keeps storage small); fall back to the
+  // original only if compression somehow produced a larger file.
+  const compressed = await compressRasterImage(file, MAX_IMAGE_BYTES).catch(() => null);
+  if (compressed) {
+    if (file.size <= MAX_IMAGE_BYTES && compressed.blob.size >= file.size) {
+      return {
+        ok: true,
+        data: {
+          blob: file,
+          kind: 'image',
+          ext: fileExtension(file),
+          contentType: file.type || 'image/jpeg',
+          compressed: false,
+        },
+      };
+    }
+    return { ok: true, data: compressed };
+  }
+
+  if (file.size <= MAX_IMAGE_BYTES) {
+    return {
+      ok: true,
+      data: {
+        blob: file,
+        kind: 'image',
+        ext: fileExtension(file),
+        contentType: file.type || 'image/jpeg',
+        compressed: false,
+      },
+    };
+  }
+  return {
+    ok: false,
+    error: "Couldn't compress this image under 100 KB. Try a smaller photo.",
+  };
 }
 
 // ── Grouping (daily / weekly) ───────────────────────────────────────

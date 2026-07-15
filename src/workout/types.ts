@@ -111,6 +111,11 @@ export interface ProgressPhoto {
   capturedAt: number;
   /** Optional caption. */
   note?: string;
+  /** Pixel dimensions, when known (auto-compressed images). */
+  width?: number;
+  height?: number;
+  /** True when the media was auto-compressed before upload. */
+  compressed?: boolean;
 }
 
 export interface HabitDay {

@@ -1,4 +1,10 @@
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import {
+  ref,
+  uploadBytes,
+  uploadBytesResumable,
+  getDownloadURL,
+  deleteObject,
+} from 'firebase/storage';
 import { getFirebaseStorage } from '@/firebase/config';
 
 export async function uploadFile(
@@ -8,6 +14,30 @@ export async function uploadFile(
   const storageRef = ref(getFirebaseStorage(), path);
   await uploadBytes(storageRef, file);
   return getDownloadURL(storageRef);
+}
+
+/**
+ * Upload with progress reporting (0..1). Uses a resumable upload so the caller
+ * can drive a progress bar.
+ */
+export function uploadFileWithProgress(
+  path: string,
+  file: File | Blob,
+  onProgress?: (fraction: number) => void
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const task = uploadBytesResumable(ref(getFirebaseStorage(), path), file);
+    task.on(
+      'state_changed',
+      (snap) => {
+        if (snap.totalBytes > 0) onProgress?.(snap.bytesTransferred / snap.totalBytes);
+      },
+      reject,
+      () => {
+        getDownloadURL(task.snapshot.ref).then(resolve).catch(reject);
+      }
+    );
+  });
 }
 
 /** Delete a file at a full storage path. Resolves even if it was already gone. */
@@ -89,12 +119,13 @@ export async function uploadFitTrackProgressPhoto(
   uid: string,
   photoId: string,
   ext: string,
-  file: File | Blob
+  file: File | Blob,
+  onProgress?: (fraction: number) => void
 ): Promise<{ url: string; path: string }> {
   const safeId = sanitizeStorageSegment(photoId);
   const safeExt = sanitizeStorageSegment(ext) || 'bin';
   const path = `users/${uid}/fittrack/progress/${safeId}.${safeExt}`;
-  const url = await uploadFile(path, file);
+  const url = await uploadFileWithProgress(path, file, onProgress);
   return { url, path };
 }
 
