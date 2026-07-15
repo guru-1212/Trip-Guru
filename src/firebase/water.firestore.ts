@@ -255,6 +255,24 @@ export async function removeWaterIntake(
   }
 }
 
+/** All water logs whose date-key falls within [startKey, endKey] (inclusive), keyed by date. */
+export async function getWaterLogsInRange(
+  uid: string,
+  startKey: string,
+  endKey: string
+): Promise<Record<string, WaterLogDoc>> {
+  try {
+    const snap = await getDocs(waterLogsCol(uid));
+    const out: Record<string, WaterLogDoc> = {};
+    for (const d of snap.docs) {
+      if (d.id >= startKey && d.id <= endKey) out[d.id] = d.data() as WaterLogDoc;
+    }
+    return out;
+  } catch (err) {
+    throw new WaterFirestoreError('Failed to load water logs in range', err);
+  }
+}
+
 export async function getRecentCompletedWaterLogs(
   uid: string,
   days: number

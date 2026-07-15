@@ -245,6 +245,25 @@ export async function removeNutritionEntry(
   await persistLog(uid, dateKey, entries, data.targets);
 }
 
+export async function getNutritionLog(uid: string, dateKey: string): Promise<NutritionLogDoc | null> {
+  const snap = await getDoc(nutritionLogDoc(uid, dateKey));
+  return snap.exists() ? (snap.data() as NutritionLogDoc) : null;
+}
+
+/** All nutrition logs whose date-key falls within [startKey, endKey] (inclusive), keyed by date. */
+export async function getNutritionLogsInRange(
+  uid: string,
+  startKey: string,
+  endKey: string
+): Promise<Record<string, NutritionLogDoc>> {
+  const snap = await getDocs(nutritionLogsCol(uid));
+  const out: Record<string, NutritionLogDoc> = {};
+  for (const d of snap.docs) {
+    if (d.id >= startKey && d.id <= endKey) out[d.id] = d.data() as NutritionLogDoc;
+  }
+  return out;
+}
+
 export async function getRecentNutritionLogs(
   uid: string,
   days: number

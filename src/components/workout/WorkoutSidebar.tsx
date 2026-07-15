@@ -16,6 +16,7 @@ import {
   CalendarDays,
   Scale,
   Camera,
+  Sparkles,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAppMode } from '@/hooks/useAppMode';
@@ -30,6 +31,7 @@ const navItems = [
   { href: '/fittrack/exercises', label: 'Exercises', icon: BookOpen },
   { href: '/fittrack/progress', label: 'Progress', icon: TrendingUp },
   { href: '/fittrack/progress-photos', label: 'Photos', icon: Camera },
+  { href: '/fittrack/recap', label: 'Recap', icon: Sparkles },
   { href: '/fittrack/weight', label: 'Weight', icon: Scale },
   { href: '/fittrack/checklist', label: 'Checklist', icon: CheckSquare },
   { href: '/fittrack/analytics', label: 'Analytics', icon: BarChart3 },
