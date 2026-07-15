@@ -28,6 +28,7 @@ import {
   filterByRange,
   calcTrainingOverview,
 } from './analytics';
+import { computeMuscleRecovery } from './recovery';
 import { normalizeChecklist } from '../firebase/fittrack.firestore';
 import type { WorkoutSession, WorkoutExercise, WorkoutSet, ChecklistData, LibraryExercise, SplitId } from './types';
 
@@ -502,6 +503,50 @@ function testCombinedLegShouldersSplit() {
   );
 }
 
+function testMuscleRecoveryTiming() {
+  console.log('Testing Muscle Recovery Timing...');
+
+  const daysAgo = (n: number) => dayjs().subtract(n, 'day').format('YYYY-MM-DD');
+  const legShoulderExercises: WorkoutExercise[] = [
+    { exerciseId: 'test-squat', name: 'Squat', variation: 'Standard', muscle: 'Legs', sets: [{ weight: 100, reps: 5, done: true }] },
+    { exerciseId: 'test-press', name: 'Shoulder Press', variation: 'Standard', muscle: 'Shoulders', sets: [{ weight: 40, reps: 8, done: true }] },
+  ];
+
+  // A session TRAINED 5 days ago but SAVED just now (completedAt = now) — as
+  // happens when a workout is backdated, its date is edited, or it is started
+  // one day and finished on a later one. Recovery must anchor to the logged
+  // training day, not the save moment.
+  const backdated: WorkoutSession = {
+    id: 'backdated',
+    date: daysAgo(5),
+    completedAt: dayjs().valueOf(),
+    splitId: 'legsh',
+    splitName: 'Legs + Shoulders',
+    duration: 3600,
+    exercises: legShoulderExercises,
+    totalSets: 2,
+    totalVolume: 500,
+  };
+
+  const rec = computeMuscleRecovery([backdated]);
+  assert(rec['Shoulders'].recoveryPct === 100, 'Shoulders fully recovered 5 days after training, despite a same-day completedAt');
+  assert(rec['Shoulders'].status === 'recovered', 'Shoulders status should be recovered');
+  assert(rec['Shoulders'].etaHours === 0, 'Shoulders should have no remaining recovery time');
+  assert(rec['Quads'].recoveryPct === 100, 'Quads (Legs, 72h) fully recovered 5 days after training');
+  assert(rec['Quads'].etaHours === 0, 'Quads should have no remaining recovery time');
+
+  // Control: trained AND saved today → still fatigued, with time remaining.
+  const trainedToday: WorkoutSession = {
+    ...backdated,
+    id: 'today',
+    date: dayjs().format('YYYY-MM-DD'),
+  };
+  const recToday = computeMuscleRecovery([trainedToday]);
+  assert(recToday['Shoulders'].recoveryPct < 100, 'Shoulders trained today are not yet fully recovered');
+  assert(recToday['Shoulders'].etaHours > 0, 'Shoulders trained today have remaining recovery time');
+  assert(recToday['Quads'].etaHours > recToday['Shoulders'].etaHours, 'Legs (72h) take longer to recover than Shoulders (48h)');
+}
+
 function runTests() {
   try {
     testVolumeCalculations();
@@ -518,6 +563,7 @@ function runTests() {
     testRotationScheduling();
     testMultiSplitScheduling();
     testCombinedLegShouldersSplit();
+    testMuscleRecoveryTiming();
     console.log('\nAll FitTrack tests passed! ✅');
   } catch (error) {
     console.error('\nTests failed! ❌');

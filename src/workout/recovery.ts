@@ -112,9 +112,25 @@ function musclesTrainedByExercise(ex: WorkoutExercise): RecoveryMuscle[] {
   return Array.from(out);
 }
 
-/** Epoch ms the session finished — real finish time, else end of the logged day. */
+/**
+ * Epoch ms the session finished. Uses the precise `completedAt` timestamp only
+ * when it lands on the same calendar day as the logged `date`; otherwise anchors
+ * to the workout's logged day (end of day).
+ *
+ * Why: `completedAt` is the moment the session was saved. It diverges from the
+ * training day whenever a workout is backdated, has its date edited on the
+ * dashboard (updateWorkoutDate keeps the old completedAt), or is started one day
+ * and finished on a later one. Trusting it blindly would compute recovery from
+ * the save time instead of the actual workout — pushing "fully recovered" days
+ * into the future. Mirrors the same guard used in buildYearlyAttendanceMap.
+ */
 function sessionFinishMs(session: WorkoutSession): number {
-  if (typeof session.completedAt === 'number') return session.completedAt;
+  if (
+    typeof session.completedAt === 'number' &&
+    dayjs(session.completedAt).format('YYYY-MM-DD') === session.date
+  ) {
+    return session.completedAt;
+  }
   return dayjs(session.date).endOf('day').valueOf();
 }
 
