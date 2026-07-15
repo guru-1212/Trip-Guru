@@ -60,6 +60,7 @@ import {
   repeatSessionPresetKey,
   isYesterday,
   getLastExerciseSession,
+  getLastLoggedSets,
   isExerciseFullyDone,
   formatLastSessionPreview,
   isPR,
@@ -605,6 +606,18 @@ export default function WorkoutPage() {
       repeatSessionPresetsRef.current = new Map();
     }
 
+    // Auto-fill each exercise from its last logged session (same reps + weight),
+    // leaving every set unchecked so the user only has to confirm what they did.
+    // Only untouched (all-empty) exercises are filled, so an explicit AI-import
+    // or repeat-session choice always takes precedence.
+    exercises = exercises.map((ex) => {
+      const alreadyFilled = ex.sets.some((s) => s.weight > 0 || s.reps > 0);
+      if (alreadyFilled) return ex;
+      const lastSets = getLastLoggedSets(workouts, ex.exerciseId, ex.variation);
+      if (!lastSets) return ex;
+      return patchExerciseSets(ex, lastSets);
+    });
+
     rememberTodayPicks(selectedSplit, picks);
     const state = {
       splitId: selectedSplit,
@@ -628,6 +641,7 @@ export default function WorkoutPage() {
     profile.prefs.restTimer,
     customExercises,
     splitExtras,
+    workouts,
     startActiveWorkout,
     rememberTodayPicks,
     setRestDay,

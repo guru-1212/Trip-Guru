@@ -350,6 +350,31 @@ export function getLastExerciseSession(
   return null;
 }
 
+/**
+ * The most recent logged sets for an exercise/variation, ready to pre-fill a new
+ * session: completed sets that recorded a weight or reps, copied with done reset
+ * to false. Unlike getLastExerciseSession this keeps bodyweight (reps-only) sets,
+ * so calisthenics exercises pre-fill too. Returns null when nothing usable exists.
+ */
+export function getLastLoggedSets(
+  workouts: WorkoutSession[],
+  exerciseId: string,
+  variation?: string
+): WorkoutSet[] | null {
+  for (const w of [...workouts].sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf())) {
+    const ex = w.exercises.find((e) => {
+      if (e.exerciseId !== exerciseId) return false;
+      if (variation !== undefined && !variationMatches(e.variation, variation)) return false;
+      return true;
+    });
+    if (!ex) continue;
+    const doneSets = ex.sets.filter((s) => s.done && (s.weight > 0 || s.reps > 0));
+    if (doneSets.length === 0) continue;
+    return doneSets.map((s) => ({ weight: s.weight, reps: s.reps, done: false }));
+  }
+  return null;
+}
+
 export function getPickedVariations(ex: WorkoutExercise): string[] {
   if (ex.pickedVariations?.length) return ex.pickedVariations;
   return [ex.variation];

@@ -9,6 +9,7 @@ import {
   suggestWeight,
   syncWorkoutHabits,
   getLastSessionsForSplit,
+  getLastLoggedSets,
   buildRepeatDataFromSession,
   repeatSessionPresetKey,
   exerciseMatchesSearch,
@@ -547,6 +548,51 @@ function testMuscleRecoveryTiming() {
   assert(recToday['Quads'].etaHours > recToday['Shoulders'].etaHours, 'Legs (72h) take longer to recover than Shoulders (48h)');
 }
 
+function testAutofillLastLoggedSets() {
+  console.log('Testing Auto-fill From Last Session...');
+
+  const mk = (
+    id: string,
+    date: string,
+    sets: WorkoutSet[],
+    variation = 'Barbell'
+  ): WorkoutSession => ({
+    id,
+    date,
+    splitId: 'ct',
+    splitName: 'Chest/Triceps',
+    duration: 3600,
+    totalSets: sets.length,
+    totalVolume: 0,
+    exercises: [{ exerciseId: 'bench', name: 'Bench Press', variation, muscle: 'Chest', sets }],
+  });
+
+  // No history → nothing to pre-fill.
+  assert(getLastLoggedSets([], 'bench', 'Barbell') === null, 'No history returns null');
+
+  // Picks the most recent session and resets done to false.
+  const workouts: WorkoutSession[] = [
+    mk('old', '2024-06-20', [{ weight: 80, reps: 10, done: true }]),
+    mk('new', '2024-06-27', [
+      { weight: 100, reps: 8, done: true },
+      { weight: 100, reps: 6, done: true },
+      { weight: 90, reps: 10, done: false }, // not done → skipped
+    ]),
+  ];
+  const filled = getLastLoggedSets(workouts, 'bench', 'Barbell');
+  assert(!!filled && filled.length === 2, 'Pre-fills only the 2 completed sets from the newest session');
+  assert(filled![0].weight === 100 && filled![0].reps === 8, 'First set copies last weight/reps');
+  assert(filled!.every((s) => s.done === false), 'Pre-filled sets start unchecked');
+
+  // Bodyweight (reps only, weight 0) still pre-fills — unlike getLastExerciseSession.
+  const bodyweight = [mk('bw', '2024-06-25', [{ weight: 0, reps: 12, done: true }])];
+  const bwFilled = getLastLoggedSets(bodyweight, 'bench', 'Barbell');
+  assert(!!bwFilled && bwFilled.length === 1 && bwFilled![0].reps === 12, 'Bodyweight reps pre-fill even with zero weight');
+
+  // Variation-specific: a different variation has no match.
+  assert(getLastLoggedSets(workouts, 'bench', 'Incline Dumbbell') === null, 'Different variation does not match');
+}
+
 function runTests() {
   try {
     testVolumeCalculations();
@@ -564,6 +610,7 @@ function runTests() {
     testMultiSplitScheduling();
     testCombinedLegShouldersSplit();
     testMuscleRecoveryTiming();
+    testAutofillLastLoggedSets();
     console.log('\nAll FitTrack tests passed! ✅');
   } catch (error) {
     console.error('\nTests failed! ❌');
