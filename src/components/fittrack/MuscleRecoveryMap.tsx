@@ -4,7 +4,11 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { MUSCLE_COLORS } from '@/workout/constants';
-import { formatRecoveryEta } from '@/workout/recovery';
+import {
+  formatRecoveryEta,
+  formatRecoveryReadyAt,
+  formatRecoveryReadyAtShort,
+} from '@/workout/recovery';
 import {
   BODY_FRONT,
   BODY_BACK,
@@ -29,6 +33,8 @@ export interface MuscleData {
   recoveryPct?: number;
   /** Hours remaining until fully recovered. */
   etaHours?: number;
+  /** Epoch ms when the muscle reaches 100% recovery. */
+  readyAt?: number;
   lastTrained?: string;
 }
 
@@ -253,6 +259,17 @@ function MuscleDetail({ muscle, info }: { muscle: string; info: MuscleData | nul
             )}
           </div>
 
+          {info && info.readyAt !== undefined && (info.etaHours ?? 0) > 0 && (
+            <div className="mt-3 rounded-xl border border-border/60 bg-background/60 px-3 py-2">
+              <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">
+                Fully recovered
+              </p>
+              <p className="mt-0.5 text-sm font-black tracking-tight" style={{ color: barColor }}>
+                {formatRecoveryReadyAt(info.readyAt)}
+              </p>
+            </div>
+          )}
+
           {info?.lastTrained ? (
             <p className="mt-2 text-xs font-medium text-muted-foreground">Last trained {info.lastTrained}</p>
           ) : (
@@ -352,8 +369,10 @@ export function MuscleRecoveryMap({ data }: { data: Record<string, MuscleData> }
               >
                 {pct}%
               </span>
-              <span className="hidden w-24 shrink-0 text-right text-[11px] font-bold text-muted-foreground sm:block">
-                {info?.etaHours !== undefined ? formatRecoveryEta(info.etaHours) : 'Ready'}
+              <span className="hidden w-28 shrink-0 text-right text-[11px] font-bold text-muted-foreground sm:block">
+                {info?.readyAt !== undefined
+                  ? formatRecoveryReadyAtShort(info.readyAt)
+                  : 'Ready'}
               </span>
             </button>
           );

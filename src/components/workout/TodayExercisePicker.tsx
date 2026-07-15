@@ -982,7 +982,7 @@ export function TodayExercisePicker({
 
       <AnimatePresence>
         {showUnlockDialog && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div key="unlock-dialog" className="fixed inset-0 z-[120] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1038,7 +1038,7 @@ export function TodayExercisePicker({
           </div>
         )}
         {showSequenceModal && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div key="sequence-modal" className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1129,7 +1129,7 @@ export function TodayExercisePicker({
           </div>
         )}
         {fullImagePreview && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+          <div key="full-image-preview" className="fixed inset-0 z-[120] flex items-center justify-center p-4">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}

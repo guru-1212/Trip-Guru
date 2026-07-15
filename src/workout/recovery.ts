@@ -91,6 +91,8 @@ export interface MuscleRecovery {
   recoveryPct: number;
   /** Hours remaining until fully recovered (0 once ready). */
   etaHours: number;
+  /** Epoch ms when the muscle reaches 100% recovery (in the past once ready). */
+  readyAt: number;
   /** Human-relative last-trained label, e.g. "2 days ago". */
   lastTrained?: string;
 }
@@ -143,7 +145,13 @@ export function computeMuscleRecovery(
     const last = sessions.find((s) => s.muscles.has(muscle));
 
     if (!last) {
-      result[muscle] = { name: muscle, status: 'recovered', recoveryPct: 100, etaHours: 0 };
+      result[muscle] = {
+        name: muscle,
+        status: 'recovered',
+        recoveryPct: 100,
+        etaHours: 0,
+        readyAt: nowMs,
+      };
       continue;
     }
 
@@ -159,6 +167,7 @@ export function computeMuscleRecovery(
       status,
       recoveryPct: Math.round(recoveryPct),
       etaHours,
+      readyAt: last.finish + window * 3_600_000,
       lastTrained: dayjs(last.finish).fromNow(),
     };
   }
@@ -174,4 +183,25 @@ export function formatRecoveryEta(hours: number): string {
   const days = Math.floor(hours / 24);
   const rem = Math.round(hours % 24);
   return rem > 0 ? `ready in ~${days}d ${rem}h` : `ready in ~${days}d`;
+}
+
+/**
+ * Friendly absolute recovery time, e.g. "Ready now" / "Today, 3:24 PM" /
+ * "Tomorrow, 3:24 PM" / "Wed, Jul 16 · 3:24 PM".
+ */
+export function formatRecoveryReadyAt(readyAt: number): string {
+  const d = dayjs(readyAt);
+  const now = dayjs();
+  if (!d.isAfter(now)) return 'Ready now';
+  const time = d.format('h:mm A');
+  if (d.isSame(now, 'day')) return `Today, ${time}`;
+  if (d.isSame(now.add(1, 'day'), 'day')) return `Tomorrow, ${time}`;
+  return d.format('ddd, MMM D · h:mm A');
+}
+
+/** Compact absolute recovery time for tight rows: "Ready" / "Jul 16 · 3:24 PM". */
+export function formatRecoveryReadyAtShort(readyAt: number): string {
+  const d = dayjs(readyAt);
+  if (!d.isAfter(dayjs())) return 'Ready';
+  return d.format('MMM D · h:mm A');
 }

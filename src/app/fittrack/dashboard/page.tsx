@@ -282,7 +282,9 @@ export default function DashboardPage() {
           <p className="ft-subtitle mt-1">
             {hasTrainedToday
               ? `Workout done for today! Let's plan for tomorrow: ${tomorrowSplitName}`
-              : `Today is ${getTodayDayKey()}. Ready to train?`}
+              : todaySplit !== 'rest'
+              ? `${getTodayDayKey()} — time to train ${splitName}. Ready?`
+              : `Today is ${getTodayDayKey()} — rest day on your plan.`}
           </p>
         </motion.div>
         <motion.div variants={item} className="flex gap-3">
@@ -291,10 +293,28 @@ export default function DashboardPage() {
             className="ft-btn ft-btn--primary flex items-center gap-2"
           >
             <Dumbbell className="h-4 w-4" />
-            <span>{hasTrainedToday ? 'View Workout' : 'Start Session'}</span>
+            <span>
+              {hasTrainedToday
+                ? 'View Workout'
+                : todaySplit !== 'rest'
+                ? `Start ${splitName}`
+                : 'Start Session'}
+            </span>
           </Link>
         </motion.div>
       </header>
+
+      {/* Muscle Recovery Map */}
+      <motion.div variants={item}>
+        <DashboardPanel
+          variants={item}
+          icon={Activity}
+          title="Muscle Recovery"
+          description="Tap a muscle group to see fatigue, readiness, and full-recovery time"
+        >
+          <MuscleRecoveryMap data={recoveryData} />
+        </DashboardPanel>
+      </motion.div>
 
       <motion.div variants={item}>
         <WaterDashboardWidget />
@@ -413,18 +433,6 @@ export default function DashboardPage() {
         maxOffset={maxFeedWeekOffset}
         variants={item}
       />
-
-      {/* Muscle Recovery Map */}
-      <motion.div variants={item}>
-        <DashboardPanel
-          variants={item}
-          icon={Activity}
-          title="Muscle Recovery"
-          description="Tap a muscle group to see fatigue and readiness"
-        >
-          <MuscleRecoveryMap data={recoveryData} />
-        </DashboardPanel>
-      </motion.div>
 
       {/* Charts & Heatmap */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

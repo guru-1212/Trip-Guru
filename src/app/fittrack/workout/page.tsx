@@ -1382,6 +1382,7 @@ export default function WorkoutPage() {
           <AnimatePresence>
             {showCooldownGate && activeWorkout && (
               <MobilityRoutineModal
+                key="cooldown-gate"
                 mode="stretch"
                 splitId={activeWorkout.splitId}
                 splitName={activeWorkout.splitName}
@@ -1399,7 +1400,7 @@ export default function WorkoutPage() {
               />
             )}
             {showSummary && (
-              <div className="ft-overlay">
+              <div key="summary-dialog" className="ft-overlay">
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -1474,7 +1475,7 @@ export default function WorkoutPage() {
             )}
 
             {showCancelDialog && (
-              <div className="ft-overlay" style={{ zIndex: 70 }}>
+              <div key="cancel-dialog" className="ft-overlay" style={{ zIndex: 70 }}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -1501,7 +1502,7 @@ export default function WorkoutPage() {
             )}
 
             {showReplaceDialog && (
-              <div className="ft-overlay" style={{ zIndex: 72 }}>
+              <div key="replace-dialog" className="ft-overlay" style={{ zIndex: 72 }}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -1540,7 +1541,7 @@ export default function WorkoutPage() {
             )}
 
             {removeConfirmKey && removeTarget && (
-              <div className="ft-overlay" style={{ zIndex: 75 }}>
+              <div key="remove-confirm-dialog" className="ft-overlay" style={{ zIndex: 75 }}>
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
