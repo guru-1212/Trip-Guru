@@ -236,6 +236,34 @@ export async function captureShareCardAsPng(element: HTMLElement): Promise<Blob>
   });
 }
 
+/**
+ * Capture a 1080×1920 card to PNG with a configurable background.
+ * Pass `backgroundColor: null` to keep transparency (for overlay-on-photo use).
+ */
+export async function captureCardPng(
+  element: HTMLElement,
+  backgroundColor: string | null = null,
+  scale = 2
+): Promise<Blob> {
+  const { default: html2canvas } = await import('html2canvas');
+  const canvas = await html2canvas(element, {
+    scale,
+    useCORS: true,
+    backgroundColor,
+    width: 1080,
+    height: 1920,
+    windowWidth: 1080,
+    windowHeight: 1920,
+  });
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error('Failed to create image'))),
+      'image/png',
+      1
+    );
+  });
+}
+
 export function downloadShareCard(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

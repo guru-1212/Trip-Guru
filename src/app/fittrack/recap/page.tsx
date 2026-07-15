@@ -1,28 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import dayjs from 'dayjs';
 import toast from 'react-hot-toast';
-import {
-  Sparkles,
-  Download,
-  Share2,
-  ChevronLeft,
-  ChevronRight,
-  Loader2,
-  CalendarDays,
-} from 'lucide-react';
+import { Sparkles, Download, Share2, ChevronLeft, ChevronRight, Loader2, CalendarDays, Check } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { RecapCard } from '@/components/fittrack/recap/RecapCard';
-import { buildRecap, pickHeroPhoto, type RecapCardData, type RecapScope } from '@/workout/recapData';
-import {
-  captureShareCardAsPng,
-  downloadShareCard,
-  shareOrDownloadShareCard,
-  waitForShareCardPaint,
-} from '@/workout/shareCard';
+import { buildRecap, pickHeroPhoto, type RecapCardData, type RecapScope, type RecapTheme } from '@/workout/recapData';
+import { captureCardPng, downloadShareCard, waitForShareCardPaint } from '@/workout/shareCard';
 import { getWeekStart, getTrackingWeekRangeLabel } from '@/workout/utils';
 import { getWaterLog, getWaterLogsInRange } from '@/firebase/water.firestore';
 import { getNutritionLog, getNutritionLogsInRange } from '@/firebase/nutrition.firestore';
@@ -30,7 +17,29 @@ import type { WaterLogDoc } from '@/types/water';
 import type { NutritionLogDoc } from '@/types/nutrition';
 import { cn } from '@/lib/utils';
 
+interface Rendered {
+  card: RecapCardData;
+  blob: Blob;
+  url: string;
+}
+
 const TODAY = () => dayjs().format('YYYY-MM-DD');
+
+const BG_OPTIONS: { value: RecapTheme; label: string; swatch: CSSProperties }[] = [
+  { value: 'light', label: 'Light', swatch: { background: '#ffffff', border: '1px solid #cbd5e1' } },
+  { value: 'dark', label: 'Dark', swatch: { background: '#0f172a' } },
+  {
+    value: 'transparent',
+    label: 'Transparent',
+    swatch: {
+      backgroundImage:
+        'linear-gradient(45deg,#cbd5e1 25%,transparent 25%),linear-gradient(-45deg,#cbd5e1 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#cbd5e1 75%),linear-gradient(-45deg,transparent 75%,#cbd5e1 75%)',
+      backgroundColor: '#ffffff',
+      backgroundSize: '10px 10px',
+      backgroundPosition: '0 0,0 5px,5px -5px,-5px 0',
+    },
+  },
+];
 
 async function toDataUrl(url: string): Promise<string | null> {
   try {
@@ -47,8 +56,26 @@ async function toDataUrl(url: string): Promise<string | null> {
   }
 }
 
-function cardFilename(card: RecapCardData, key: string): string {
-  return `fittrack-${card.scope}-${card.type}-${key}.png`;
+function cardFilename(card: RecapCardData, key: string, theme: RecapTheme): string {
+  return `fittrack-${card.scope}-${card.type}-${key}-${theme}.png`;
+}
+
+async function shareBlob(blob: Blob, filename: string) {
+  const file = new File([blob], filename, { type: 'image/png' });
+  const nav = navigator as Navigator & {
+    canShare?: (d?: ShareData) => boolean;
+    share?: (d?: ShareData) => Promise<void>;
+  };
+  if (nav.canShare?.({ files: [file] }) && nav.share) {
+    try {
+      await nav.share({ files: [file], title: 'FitTrack Recap' });
+      return;
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') return;
+    }
+  }
+  downloadShareCard(blob, filename);
+  toast.success('Saved to your device');
 }
 
 export default function RecapPage() {
@@ -59,16 +86,21 @@ export default function RecapPage() {
   const [scope, setScope] = useState<RecapScope>('day');
   const [dayKey, setDayKey] = useState<string>(TODAY);
   const [weekStartKey, setWeekStartKey] = useState<string>(() => getWeekStart());
+  const [theme, setTheme] = useState<RecapTheme>('light');
   const scopeKey = scope === 'day' ? dayKey : weekStartKey;
 
   const [cards, setCards] = useState<RecapCardData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [rendered, setRendered] = useState<Rendered[]>([]);
+  const [rendering, setRendering] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
 
   const offscreenRef = useRef<HTMLDivElement>(null);
   const [captureCard, setCaptureCard] = useState<RecapCardData | null>(null);
+  const renderedRef = useRef<Rendered[]>([]);
+  renderedRef.current = rendered;
 
-  // Build the card set for the current scope/date (fetches water/diet + hero photo).
+  // 1) Build card data for the scope/date (fetches water/diet + hero photo).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -76,7 +108,6 @@ export default function RecapPage() {
       const key = scope === 'day' ? dayKey : weekStartKey;
       const water: Record<string, WaterLogDoc> = {};
       const nutrition: Record<string, NutritionLogDoc> = {};
-
       if (uid) {
         try {
           if (scope === 'day') {
@@ -85,10 +116,7 @@ export default function RecapPage() {
             if (n) nutrition[key] = n;
           } else {
             const endKey = dayjs(key).add(6, 'day').format('YYYY-MM-DD');
-            const [w, n] = await Promise.all([
-              getWaterLogsInRange(uid, key, endKey),
-              getNutritionLogsInRange(uid, key, endKey),
-            ]);
+            const [w, n] = await Promise.all([getWaterLogsInRange(uid, key, endKey), getNutritionLogsInRange(uid, key, endKey)]);
             Object.assign(water, w);
             Object.assign(nutrition, n);
           }
@@ -96,26 +124,12 @@ export default function RecapPage() {
           console.error('[Recap] failed to load water/diet:', err);
         }
       }
-
       const hero = pickHeroPhoto(progressPhotos, scope, key);
       const photoDataUrl = hero ? await toDataUrl(hero.url) : null;
       if (cancelled) return;
-
-      const built = buildRecap({
-        scope,
-        dateKey: key,
-        profile,
-        workouts,
-        prs,
-        bodyStats,
-        habits,
-        weeklyGoals,
-        progressPhotos,
-        water,
-        nutrition,
-        photoDataUrl,
-      });
-      setCards(built);
+      setCards(
+        buildRecap({ scope, dateKey: key, profile, workouts, prs, bodyStats, habits, weeklyGoals, progressPhotos, water, nutrition, photoDataUrl })
+      );
       setLoading(false);
     })();
     return () => {
@@ -123,112 +137,98 @@ export default function RecapPage() {
     };
   }, [scope, dayKey, weekStartKey, uid, profile, workouts, prs, bodyStats, habits, weeklyGoals, progressPhotos]);
 
-  const renderBlob = useCallback(async (card: RecapCardData): Promise<Blob> => {
-    flushSync(() => setCaptureCard(card));
-    await waitForShareCardPaint();
-    const node = offscreenRef.current;
-    if (!node) throw new Error('Card did not render');
-    return captureShareCardAsPng(node);
-  }, []);
-
-  const shareOne = async (card: RecapCardData) => {
-    setBusy('Rendering…');
-    try {
-      const blob = await renderBlob(card);
-      await shareOrDownloadShareCard(blob, cardFilename(card, scopeKey));
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        console.error(err);
-        toast.error('Could not create image');
-      }
-    } finally {
-      setCaptureCard(null);
-      setBusy(null);
+  // 2) Pre-render every card to a PNG blob (so Share fires within the tap gesture).
+  useEffect(() => {
+    if (!cards.length) {
+      setRendered((prev) => {
+        prev.forEach((p) => URL.revokeObjectURL(p.url));
+        return [];
+      });
+      return;
     }
-  };
-
-  const downloadOne = async (card: RecapCardData) => {
-    setBusy('Rendering…');
-    try {
-      const blob = await renderBlob(card);
-      downloadShareCard(blob, cardFilename(card, scopeKey));
-      toast.success('Image downloaded');
-    } catch (err) {
-      console.error(err);
-      toast.error('Could not create image');
-    } finally {
-      setCaptureCard(null);
-      setBusy(null);
-    }
-  };
-
-  const downloadAll = async () => {
-    setBusy('Rendering…');
-    try {
-      for (let i = 0; i < cards.length; i++) {
-        setBusy(`Rendering ${i + 1}/${cards.length}…`);
-        const blob = await renderBlob(cards[i]);
-        downloadShareCard(blob, cardFilename(cards[i], scopeKey));
-        await new Promise((r) => setTimeout(r, 250));
+    let cancelled = false;
+    const createdUrls: string[] = [];
+    (async () => {
+      setRendering(true);
+      const out: Rendered[] = [];
+      for (const card of cards) {
+        if (cancelled) break;
+        flushSync(() => setCaptureCard(card));
+        await waitForShareCardPaint();
+        const node = offscreenRef.current;
+        if (!node) continue;
+        try {
+          const blob = await captureCardPng(node, null, 2);
+          const url = URL.createObjectURL(blob);
+          createdUrls.push(url);
+          out.push({ card, blob, url });
+        } catch (err) {
+          console.error('[Recap] render failed:', err);
+        }
       }
-      toast.success(`Downloaded ${cards.length} cards`);
-    } catch (err) {
-      console.error(err);
-      toast.error('Could not create images');
-    } finally {
-      setCaptureCard(null);
-      setBusy(null);
-    }
-  };
-
-  const shareAll = async () => {
-    setBusy('Rendering…');
-    try {
-      const files: File[] = [];
-      for (let i = 0; i < cards.length; i++) {
-        setBusy(`Rendering ${i + 1}/${cards.length}…`);
-        const blob = await renderBlob(cards[i]);
-        files.push(new File([blob], cardFilename(cards[i], scopeKey), { type: 'image/png' }));
+      flushSync(() => setCaptureCard(null));
+      if (cancelled) {
+        createdUrls.forEach(URL.revokeObjectURL);
+        return;
       }
-      setCaptureCard(null);
-      const nav = navigator as Navigator & {
-        canShare?: (d?: ShareData) => boolean;
-        share?: (d?: ShareData) => Promise<void>;
-      };
-      if (nav.canShare?.({ files }) && nav.share) {
+      setRendered((prev) => {
+        prev.forEach((p) => URL.revokeObjectURL(p.url));
+        return out;
+      });
+      setRendering(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [cards, theme]);
+
+  // Revoke object URLs on unmount.
+  useEffect(() => () => renderedRef.current.forEach((r) => URL.revokeObjectURL(r.url)), []);
+
+  const shareAll = useCallback(async () => {
+    if (!rendered.length) return;
+    const files = rendered.map((r) => new File([r.blob], cardFilename(r.card, scopeKey, theme), { type: 'image/png' }));
+    const nav = navigator as Navigator & { canShare?: (d?: ShareData) => boolean; share?: (d?: ShareData) => Promise<void> };
+    if (nav.canShare?.({ files }) && nav.share) {
+      try {
         await nav.share({ files, title: 'FitTrack Recap' });
-      } else {
-        files.forEach((f) => downloadShareCard(f, f.name));
-        toast.success('Downloaded (bulk share not supported on this device)');
+        return;
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return;
       }
-    } catch (err) {
-      if ((err as Error).name !== 'AbortError') {
-        console.error(err);
-        toast.error('Could not share images');
-      }
-    } finally {
-      setCaptureCard(null);
-      setBusy(null);
     }
-  };
+    setBusy('Saving…');
+    rendered.forEach((r) => downloadShareCard(r.blob, cardFilename(r.card, scopeKey, theme)));
+    toast.success(`Saved ${rendered.length} cards`);
+    setBusy(null);
+  }, [rendered, scopeKey, theme]);
+
+  const downloadAll = useCallback(async () => {
+    if (!rendered.length) return;
+    setBusy('Saving…');
+    for (const r of rendered) {
+      downloadShareCard(r.blob, cardFilename(r.card, scopeKey, theme));
+      await new Promise((res) => setTimeout(res, 200));
+    }
+    toast.success(`Downloaded ${rendered.length} cards`);
+    setBusy(null);
+  }, [rendered, scopeKey, theme]);
 
   const currentWeekStart = getWeekStart();
   const canGoNextWeek = weekStartKey < currentWeekStart;
+  const firstLoading = rendered.length === 0 && (rendering || loading);
 
   if (!hydrated) return <div className="text-muted-foreground">Loading…</div>;
 
   return (
     <PageTransition>
       <div className="space-y-6">
-        {/* Header */}
         <div>
           <h1 className="ft-title text-2xl font-bold flex items-center gap-2">
             <Sparkles className="h-6 w-6 text-primary" />
             Recap
           </h1>
-          <p className="ft-subtitle mt-1 text-sm">
-            Auto-generated share cards for your day &amp; week — ready for Stories.
-          </p>
+          <p className="ft-subtitle mt-1 text-sm">Auto-generated share cards for your day &amp; week — ready for Stories.</p>
         </div>
 
         {/* Controls */}
@@ -252,13 +252,7 @@ export default function RecapPage() {
           {scope === 'day' ? (
             <label className="flex items-center gap-3 text-sm font-semibold text-muted-foreground">
               <CalendarDays className="h-4 w-4 shrink-0" />
-              <input
-                type="date"
-                value={dayKey}
-                max={TODAY()}
-                onChange={(e) => setDayKey(e.target.value)}
-                className="ft-input w-auto"
-              />
+              <input type="date" value={dayKey} max={TODAY()} onChange={(e) => setDayKey(e.target.value)} className="ft-input w-auto" />
             </label>
           ) : (
             <div className="flex items-center gap-3">
@@ -270,9 +264,7 @@ export default function RecapPage() {
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
-              <span className="text-sm font-bold tabular-nums min-w-[150px] text-center">
-                {getTrackingWeekRangeLabel(weekStartKey)}
-              </span>
+              <span className="text-sm font-bold tabular-nums min-w-[150px] text-center">{getTrackingWeekRangeLabel(weekStartKey)}</span>
               <button
                 type="button"
                 onClick={() => canGoNextWeek && setWeekStartKey(dayjs(weekStartKey).add(1, 'week').format('YYYY-MM-DD'))}
@@ -285,51 +277,74 @@ export default function RecapPage() {
             </div>
           )}
 
+          {/* Background picker */}
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-2">Background</p>
+            <div className="flex gap-3">
+              {BG_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setTheme(opt.value)}
+                  className={cn(
+                    'flex flex-col items-center gap-1.5 rounded-xl p-2 transition-colors',
+                    theme === opt.value ? 'bg-primary/10' : 'hover:bg-muted/50'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'relative h-10 w-10 rounded-full shadow-sm',
+                      theme === opt.value && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+                    )}
+                    style={opt.swatch}
+                  >
+                    {theme === opt.value && (
+                      <Check className="absolute inset-0 m-auto h-4 w-4 text-primary drop-shadow" />
+                    )}
+                  </span>
+                  <span className="text-[11px] font-bold text-muted-foreground">{opt.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Bulk actions */}
-          <div className="flex flex-wrap gap-3 pt-1">
-            <button
-              type="button"
-              onClick={downloadAll}
-              disabled={!!busy || loading || cards.length === 0}
-              className="ft-btn ft-btn--secondary disabled:opacity-50"
-            >
+          <div className="flex flex-wrap items-center gap-3 pt-1">
+            <button type="button" onClick={downloadAll} disabled={!!busy || firstLoading || rendered.length === 0} className="ft-btn ft-btn--secondary disabled:opacity-50">
               <Download className="h-4 w-4" />
               Download all
             </button>
-            <button
-              type="button"
-              onClick={shareAll}
-              disabled={!!busy || loading || cards.length === 0}
-              className="ft-btn ft-btn--primary disabled:opacity-50"
-            >
+            <button type="button" onClick={shareAll} disabled={!!busy || firstLoading || rendered.length === 0} className="ft-btn ft-btn--primary disabled:opacity-50">
               <Share2 className="h-4 w-4" />
               Share all
             </button>
-            {busy && (
+            {(busy || rendering) && (
               <span className="inline-flex items-center gap-2 text-sm font-semibold text-primary">
                 <Loader2 className="h-4 w-4 animate-spin" />
-                {busy}
+                {busy ?? 'Rendering…'}
               </span>
             )}
           </div>
         </div>
 
         {/* Gallery */}
-        {loading ? (
+        {firstLoading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
             <Loader2 className="h-6 w-6 animate-spin mr-2" />
             Building your recap…
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {cards.map((card) => (
-              <div key={card.id} className="space-y-2">
-                <CardThumb data={card} />
+          <div className={cn('grid grid-cols-2 md:grid-cols-3 gap-4 transition-opacity', rendering && 'opacity-50')}>
+            {rendered.map((r) => (
+              <div key={r.card.id} className="space-y-2">
+                <div className="rounded-2xl border border-border overflow-hidden bg-muted/30 shadow-sm">
+                  <img src={r.url} alt="" className="block w-full" style={{ aspectRatio: '1080 / 1920', objectFit: 'contain' }} />
+                </div>
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => downloadOne(card)}
-                    disabled={!!busy}
+                    onClick={() => downloadShareCard(r.blob, cardFilename(r.card, scopeKey, theme))}
+                    disabled={rendering}
                     className="ft-btn ft-btn--secondary ft-btn--sm flex-1 disabled:opacity-50"
                     aria-label="Download"
                   >
@@ -337,8 +352,8 @@ export default function RecapPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => shareOne(card)}
-                    disabled={!!busy}
+                    onClick={() => shareBlob(r.blob, cardFilename(r.card, scopeKey, theme))}
+                    disabled={rendering}
                     className="ft-btn ft-btn--primary ft-btn--sm flex-1 disabled:opacity-50"
                     aria-label="Share"
                   >
@@ -353,36 +368,8 @@ export default function RecapPage() {
 
       {/* Offscreen full-size capture mount (one card at a time) */}
       <div style={{ position: 'fixed', left: -99999, top: 0, zIndex: -1, pointerEvents: 'none' }} aria-hidden>
-        {captureCard && <RecapCard ref={offscreenRef} data={captureCard} />}
+        {captureCard && <RecapCard ref={offscreenRef} data={captureCard} theme={theme} />}
       </div>
     </PageTransition>
-  );
-}
-
-/** WYSIWYG thumbnail: scales the real 1080×1920 card to the cell width. */
-function CardThumb({ data }: { data: RecapCardData }) {
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.2);
-
-  useEffect(() => {
-    const el = wrapRef.current;
-    if (!el) return;
-    const update = () => setScale(el.clientWidth / 1080);
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  return (
-    <div
-      ref={wrapRef}
-      style={{ width: '100%', aspectRatio: '1080 / 1920', overflow: 'hidden' }}
-      className="rounded-2xl border border-border shadow-sm"
-    >
-      <div style={{ width: 1080, height: 1920, transform: `scale(${scale})`, transformOrigin: 'top left' }}>
-        <RecapCard data={data} />
-      </div>
-    </div>
   );
 }

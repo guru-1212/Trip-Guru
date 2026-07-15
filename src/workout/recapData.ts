@@ -22,13 +22,9 @@ import type { WaterLogDoc } from '@/types/water';
 import type { NutrientsPerServing, NutritionLogDoc } from '@/types/nutrition';
 
 export type RecapScope = 'day' | 'week';
+export type RecapTheme = 'light' | 'dark' | 'transparent';
 
 // ── shared sub-shapes ───────────────────────────────────────────────
-export interface RecapBar {
-  label: string;
-  value: number;
-  highlight?: boolean;
-}
 export interface RecapChip {
   label: string;
   value: string;
@@ -52,33 +48,41 @@ export interface RecapExLine {
   detail: string;
   pr?: boolean;
 }
+export interface RadarAxis {
+  label: string;
+  /** 0..1 normalized against the strongest axis. */
+  value: number;
+}
+export interface RecapSparkPoint {
+  value: number;
+}
 
 export interface RecapMeta {
   athleteName: string;
+  handle: string;
   scope: RecapScope;
   dateLabel: string;
-  accent: string[];
+  accent: string;
 }
 
 export type RecapCardData = { id: string } & RecapMeta &
   (
-    | { type: 'cover'; headline: string; chips: RecapChip[] }
     | {
-        type: 'volume';
+        type: 'overview';
+        durationLabel: string;
         volumeLabel: string;
         sets: number;
-        sessions: number;
-        bars: RecapBar[];
-        barUnitLabel: string;
-        goalPct: number | null;
-        goalLabel: string | null;
+        radar: RadarAxis[];
+        hasData: boolean;
       }
+    | { type: 'comparison'; volumeLabel: string; objectLabel: string; emoji: string }
     | {
         type: 'workout';
         headline: string;
         durationLabel: string;
-        sets: number;
         volumeLabel: string;
+        exercisesCount: number;
+        sets: number;
         prCount: number;
         exercises: RecapExLine[];
         empty: boolean;
@@ -91,7 +95,6 @@ export type RecapCardData = { id: string } & RecapMeta &
         deltaDir: 'up' | 'down' | 'flat';
         toGoalLabel: string;
         points: number[];
-        unit: string;
         empty: boolean;
       }
     | { type: 'water'; totalLabel: string; goalLabel: string; pct: number; sub: string; empty: boolean }
@@ -99,7 +102,6 @@ export type RecapCardData = { id: string } & RecapMeta &
         type: 'nutrition';
         calories: number;
         calorieTarget: number;
-        caloriePct: number;
         macros: RecapMacro[];
         sub: string;
         empty: boolean;
@@ -119,11 +121,8 @@ export interface RecapInput {
   habits: Record<string, HabitDay>;
   weeklyGoals: WeeklyGoals;
   progressPhotos: ProgressPhoto[];
-  /** Water logs keyed by date (day: 0–1 entries; week: up to 7). */
   water: Record<string, WaterLogDoc>;
-  /** Nutrition logs keyed by date. */
   nutrition: Record<string, NutritionLogDoc>;
-  /** Pre-fetched hero progress photo as a data URL (avoids html2canvas tainting). */
   photoDataUrl: string | null;
 }
 
@@ -135,27 +134,38 @@ const HABIT_META: { key: keyof HabitDay; label: string; color: string }[] = [
   { key: 'steps', label: 'Steps', color: '#f59e0b' },
 ];
 
-const DEFAULT_ACCENT = ['#6366f1', '#22c55e', '#f59e0b', '#ec4899'];
+// Radar axes (Hevy-style): 6 muscle groups. Biceps + Triceps → "Arms".
+const RADAR_AXES: { label: string; muscles: string[] }[] = [
+  { label: 'Chest', muscles: ['Chest'] },
+  { label: 'Back', muscles: ['Back'] },
+  { label: 'Shoulders', muscles: ['Shoulders'] },
+  { label: 'Arms', muscles: ['Biceps', 'Triceps'] },
+  { label: 'Legs', muscles: ['Legs'] },
+  { label: 'Core', muscles: ['Core'] },
+];
 
-// ── small helpers ───────────────────────────────────────────────────
+const COMPARISONS: { min: number; label: string; emoji: string }[] = [
+  { min: 150000, label: 'a blue whale', emoji: '🐋' },
+  { min: 40000, label: 'an airplane', emoji: '✈️' },
+  { min: 12000, label: 'a truck', emoji: '🚚' },
+  { min: 5000, label: 'a helicopter', emoji: '🚁' },
+  { min: 2500, label: 'a rhino', emoji: '🦏' },
+  { min: 1200, label: 'a car', emoji: '🚗' },
+  { min: 700, label: 'a grand piano', emoji: '🎹' },
+  { min: 300, label: 'a horse', emoji: '🐴' },
+  { min: 120, label: 'a panda', emoji: '🐼' },
+  { min: 0, label: 'a bag of groceries', emoji: '🛒' },
+];
+
+// ── helpers ─────────────────────────────────────────────────────────
+function deriveHandle(name: string): string {
+  const clean = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return clean ? `@${clean}` : '@athlete';
+}
+
 function dayKeysOfWeek(weekStartKey: string): string[] {
   const start = dayjs(weekStartKey);
   return Array.from({ length: 7 }, (_, i) => start.add(i, 'day').format('YYYY-MM-DD'));
-}
-
-function dayVolume(workouts: WorkoutSession[], dateKey: string): number {
-  return workouts.filter((w) => w.date === dateKey).reduce((s, w) => s + w.totalVolume, 0);
-}
-
-function accentFromSessions(sessions: WorkoutSession[]): string[] {
-  const muscles: string[] = [];
-  for (const w of sessions) {
-    for (const ex of w.exercises) {
-      if (!muscles.includes(ex.muscle)) muscles.push(ex.muscle);
-    }
-  }
-  const colors = muscles.map((m) => MUSCLE_COLORS[m]).filter(Boolean) as string[];
-  return colors.length ? colors.slice(0, 5) : DEFAULT_ACCENT;
 }
 
 function bestDoneSet(sets: WorkoutSession['exercises'][number]['sets']) {
@@ -170,7 +180,7 @@ function buildExerciseLines(
   unit: 'kg' | 'lbs',
   limit: number
 ): RecapExLine[] {
-  const rows = sessions
+  return sessions
     .flatMap((w) => w.exercises)
     .map((ex) => {
       const best = bestDoneSet(ex.sets);
@@ -179,63 +189,57 @@ function buildExerciseLines(
       const pr = ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs));
       return {
         name: ex.name,
-        detail: `${doneCount} × · ${formatWeight(best.weight, unit)} × ${best.reps}`,
+        detail: `${doneCount} sets · ${formatWeight(best.weight, unit)} × ${best.reps}`,
         pr,
         score: best.weight * best.reps,
       };
     })
     .filter((x): x is NonNullable<typeof x> => x !== null)
     .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
-  return rows.map(({ name, detail, pr }) => ({ name, detail, pr }));
+    .slice(0, limit)
+    .map(({ name, detail, pr }) => ({ name, detail, pr }));
 }
 
-function prCountForSessions(
-  sessions: WorkoutSession[],
-  prs: Record<string, PersonalRecord>
-): number {
+function prCountForSessions(sessions: WorkoutSession[], prs: Record<string, PersonalRecord>): number {
   return sessions.filter((w) =>
     w.exercises.some((ex) => ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs)))
   ).length;
 }
 
-function volumeBarsForDay(workouts: WorkoutSession[], dateKey: string): RecapBar[] {
-  const end = dayjs(dateKey);
-  const bars: RecapBar[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = end.subtract(i, 'day');
-    bars.push({
-      label: d.format('dd'),
-      value: dayVolume(workouts, d.format('YYYY-MM-DD')),
-      highlight: i === 0,
-    });
+function muscleRadar(sessions: WorkoutSession[]): RadarAxis[] {
+  const totals: Record<string, number> = {};
+  for (const w of sessions) {
+    for (const ex of w.exercises) {
+      const vol = ex.sets.filter((s) => s.done).reduce((s, set) => s + set.weight * set.reps, 0);
+      totals[ex.muscle] = (totals[ex.muscle] ?? 0) + vol;
+    }
   }
-  return bars;
+  const axisValues = RADAR_AXES.map((a) => a.muscles.reduce((s, m) => s + (totals[m] ?? 0), 0));
+  const max = Math.max(1, ...axisValues);
+  return RADAR_AXES.map((a, i) => ({ label: a.label, value: axisValues[i] / max }));
 }
 
-function volumeBarsForWeek(workouts: WorkoutSession[], weekStartKey: string): RecapBar[] {
-  const end = dayjs(weekStartKey);
-  const bars: RecapBar[] = [];
-  for (let i = 7; i >= 0; i--) {
-    const ws = end.subtract(i, 'week');
-    const we = ws.add(6, 'day');
-    const volume = workouts
-      .filter((w) => {
-        const d = dayjs(w.date);
-        return !d.isBefore(ws, 'day') && !d.isAfter(we, 'day');
-      })
-      .reduce((s, w) => s + w.totalVolume, 0);
-    bars.push({ label: ws.format('M/D'), value: volume, highlight: i === 0 });
-  }
-  return bars;
+function comparisonFor(volumeKg: number): { objectLabel: string; emoji: string } {
+  const hit = COMPARISONS.find((c) => volumeKg >= c.min) ?? COMPARISONS[COMPARISONS.length - 1];
+  return { objectLabel: hit.label, emoji: hit.emoji };
 }
 
-function weightPoints(bodyStats: BodyStat[], asOfKey: string, unit: 'kg' | 'lbs', count: number): number[] {
-  return [...bodyStats]
-    .filter((s) => s.date <= asOfKey)
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .slice(-count)
-    .map((s) => Math.round(displayWeight(s.weight, unit) * 10) / 10);
+function totalDuration(sessions: WorkoutSession[]): number {
+  return sessions.reduce((s, w) => s + w.duration, 0);
+}
+function totalVolume(sessions: WorkoutSession[]): number {
+  return sessions.reduce((s, w) => s + w.totalVolume, 0);
+}
+function totalSets(sessions: WorkoutSession[]): number {
+  return sessions.reduce((s, w) => s + w.totalSets, 0);
+}
+
+function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
 function sumMacro(logs: NutritionLogDoc[], pick: (n: NutrientsPerServing) => number): number {
@@ -250,167 +254,115 @@ export function buildRecap(input: RecapInput): RecapCardData[] {
 function buildDayRecap(input: RecapInput): RecapCardData[] {
   const { dateKey, profile, workouts, prs, bodyStats, habits, weeklyGoals } = input;
   const unit = profile.prefs.unit;
-  const athleteName = profile.name || 'Athlete';
-  const dateLabel = dayjs(dateKey).format('ddd, MMM D, YYYY');
   const sessions = workouts.filter((w) => w.date === dateKey);
-  const accent = accentFromSessions(sessions);
-  const meta: RecapMeta = { athleteName, scope: 'day', dateLabel, accent };
-  const cards: RecapCardData[] = [];
-
-  // aggregates for cover chips
-  const dayVol = sessions.reduce((s, w) => s + w.totalVolume, 0);
-  const daySets = sessions.reduce((s, w) => s + w.totalSets, 0);
-  const waterDoc = input.water[dateKey];
-  const nutDoc = input.nutrition[dateKey];
-  const habitDay = habits[dateKey];
-  const habitsDone = habitDay
-    ? HABIT_META.filter((h) => habitDay[h.key]).length
-    : 0;
-
-  // Cover
-  const chips: RecapChip[] = [];
-  if (sessions.length) chips.push({ label: 'Volume', value: formatWeight(dayVol, unit) });
-  if (waterDoc) chips.push({ label: 'Water', value: formatMl(waterDoc.totalMl) });
-  if (nutDoc) chips.push({ label: 'Protein', value: `${Math.round(nutDoc.totals.proteinG)} g` });
-  chips.push({ label: 'Habits', value: `${habitsDone}/5` });
-  cards.push({
-    id: 'cover',
-    ...meta,
-    type: 'cover',
-    headline: sessions.length ? sessions.map((s) => SPLIT_NAMES[s.splitId] ?? s.splitName).join(' + ') : 'Rest & Recover',
-    chips,
-  });
-
-  // Workout details
-  cards.push({
-    id: 'workout',
-    ...meta,
-    type: 'workout',
-    headline: sessions.length ? sessions.map((s) => s.splitName).join(' + ') : 'No session logged',
-    durationLabel: formatDuration(sessions.reduce((s, w) => s + w.duration, 0)),
-    sets: daySets,
-    volumeLabel: formatWeight(dayVol, unit),
-    prCount: prCountForSessions(sessions, prs),
-    exercises: buildExerciseLines(sessions, prs, unit, 7),
-    empty: sessions.length === 0,
-  });
-
-  // Volume + 7-day graph
-  cards.push({
-    id: 'volume',
-    ...meta,
-    type: 'volume',
-    volumeLabel: formatWeight(dayVol, unit),
-    sets: daySets,
-    sessions: sessions.length,
-    bars: volumeBarsForDay(workouts, dateKey),
-    barUnitLabel: 'Last 7 days',
-    goalPct: null,
-    goalLabel: null,
-  });
-
-  // Weight vs target
-  cards.push(buildWeightCard(meta, bodyStats, weeklyGoals.targetWeight, unit, dateKey));
-
-  // Nutrition
-  cards.push(buildNutritionCard(meta, nutDoc ? [nutDoc] : [], 1));
-
-  // Water
-  cards.push(buildWaterCardDay(meta, waterDoc));
-
-  // Habits
-  cards.push(buildHabitsCardDay(meta, habitDay, habits));
-
-  // Progress photo
-  cards.push(buildPhotoCard(input, meta, dateKey));
-
-  return cards;
+  const meta: RecapMeta = {
+    athleteName: profile.name || 'Athlete',
+    handle: deriveHandle(profile.name || 'athlete'),
+    scope: 'day',
+    dateLabel: dayjs(dateKey).format('ddd, MMM D, YYYY'),
+    accent: '#6366f1',
+  };
+  return assemble(input, meta, sessions, unit, weeklyGoals, dateKey, dateKey, bodyStats, habits, prs, [dateKey]);
 }
 
 function buildWeekRecap(input: RecapInput): RecapCardData[] {
   const { dateKey, profile, workouts, prs, bodyStats, habits, weeklyGoals } = input;
   const unit = profile.prefs.unit;
-  const athleteName = profile.name || 'Athlete';
-  const weekStart = dayjs(dateKey);
-  const weekEndKey = weekStart.add(6, 'day').format('YYYY-MM-DD');
-  const dateLabel = getTrackingWeekRangeLabel(dateKey);
+  const weekEndKey = dayjs(dateKey).add(6, 'day').format('YYYY-MM-DD');
   const sessions = getWorkoutsInRange(workouts, dateKey, weekEndKey);
-  const accent = accentFromSessions(sessions);
-  const meta: RecapMeta = { athleteName, scope: 'week', dateLabel, accent };
-  const cards: RecapCardData[] = [];
+  const meta: RecapMeta = {
+    athleteName: profile.name || 'Athlete',
+    handle: deriveHandle(profile.name || 'athlete'),
+    scope: 'week',
+    dateLabel: getTrackingWeekRangeLabel(dateKey),
+    accent: '#6366f1',
+  };
+  return assemble(
+    input,
+    meta,
+    sessions,
+    unit,
+    weeklyGoals,
+    weekEndKey,
+    dateKey,
+    bodyStats,
+    habits,
+    prs,
+    dayKeysOfWeek(dateKey)
+  );
+}
 
-  const weekVol = sessions.reduce((s, w) => s + w.totalVolume, 0);
-  const weekSets = sessions.reduce((s, w) => s + w.totalSets, 0);
-  const dayKeys = dayKeysOfWeek(dateKey);
+function assemble(
+  input: RecapInput,
+  meta: RecapMeta,
+  sessions: WorkoutSession[],
+  unit: 'kg' | 'lbs',
+  weeklyGoals: WeeklyGoals,
+  weightAsOfKey: string,
+  photoRefKey: string,
+  bodyStats: BodyStat[],
+  habits: Record<string, HabitDay>,
+  prs: Record<string, PersonalRecord>,
+  dayKeys: string[]
+): RecapCardData[] {
+  const cards: RecapCardData[] = [];
+  const vol = totalVolume(sessions);
   const waterLogs = dayKeys.map((k) => input.water[k]).filter(Boolean) as WaterLogDoc[];
   const nutLogs = dayKeys.map((k) => input.nutrition[k]).filter(Boolean) as NutritionLogDoc[];
 
-  // Cover
-  const chips: RecapChip[] = [
-    { label: 'Workouts', value: String(sessions.length) },
-    { label: 'Volume', value: formatWeight(weekVol, unit) },
-  ];
-  if (waterLogs.length) {
-    const daysHit = waterLogs.filter((w) => w.completed).length;
-    chips.push({ label: 'Water', value: `${daysHit}/7 days` });
-  }
+  // 1) Overview (stats + muscle radar)
   cards.push({
-    id: 'cover',
+    id: 'overview',
     ...meta,
-    type: 'cover',
-    headline: `${sessions.length} session${sessions.length === 1 ? '' : 's'} this week`,
-    chips,
+    type: 'overview',
+    durationLabel: formatDuration(totalDuration(sessions)),
+    volumeLabel: formatWeight(vol, unit),
+    sets: totalSets(sessions),
+    radar: muscleRadar(sessions),
+    hasData: sessions.length > 0,
   });
 
-  // Workout details (week roll-up)
-  const splitNames = Array.from(new Set(sessions.map((s) => s.splitName)));
+  // 2) Fun comparison (only when something was lifted)
+  if (vol > 0) {
+    const c = comparisonFor(vol);
+    cards.push({ id: 'comparison', ...meta, type: 'comparison', volumeLabel: formatWeight(vol, unit), ...c });
+  }
+
+  // 3) Workout details
+  const splitNames = Array.from(new Set(sessions.map((s) => SPLIT_NAMES[s.splitId] ?? s.splitName)));
   cards.push({
     id: 'workout',
     ...meta,
     type: 'workout',
-    headline: splitNames.length ? splitNames.join(' · ') : 'No sessions this week',
-    durationLabel: formatDuration(sessions.reduce((s, w) => s + w.duration, 0)),
-    sets: weekSets,
-    volumeLabel: formatWeight(weekVol, unit),
+    headline: splitNames.length ? splitNames.join(' + ') : 'Rest day',
+    durationLabel: formatDuration(totalDuration(sessions)),
+    volumeLabel: formatWeight(vol, unit),
+    exercisesCount: sessions.reduce((s, w) => s + w.exercises.length, 0),
+    sets: totalSets(sessions),
     prCount: prCountForSessions(sessions, prs),
-    exercises: buildExerciseLines(sessions, prs, unit, 7),
+    exercises: buildExerciseLines(sessions, prs, unit, 6),
     empty: sessions.length === 0,
   });
 
-  // Volume + 8-week trend
-  const volumePct = weeklyGoals.volumeTarget > 0 ? Math.min(100, Math.round((weekVol / weeklyGoals.volumeTarget) * 100)) : null;
-  cards.push({
-    id: 'volume',
-    ...meta,
-    type: 'volume',
-    volumeLabel: formatWeight(weekVol, unit),
-    sets: weekSets,
-    sessions: sessions.length,
-    bars: volumeBarsForWeek(workouts, dateKey),
-    barUnitLabel: 'Last 8 weeks',
-    goalPct: volumePct,
-    goalLabel: volumePct !== null ? `${volumePct}% of ${formatWeight(weeklyGoals.volumeTarget, unit)} goal` : null,
-  });
+  // 4) Weight
+  cards.push(buildWeightCard(meta, bodyStats, weeklyGoals.targetWeight, unit, weightAsOfKey));
 
-  // Weight (as of week end)
-  cards.push(buildWeightCard(meta, bodyStats, weeklyGoals.targetWeight, unit, weekEndKey));
+  // 5) Nutrition
+  cards.push(buildNutritionCard(meta, nutLogs));
 
-  // Nutrition (weekly averages)
-  cards.push(buildNutritionCard(meta, nutLogs, Math.max(nutLogs.length, 1)));
+  // 6) Water
+  cards.push(meta.scope === 'day' ? buildWaterCardDay(meta, waterLogs[0]) : buildWaterCardWeek(meta, waterLogs));
 
-  // Water (weekly)
-  cards.push(buildWaterCardWeek(meta, waterLogs));
+  // 7) Habits
+  cards.push(meta.scope === 'day' ? buildHabitsCardDay(meta, habits, dayKeys[0]) : buildHabitsCardWeek(meta, habits, dayKeys));
 
-  // Habits (x/7)
-  cards.push(buildHabitsCardWeek(meta, habits, dayKeys));
-
-  // Progress photo (latest in week)
-  cards.push(buildPhotoCard(input, meta, weekEndKey));
+  // 8) Progress photo
+  cards.push(buildPhotoCard(input, meta, photoRefKey));
 
   return cards;
 }
 
-// ── per-card builders shared by day/week ────────────────────────────
+// ── per-card builders ───────────────────────────────────────────────
 function buildWeightCard(
   meta: RecapMeta,
   bodyStats: BodyStat[],
@@ -418,11 +370,13 @@ function buildWeightCard(
   unit: 'kg' | 'lbs',
   asOfKey: string
 ): RecapCardData {
-  const onOrBefore = [...bodyStats]
-    .filter((s) => s.date <= asOfKey)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const onOrBefore = [...bodyStats].filter((s) => s.date <= asOfKey).sort((a, b) => b.date.localeCompare(a.date));
   const latest = onOrBefore[0] ?? [...bodyStats].sort((a, b) => b.date.localeCompare(a.date))[0];
-  const points = weightPoints(bodyStats, asOfKey, unit, 12);
+  const points = [...bodyStats]
+    .filter((s) => s.date <= asOfKey)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(-12)
+    .map((s) => Math.round(displayWeight(s.weight, unit) * 10) / 10);
 
   if (!latest) {
     return {
@@ -433,16 +387,14 @@ function buildWeightCard(
       target: targetKg ? formatWeight(targetKg, unit) : '—',
       deltaLabel: '—',
       deltaDir: 'flat',
-      toGoalLabel: 'Log a weigh-in',
+      toGoalLabel: 'Log a weigh-in to track',
       points: [],
-      unit,
       empty: true,
     };
   }
 
   const oldest = onOrBefore[onOrBefore.length - 1] ?? latest;
-  const deltaDisp = Math.round((displayWeight(latest.weight, unit) - displayWeight(oldest.weight, unit)) * 10) / 10;
-  const deltaDir: 'up' | 'down' | 'flat' = deltaDisp > 0 ? 'up' : deltaDisp < 0 ? 'down' : 'flat';
+  const delta = Math.round((displayWeight(latest.weight, unit) - displayWeight(oldest.weight, unit)) * 10) / 10;
   const toGoal =
     targetKg != null
       ? Math.round((displayWeight(latest.weight, unit) - displayWeight(targetKg, unit)) * 10) / 10
@@ -454,37 +406,29 @@ function buildWeightCard(
     type: 'weight',
     current: formatWeight(latest.weight, unit),
     target: targetKg != null ? formatWeight(targetKg, unit) : '—',
-    deltaLabel: `${deltaDisp > 0 ? '+' : ''}${deltaDisp} ${unit}`,
-    deltaDir,
+    deltaLabel: `${delta > 0 ? '+' : ''}${delta} ${unit}`,
+    deltaDir: delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat',
     toGoalLabel:
-      toGoal == null ? 'Set a goal' : toGoal === 0 ? 'At goal 🎯' : `${Math.abs(toGoal)} ${unit} ${toGoal > 0 ? 'above' : 'below'} goal`,
+      toGoal == null
+        ? 'Set a goal weight'
+        : toGoal === 0
+          ? 'At your goal 🎯'
+          : `${Math.abs(toGoal)} ${unit} ${toGoal > 0 ? 'above' : 'below'} goal`,
     points,
-    unit,
     empty: false,
   };
 }
 
-function buildNutritionCard(meta: RecapMeta, logs: NutritionLogDoc[], divisor: number): RecapCardData {
+function buildNutritionCard(meta: RecapMeta, logs: NutritionLogDoc[]): RecapCardData {
   if (!logs.length) {
-    return {
-      id: 'nutrition',
-      ...meta,
-      type: 'nutrition',
-      calories: 0,
-      calorieTarget: 0,
-      caloriePct: 0,
-      macros: [],
-      sub: 'No meals logged',
-      empty: true,
-    };
+    return { id: 'nutrition', ...meta, type: 'nutrition', calories: 0, calorieTarget: 0, macros: [], sub: 'No meals logged', empty: true };
   }
-  const div = Math.max(divisor, 1);
+  const div = meta.scope === 'week' ? logs.length : 1;
   const cal = Math.round(sumMacro(logs, (n) => n.calories) / div);
   const protein = Math.round(sumMacro(logs, (n) => n.proteinG) / div);
   const carbs = Math.round(sumMacro(logs, (n) => n.carbsG) / div);
   const fat = Math.round(sumMacro(logs, (n) => n.fatG) / div);
   const t = logs[logs.length - 1].targets;
-  const calTarget = Math.round(t.calories);
   const mk = (label: string, value: number, target: number, color: string): RecapMacro => ({
     label,
     value,
@@ -498,8 +442,7 @@ function buildNutritionCard(meta: RecapMeta, logs: NutritionLogDoc[], divisor: n
     ...meta,
     type: 'nutrition',
     calories: cal,
-    calorieTarget: calTarget,
-    caloriePct: calTarget > 0 ? Math.min(100, Math.round((cal / calTarget) * 100)) : 0,
+    calorieTarget: Math.round(t.calories),
     macros: [
       mk('Protein', protein, t.proteinG, '#22c55e'),
       mk('Carbs', carbs, t.carbsG, '#f59e0b'),
@@ -511,9 +454,7 @@ function buildNutritionCard(meta: RecapMeta, logs: NutritionLogDoc[], divisor: n
 }
 
 function buildWaterCardDay(meta: RecapMeta, doc: WaterLogDoc | undefined): RecapCardData {
-  if (!doc) {
-    return { id: 'water', ...meta, type: 'water', totalLabel: '0 ml', goalLabel: '—', pct: 0, sub: 'No water logged', empty: true };
-  }
+  if (!doc) return { id: 'water', ...meta, type: 'water', totalLabel: '0 ml', goalLabel: '—', pct: 0, sub: 'No water logged', empty: true };
   const pct = doc.goalMl > 0 ? Math.min(100, Math.round((doc.totalMl / doc.goalMl) * 100)) : 0;
   const remaining = Math.max(0, doc.goalMl - doc.totalMl);
   return {
@@ -529,50 +470,34 @@ function buildWaterCardDay(meta: RecapMeta, doc: WaterLogDoc | undefined): Recap
 }
 
 function buildWaterCardWeek(meta: RecapMeta, logs: WaterLogDoc[]): RecapCardData {
-  if (!logs.length) {
-    return { id: 'water', ...meta, type: 'water', totalLabel: '0 ml', goalLabel: '—', pct: 0, sub: 'No water logged', empty: true };
-  }
-  const totalMl = logs.reduce((s, l) => s + l.totalMl, 0);
-  const avg = Math.round(totalMl / 7);
+  if (!logs.length) return { id: 'water', ...meta, type: 'water', totalLabel: '0 ml', goalLabel: '—', pct: 0, sub: 'No water logged', empty: true };
+  const avg = Math.round(logs.reduce((s, l) => s + l.totalMl, 0) / 7);
   const goalAvg = Math.round(logs.reduce((s, l) => s + l.goalMl, 0) / logs.length);
   const daysHit = logs.filter((l) => l.completed).length;
-  const pct = goalAvg > 0 ? Math.min(100, Math.round((avg / goalAvg) * 100)) : 0;
   return {
     id: 'water',
     ...meta,
     type: 'water',
     totalLabel: formatMl(avg),
     goalLabel: `${formatMl(goalAvg)}/day`,
-    pct,
+    pct: goalAvg > 0 ? Math.min(100, Math.round((avg / goalAvg) * 100)) : 0,
     sub: `${daysHit}/7 days hit goal`,
     empty: false,
   };
 }
 
-function buildHabitsCardDay(
-  meta: RecapMeta,
-  habitDay: HabitDay | undefined,
-  habits: Record<string, HabitDay>
-): RecapCardData {
+function buildHabitsCardDay(meta: RecapMeta, habits: Record<string, HabitDay>, dayKey: string): RecapCardData {
+  const habitDay = habits[dayKey];
   const rings: RecapRing[] = HABIT_META.map((h) => {
     const done = !!habitDay?.[h.key];
     const streak = getHabitStreak(habits, h.key);
-    return {
-      label: h.label,
-      pct: done ? 100 : 0,
-      sub: streak > 0 ? `${streak}d streak` : done ? 'Done' : '—',
-      color: h.color,
-    };
+    return { label: h.label, pct: done ? 100 : 0, sub: streak > 0 ? `${streak}d streak` : done ? 'Done' : '—', color: h.color };
   });
   const doneCount = HABIT_META.filter((h) => habitDay?.[h.key]).length;
   return { id: 'habits', ...meta, type: 'habits', rings, sub: `${doneCount} of 5 habits done` };
 }
 
-function buildHabitsCardWeek(
-  meta: RecapMeta,
-  habits: Record<string, HabitDay>,
-  dayKeys: string[]
-): RecapCardData {
+function buildHabitsCardWeek(meta: RecapMeta, habits: Record<string, HabitDay>, dayKeys: string[]): RecapCardData {
   const rings: RecapRing[] = HABIT_META.map((h) => {
     const count = dayKeys.filter((k) => habits[k]?.[h.key]).length;
     return { label: h.label, pct: Math.round((count / 7) * 100), sub: `${count}/7`, color: h.color };
@@ -602,11 +527,7 @@ function buildPhotoCard(input: RecapInput, meta: RecapMeta, refKey: string): Rec
 }
 
 /** Pick the hero progress photo for a scope (latest image in range). */
-export function pickHeroPhoto(
-  photos: ProgressPhoto[],
-  scope: RecapScope,
-  dateKey: string
-): ProgressPhoto | null {
+export function pickHeroPhoto(photos: ProgressPhoto[], scope: RecapScope, dateKey: string): ProgressPhoto | null {
   const inScope =
     scope === 'day'
       ? photos.filter((p) => p.date === dateKey)
@@ -617,12 +538,4 @@ export function pickHeroPhoto(
         });
   const images = inScope.filter((p) => p.kind === 'image');
   return [...images].sort((a, b) => b.capturedAt - a.capturedAt)[0] ?? null;
-}
-
-function formatDuration(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
 }
