@@ -66,6 +66,8 @@ export default function DietPage() {
     isToday,
     goToPrevDay,
     goToNextDay,
+    goToToday,
+    goToDate,
     logFood,
     logImportedFoods,
     logCustomFood,
@@ -195,6 +197,8 @@ export default function DietPage() {
           settings={settings}
           onPrevDay={goToPrevDay}
           onNextDay={goToNextDay}
+          onGoToDate={goToDate}
+          onGoToToday={goToToday}
           onLogMeal={() => openSheet()}
           onAIImport={uid ? aiImport.openModal : undefined}
           onShare={() => setShareDietModalOpen(true)}
@@ -391,6 +395,8 @@ export default function DietPage() {
 
         <AddFoodSheet
           open={sheetOpen}
+          isToday={isToday}
+          dateLabel={formatDateLabel(dateKey, timezone)}
           initialMealSlot={sheetMealSlot}
           initialSearchQuery={sheetSearchQuery}
           initialFoodId={sheetFoodId}

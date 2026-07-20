@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Search, X, Sparkles, Leaf, Zap, IndianRupee } from 'lucide-react';
+import { Plus, Search, X, Sparkles, Leaf, Zap, IndianRupee, CalendarClock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   QUICK_ADD_FOOD_IDS,
@@ -40,6 +40,8 @@ const SMART_FILTERS: { id: SmartFilter; label: string; icon: any }[] = [
 
 interface AddFoodSheetProps {
   open: boolean;
+  isToday?: boolean;
+  dateLabel?: string;
   initialMealSlot?: MealSlot;
   initialSearchQuery?: string;
   initialFoodId?: string | null;
@@ -61,6 +63,8 @@ interface AddFoodSheetProps {
 
 export function AddFoodSheet({
   open,
+  isToday = true,
+  dateLabel,
   initialMealSlot = 'breakfast',
   initialSearchQuery = '',
   initialFoodId = null,
@@ -289,6 +293,13 @@ export function AddFoodSheet({
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {!isToday && dateLabel && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary text-xs font-semibold shrink-0">
+            <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span>Adding to {dateLabel}</span>
+          </div>
+        )}
 
         {!selectedFood && (
           <>

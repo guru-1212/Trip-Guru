@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, Database, Plus, Sparkles, Utensils, Settings
 import Link from 'next/link';
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { formatDateLabel } from '@/lib/nutrition/nutritionUtils';
+import { formatDateLabel, getTodayDateKey } from '@/lib/nutrition/nutritionUtils';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,6 +27,8 @@ interface DietPageHeaderProps {
   isToday: boolean;
   onPrevDay: () => void;
   onNextDay: () => void;
+  onGoToDate: (dateKey: string) => void;
+  onGoToToday: () => void;
   onLogMeal: () => void;
   onAIImport?: () => void;
   onShare?: () => void;
@@ -40,6 +42,8 @@ export function DietPageHeader({
   isToday,
   onPrevDay,
   onNextDay,
+  onGoToDate,
+  onGoToToday,
   onLogMeal,
   onAIImport,
   onShare,
@@ -121,9 +125,21 @@ export function DietPageHeader({
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-sm text-muted-foreground min-w-[140px] text-center font-medium">
-              {formatDateLabel(dateKey, timezone)}
-            </span>
+            {/* Tap the date to open a native calendar and jump to any past day */}
+            <div className="relative min-w-[140px]">
+              <span className="flex items-center justify-center gap-1 text-sm text-muted-foreground text-center font-medium cursor-pointer hover:text-foreground">
+                <Calendar className="h-3.5 w-3.5" aria-hidden="true" />
+                {formatDateLabel(dateKey, timezone)}
+              </span>
+              <input
+                type="date"
+                value={dateKey}
+                max={getTodayDateKey(timezone)}
+                onChange={(e) => e.target.value && onGoToDate(e.target.value)}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                aria-label="Pick a date to log food for"
+              />
+            </div>
             <button
               type="button"
               onClick={onNextDay}
@@ -133,6 +149,15 @@ export function DietPageHeader({
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+            {!isToday && (
+              <button
+                type="button"
+                onClick={onGoToToday}
+                className="ml-1 px-2 py-0.5 rounded-lg text-xs font-semibold text-primary hover:bg-primary/10"
+              >
+                Today
+              </button>
+            )}
           </div>
         </div>
       </div>

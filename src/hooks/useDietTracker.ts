@@ -222,6 +222,15 @@ export function useDietTracker() {
     setDateKey(getTodayDateKey(timezone));
   }, [timezone]);
 
+  const goToDate = useCallback(
+    (newKey: string) => {
+      if (!newKey) return;
+      const today = getTodayDateKey(timezone);
+      setDateKey(newKey > today ? today : newKey);
+    },
+    [timezone]
+  );
+
   const logFood = useCallback(
     async (
       food: Pick<FoodItem, 'id' | 'name' | 'nutrients'> & { nutrients: NutrientsPerServing },
@@ -473,6 +482,7 @@ export function useDietTracker() {
     goToPrevDay,
     goToNextDay,
     goToToday,
+    goToDate,
     logFood,
     logImportedFoods,
     logCustomFood,
