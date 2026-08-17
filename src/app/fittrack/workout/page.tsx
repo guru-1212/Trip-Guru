@@ -189,6 +189,7 @@ export default function WorkoutPage() {
   const pickInitSplitRef = useRef<SplitId | null>(null);
   const todayPicksRef = useRef<TodayExercisePick[]>([]);
   const selectedSplitRef = useRef<SplitId | null>(null);
+  const wasActiveWorkoutRef = useRef(false);
   const picksPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiImportPresetsRef = useRef<Map<string, ImportedExercise>>(new Map());
   const repeatSessionPresetsRef = useRef<Map<string, WorkoutSet[]>>(new Map());
@@ -343,7 +344,18 @@ export default function WorkoutPage() {
   const todaySessionsDone = todayScheduledSplits.length - remainingTodaySplits.length;
 
   useEffect(() => {
-    if (activeWorkout) return;
+    if (activeWorkout) {
+      wasActiveWorkoutRef.current = true;
+      return;
+    }
+    // Background data syncs (e.g. Firestore listeners refreshing `workouts`)
+    // re-run this effect without any user action. Only auto-pick a split (be
+    // it from the `?split=` deep link or the weekly schedule) on first load
+    // or right after finishing/discarding a session — never clobber a split
+    // the user has manually selected in the meantime.
+    const justFinishedWorkout = wasActiveWorkoutRef.current;
+    wasActiveWorkoutRef.current = false;
+    if (selectedSplitRef.current !== null && !justFinishedWorkout) return;
     if (preselected && SPLIT_DEFINITIONS.some((s) => s.id === preselected)) {
       setSelectedSplit(preselected);
       return;
@@ -1976,7 +1988,10 @@ export default function WorkoutPage() {
             </div>
             <button
               type="button"
-              onClick={() => setRestDay(todayStr, false)}
+              onClick={() => {
+                setRestDay(todayStr, false);
+                if (todaySplit !== 'rest') setSelectedSplit(todaySplit);
+              }}
               className="ft-btn ft-btn--ghost shrink-0 inline-flex items-center gap-1.5 text-sm"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -2013,6 +2028,7 @@ export default function WorkoutPage() {
               type="button"
               onClick={() => {
                 setRestDay(todayStr, true);
+                if (tomorrowSplit !== 'rest') setSelectedSplit(tomorrowSplit);
                 toast.success(`Resting today — ${SPLIT_NAMES[todaySplit]} moves to your next session`);
               }}
               className="ft-btn ft-btn--ghost shrink-0 inline-flex items-center gap-1.5 text-sm"
@@ -2128,7 +2144,6 @@ export default function WorkoutPage() {
                     <button
                       type="button"
                       onClick={openWarmupGate}
-                      disabled={todayPicks.length === 0}
                       className="ft-btn ft-btn--primary flex-1 ft-btn--lg"
                     >
                       {startButtonLabel}
@@ -2166,7 +2181,6 @@ export default function WorkoutPage() {
             <button
               type="button"
               onClick={openWarmupGate}
-              disabled={todayPicks.length === 0}
               className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg flex-1"
             >
               {startButtonLabel}
