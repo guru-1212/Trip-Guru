@@ -83,21 +83,28 @@ export function AddExerciseModal({
     getVariationImage?.(exerciseId, variation) ?? defaultExerciseImageUrl(exerciseId);
 
   const available = useMemo(() => {
-    const all = [...EXERCISE_LIBRARY, ...customAsLibrary].filter((ex) =>
-      exerciseBelongsToSplit(ex, splitId)
-    );
+    // Show the entire exercise store here (not just this split's muscles) so
+    // nothing is hidden when adding mid-workout — split-relevant exercises
+    // are simply sorted first for convenience.
+    const all = [...EXERCISE_LIBRARY, ...customAsLibrary];
     return all
       .map((ex) => {
         const variations = getVariationsForExercise
           ? getVariationsForExercise(ex.id, ex.variations)
           : ex.variations;
         const availableVariations = variations.filter((variation) => !selectedSet.has(`${ex.id}::${variation}`));
-        return { exercise: ex, variations, availableVariations };
+        return {
+          exercise: ex,
+          variations,
+          availableVariations,
+          belongsToSplit: exerciseBelongsToSplit(ex, splitId),
+        };
       })
       .filter(({ exercise, variations, availableVariations }) => {
         if (!availableVariations.length) return false;
         return exerciseMatchesSearch(exercise, search, variations);
-      });
+      })
+      .sort((a, b) => (a.belongsToSplit === b.belongsToSplit ? 0 : a.belongsToSplit ? -1 : 1));
   }, [search, customAsLibrary, getVariationsForExercise, selectedSet, splitId]);
 
   const searchQuery = search.toLowerCase().trim();
@@ -217,7 +224,7 @@ export function AddExerciseModal({
               <h2 className="ft-title">Add Exercise</h2>
               <p className="text-xs text-muted-foreground mt-0.5">
                 {splitDef
-                  ? `${splitDef.name} exercises only — search or pick a variation`
+                  ? `${splitDef.name} exercises first, full library below — search or pick a variation`
                   : 'Search the library or create custom'}
               </p>
             </div>

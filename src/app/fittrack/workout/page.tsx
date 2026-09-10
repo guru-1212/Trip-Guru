@@ -1,9 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import dayjs from 'dayjs';
-import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
+import { motion, AnimatePresence, LayoutGroup, Reorder, useDragControls } from 'framer-motion';
 import {
   AlertTriangle,
   ChevronRight,
@@ -28,6 +28,7 @@ import {
   Repeat2,
   Moon,
   RotateCcw,
+  GripVertical,
 } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { WorkoutShareCard } from '@/components/workout/WorkoutShareCard';
@@ -138,6 +139,40 @@ function resolveExerciseInfo(
   return null;
 }
 
+function SequenceReorderItem({
+  cardKey,
+  ex,
+  children,
+}: {
+  cardKey: string;
+  ex: WorkoutExercise;
+  children: (dragHandle: ReactNode) => ReactNode;
+}) {
+  const dragControls = useDragControls();
+  return (
+    <Reorder.Item
+      value={ex}
+      id={cardKey}
+      dragListener={false}
+      dragControls={dragControls}
+      layout
+      transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+    >
+      {children(
+        <button
+          type="button"
+          className="ft-drag-handle"
+          onPointerDown={(e) => dragControls.start(e)}
+          aria-label="Drag to reorder exercise"
+          title="Drag to reorder"
+        >
+          <GripVertical className="h-4 w-4" />
+        </button>
+      )}
+    </Reorder.Item>
+  );
+}
+
 export default function WorkoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -189,6 +224,7 @@ export default function WorkoutPage() {
   const pickInitSplitRef = useRef<SplitId | null>(null);
   const todayPicksRef = useRef<TodayExercisePick[]>([]);
   const selectedSplitRef = useRef<SplitId | null>(null);
+  const wasActiveWorkoutRef = useRef(false);
   const picksPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const aiImportPresetsRef = useRef<Map<string, ImportedExercise>>(new Map());
   const repeatSessionPresetsRef = useRef<Map<string, WorkoutSet[]>>(new Map());
@@ -343,7 +379,18 @@ export default function WorkoutPage() {
   const todaySessionsDone = todayScheduledSplits.length - remainingTodaySplits.length;
 
   useEffect(() => {
-    if (activeWorkout) return;
+    if (activeWorkout) {
+      wasActiveWorkoutRef.current = true;
+      return;
+    }
+    // Background data syncs (e.g. Firestore listeners refreshing `workouts`)
+    // re-run this effect without any user action. Only auto-pick a split (be
+    // it from the `?split=` deep link or the weekly schedule) on first load
+    // or right after finishing/discarding a session — never clobber a split
+    // the user has manually selected in the meantime.
+    const justFinishedWorkout = wasActiveWorkoutRef.current;
+    wasActiveWorkoutRef.current = false;
+    if (selectedSplitRef.current !== null && !justFinishedWorkout) return;
     if (preselected && SPLIT_DEFINITIONS.some((s) => s.id === preselected)) {
       setSelectedSplit(preselected);
       return;
@@ -986,7 +1033,7 @@ export default function WorkoutPage() {
         )
       : null;
 
-    const renderExerciseCard = (ex: WorkoutExercise, sequenceIndex?: number) => {
+    const renderExerciseCard = (ex: WorkoutExercise, sequenceIndex?: number, dragHandle?: ReactNode) => {
       const cardKey = `${ex.exerciseId}::${ex.variation}`;
       const isExpanded = expandedEx === cardKey;
       const isFullyDone = isExerciseFullyDone(ex);
@@ -999,11 +1046,6 @@ export default function WorkoutPage() {
       const lastSession = getLastExerciseSession(workouts, ex.exerciseId, ex.variation);
 
       return (
-        <motion.div
-          key={cardKey}
-          layout
-          transition={{ type: 'spring', stiffness: 400, damping: 32 }}
-        >
           <div
             className={cn(
               'ft-exercise-card',
@@ -1024,6 +1066,7 @@ export default function WorkoutPage() {
             </div>
 
             <div className="ft-exercise-trigger">
+              {dragHandle}
               <button
                 type="button"
                 onClick={(e) => {
@@ -1255,10 +1298,13 @@ export default function WorkoutPage() {
               )}
             </AnimatePresence>
           </div>
-        </motion.div>
       );
     };
 
+    const handleReorderPicked = (newOrder: WorkoutExercise[]) => {
+      const newPickOrder = newOrder.map((ex) => `${ex.exerciseId}::${ex.variation}`);
+      patchActiveWorkout((prev) => ({ ...prev, pickOrder: newPickOrder }));
+    };
 
     const renderMuscleGroups = (
       groups: { muscle: string; exercises: WorkoutExercise[] }[],
@@ -1273,7 +1319,17 @@ export default function WorkoutPage() {
             />
             <h2 className="text-sm font-black uppercase tracking-widest text-muted-foreground">{muscle}</h2>
           </div>
-          <LayoutGroup>{exercises.map((ex) => renderExerciseCard(ex))}</LayoutGroup>
+          <LayoutGroup>
+            {exercises.map((ex) => (
+              <motion.div
+                key={`${ex.exerciseId}::${ex.variation}`}
+                layout
+                transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+              >
+                {renderExerciseCard(ex)}
+              </motion.div>
+            ))}
+          </LayoutGroup>
         </div>
       ));
 
@@ -1328,8 +1384,28 @@ export default function WorkoutPage() {
               </span>
             </div>
             <div className="space-y-4">
+              {pickedSorted.length > 1 && (
+                <p className="ft-drag-hint">
+                  <GripVertical className="h-3.5 w-3.5" />
+                  Drag the handle to reorder your exercises
+                </p>
+              )}
               <LayoutGroup>
-                {pickedSorted.map((ex, index) => renderExerciseCard(ex, index + 1))}
+                <Reorder.Group
+                  axis="y"
+                  values={pickedSorted}
+                  onReorder={handleReorderPicked}
+                  className="space-y-4"
+                >
+                  {pickedSorted.map((ex, index) => {
+                    const cardKey = `${ex.exerciseId}::${ex.variation}`;
+                    return (
+                      <SequenceReorderItem key={cardKey} cardKey={cardKey} ex={ex}>
+                        {(dragHandle) => renderExerciseCard(ex, index + 1, dragHandle)}
+                      </SequenceReorderItem>
+                    );
+                  })}
+                </Reorder.Group>
               </LayoutGroup>
             </div>
             {unpickedGroups.length > 0 && (
@@ -1976,7 +2052,10 @@ export default function WorkoutPage() {
             </div>
             <button
               type="button"
-              onClick={() => setRestDay(todayStr, false)}
+              onClick={() => {
+                setRestDay(todayStr, false);
+                if (todaySplit !== 'rest') setSelectedSplit(todaySplit);
+              }}
               className="ft-btn ft-btn--ghost shrink-0 inline-flex items-center gap-1.5 text-sm"
             >
               <RotateCcw className="h-3.5 w-3.5" />
@@ -2013,6 +2092,7 @@ export default function WorkoutPage() {
               type="button"
               onClick={() => {
                 setRestDay(todayStr, true);
+                if (tomorrowSplit !== 'rest') setSelectedSplit(tomorrowSplit);
                 toast.success(`Resting today — ${SPLIT_NAMES[todaySplit]} moves to your next session`);
               }}
               className="ft-btn ft-btn--ghost shrink-0 inline-flex items-center gap-1.5 text-sm"
@@ -2128,7 +2208,6 @@ export default function WorkoutPage() {
                     <button
                       type="button"
                       onClick={openWarmupGate}
-                      disabled={todayPicks.length === 0}
                       className="ft-btn ft-btn--primary flex-1 ft-btn--lg"
                     >
                       {startButtonLabel}
@@ -2166,7 +2245,6 @@ export default function WorkoutPage() {
             <button
               type="button"
               onClick={openWarmupGate}
-              disabled={todayPicks.length === 0}
               className="ft-btn ft-btn--primary ft-btn--block ft-btn--lg flex-1"
             >
               {startButtonLabel}
