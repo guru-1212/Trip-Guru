@@ -186,3 +186,47 @@ export async function cancelPendingFitTrackInvite(memberId: string): Promise<voi
   if (memberSnap.data().inviteStatus !== 'pending') return;
   await deleteDoc(memberRef);
 }
+
+/**
+ * On registration, accept a pending FitTrack partner invite addressed to this
+ * email (if any) and link the new account to the inviting owner. Returns true
+ * when an invite was linked.
+ */
+export async function autoLinkPendingFitTrackInviteOnRegister(
+  uid: string,
+  email: string,
+  name: string
+): Promise<boolean> {
+  const normalizedEmail = email.trim().toLowerCase();
+  if (!normalizedEmail) return false;
+
+  const pendingQ = query(
+    collection(db(), 'fittrackPartners'),
+    where('partnerEmail', '==', normalizedEmail),
+    where('inviteStatus', '==', 'pending')
+  );
+  const snap = await getDocs(pendingQ);
+  if (snap.empty) return false;
+
+  const memberDoc = snap.docs[0];
+  const data = memberDoc.data();
+  const ownerId = data.ownerId as string;
+  const newMemberId = `${ownerId}_${uid}`;
+  const updatedData = {
+    ...data,
+    partnerId: uid,
+    partnerName: name,
+    inviteStatus: 'accepted',
+  };
+
+  const batch = writeBatch(db());
+  if (memberDoc.id !== newMemberId) {
+    batch.set(doc(db(), 'fittrackPartners', newMemberId), updatedData);
+    batch.delete(memberDoc.ref);
+  } else {
+    batch.update(memberDoc.ref, updatedData);
+  }
+  batch.update(doc(db(), 'users', uid), { fittrackLinkedOwnerId: ownerId });
+  await batch.commit();
+  return true;
+}

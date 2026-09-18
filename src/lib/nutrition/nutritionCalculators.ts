@@ -3,8 +3,8 @@ import {
   calculateGoalCalories,
   calculateMacros,
   calculateMaintenanceCalories,
-} from '@/lib/gymCalculators';
-import type { ActivityLevel, FitnessGoal, Gender } from '@/types/gym';
+} from './energyCalculators';
+import type { ActivityLevel, FitnessGoal, Gender } from './energyCalculators';
 import type {
   GainPace,
   NutrientsPerServing,

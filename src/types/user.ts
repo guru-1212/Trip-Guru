@@ -1,7 +1,9 @@
 import { Timestamp } from 'firebase/firestore';
 
+/** @deprecated Legacy multi-product field; still present on old user docs, never read or written now. */
 export type PrimaryUseCase = 'trips' | 'roommate' | 'both';
 
+/** @deprecated Legacy multi-product field; still present on old user docs, never read or written now. */
 export type AppMode = 'trip' | 'room' | 'gym' | 'yoga';
 
 export interface User {
@@ -15,14 +17,11 @@ export interface User {
   fcmTokens?: string[];
   createdAt: Timestamp;
   notifyEnabled?: boolean;
+  /** @deprecated Legacy field from the multi-product era; ignored. */
   primaryUseCase?: PrimaryUseCase;
-  /** Active Trip vs Room UI mode (for "both" and legacy multi-use accounts). */
+  /** @deprecated Legacy field from the multi-product era; ignored. */
   activeMode?: AppMode;
-  /**
-   * Workspaces this user has chosen to see in the app (Trips/Rooms/GYM/YOGA).
-   * Personal preference only — affects this account's UI, never other users.
-   * Undefined or empty means "all enabled" (backward compatible for existing accounts).
-   */
+  /** @deprecated Legacy field from the multi-product era; ignored. */
   enabledWorkspaces?: AppMode[];
   /** When set, FitTrack reads/writes use this owner's data instead of own uid. */
   fittrackLinkedOwnerId?: string;

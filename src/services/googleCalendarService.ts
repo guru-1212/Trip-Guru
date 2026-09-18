@@ -6,7 +6,12 @@
  */
 
 const CALENDAR_API_BASE = 'https://www.googleapis.com/calendar/v3';
-const APP_CALENDAR_NAME = 'Trip-Guru Reminders';
+export const APP_CALENDAR_NAME = 'FitTrack Reminders';
+/**
+ * Calendars are looked up by name, so users who linked before the rename keep
+ * their existing calendar instead of getting a duplicate.
+ */
+const LEGACY_CALENDAR_NAMES = ['Trip-Guru Reminders'];
 
 export interface CalendarEventDetails {
   summary: string;
@@ -33,7 +38,9 @@ export interface CalendarEventDetails {
 export async function getOrCreateAppCalendar(accessToken: string): Promise<string> {
   try {
     const calendars = await listCalendars(accessToken);
-    const existing = calendars.find(c => c.summary === APP_CALENDAR_NAME);
+    const existing =
+      calendars.find((c) => c.summary === APP_CALENDAR_NAME) ??
+      calendars.find((c) => LEGACY_CALENDAR_NAMES.includes(c.summary));
     
     if (existing) {
       return existing.id;

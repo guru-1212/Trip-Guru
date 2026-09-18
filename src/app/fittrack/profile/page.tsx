@@ -20,7 +20,16 @@ import {
 } from '@/workout/utils';
 import type { DayKey, FitnessGoal, SplitId, ThemePref, WeekSchedule, WeekScheduleValue } from '@/workout/types';
 import { TrainingPartnersSection } from '@/components/workout/TrainingPartnersSection';
-import { WorkspacesSettingsCard } from '@/components/profile/WorkspacesSettingsCard';
+import { AccountSettingsCard } from '@/components/profile/AccountSettingsCard';
+import { PushNotificationsCard } from '@/components/profile/PushNotificationsCard';
+import { GoogleCalendarCard } from '@/components/profile/GoogleCalendarCard';
+import { ImageCropper } from '@/components/profile/ImageCropper';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { uploadProfilePhoto } from '@/firebase/storage';
+import { updateUser } from '@/firebase/users.firestore';
+import { updateProfileLocal } from '@/features/auth/authSlice';
+import { useAppDispatch } from '@/store';
+import toast from 'react-hot-toast';
 
 export default function ProfilePage() {
   const {
@@ -34,12 +43,18 @@ export default function ProfilePage() {
     clearHistory,
     clearAllPRs,
   } = useWorkoutStore();
-  const { user } = useAuth();
+  const { user, uid } = useAuth();
+  const dispatch = useAppDispatch();
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(profile);
   const [confirmClear, setConfirmClear] = useState<'history' | 'prs' | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [cropImage, setCropImage] = useState<string | null>(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
+  // The account photo (users.photoURL) is the one avatar shown app-wide; legacy
+  // FitTrack profiles may still carry a base64 `avatar`, used as a fallback.
+  const avatarSrc = user?.photoURL || form.avatar;
 
   const pushEnabled =
     user?.notifyEnabled !== false &&
@@ -84,12 +99,27 @@ export default function ProfilePage() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      const avatar = reader.result as string;
-      setForm((f) => ({ ...f, avatar }));
-      if (!editing) updateProfile({ avatar });
-    };
+    reader.onload = () => setCropImage(reader.result as string);
     reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleCropComplete = async (blob: Blob) => {
+    if (!uid) return;
+    setCropImage(null);
+    setPhotoSaving(true);
+    try {
+      const file = new File([blob], 'profile.jpg', { type: 'image/jpeg' });
+      const url = await uploadProfilePhoto(uid, file);
+      await updateUser(uid, { photoURL: url });
+      dispatch(updateProfileLocal({ photoURL: url }));
+      toast.success('Photo updated');
+    } catch (err) {
+      console.error(err);
+      toast.error('Could not upload photo');
+    } finally {
+      setPhotoSaving(false);
+    }
   };
 
   if (!hydrated) return <div className="text-muted-foreground">Loading...</div>;
@@ -114,18 +144,28 @@ export default function ProfilePage() {
           <h2 className="ft-title font-semibold mb-4">Personal Info</h2>
           <div className="flex flex-wrap items-start gap-6">
             <div className="relative">
-              <div className="w-20 h-20 rounded-full overflow-hidden bg-muted/30 border-2 border-border">
-                {form.avatar ? (
-                  <img src={form.avatar} alt="Avatar" className="w-full h-full object-cover" />
+              <div className={cn('w-20 h-20 rounded-full overflow-hidden bg-muted/30 border-2 border-border', photoSaving && 'opacity-60')}>
+                {avatarSrc ? (
+                  <img src={avatarSrc} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-2xl">👤</div>
                 )}
               </div>
-              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center cursor-pointer">
+              <label className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-primary flex items-center justify-center cursor-pointer" aria-label="Change photo">
                 <Upload className="h-3.5 w-3.5 text-white" />
-                <input type="file" accept="image/*" className="hidden" onChange={handleAvatar} />
+                <input type="file" accept="image/*" className="hidden" onChange={handleAvatar} disabled={photoSaving} />
               </label>
             </div>
+            <Dialog open={!!cropImage} onOpenChange={(open) => !open && setCropImage(null)}>
+              <DialogContent className="max-w-md p-0 overflow-hidden rounded-[32px] border-0 shadow-2xl">
+                <DialogHeader className="p-6 pb-0">
+                  <DialogTitle className="text-xl font-black text-center">Crop Profile Photo</DialogTitle>
+                </DialogHeader>
+                {cropImage && (
+                  <ImageCropper imageSrc={cropImage} onCrop={handleCropComplete} onCancel={() => setCropImage(null)} />
+                )}
+              </DialogContent>
+            </Dialog>
             <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 min-w-[240px]">
               <Field label="Name" value={form.name} editing={editing} onChange={(v) => setForm({ ...form, name: v })} />
               <Field label="Age" value={String(form.age)} editing={editing} type="number" onChange={(v) => setForm({ ...form, age: parseInt(v, 10) || 0 })} />
@@ -323,11 +363,11 @@ export default function ProfilePage() {
               <div className="text-sm">
                 <p className="font-medium text-amber-600 dark:text-amber-400">Push notifications are off</p>
                 <p className="text-muted-foreground mt-1">
-                  Enable notifications in{' '}
-                  <Link href="/profile" className="text-primary underline underline-offset-2">
-                    App Profile
+                  Enable them in{' '}
+                  <Link href="#notifications" className="text-primary underline underline-offset-2">
+                    Push Notifications
                   </Link>{' '}
-                  to receive gym reminders when the app is closed.
+                  below to receive gym reminders when the app is closed.
                 </p>
               </div>
             </div>
@@ -426,8 +466,10 @@ export default function ProfilePage() {
 
         <TrainingPartnersSection />
 
-        {/* Workspaces visibility */}
-        <WorkspacesSettingsCard />
+        {/* Account, notifications, integrations */}
+        <PushNotificationsCard />
+        <GoogleCalendarCard />
+        <AccountSettingsCard />
 
         {/* Data Management */}
         <section className="ft-card ft-card-padded">

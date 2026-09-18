@@ -8,7 +8,7 @@ import { WorkoutSidebar } from '@/components/workout/WorkoutSidebar';
 import { WorkoutBottomNav } from '@/components/workout/WorkoutBottomNav';
 import { GlobalRestTimer } from '@/components/workout/GlobalRestTimer';
 import { GlobalWorkoutTimer } from '@/components/workout/GlobalWorkoutTimer';
-import { Navbar } from '@/components/layout/Navbar';
+import { FitTrackNavbar } from '@/components/workout/FitTrackNavbar';
 import { FitTrackSharedBanner } from '@/components/workout/FitTrackSharedBanner';
 import { FitTrackCelebrationProvider } from '@/components/fittrack/FitTrackCelebrationProvider';
 import { WeeklyWeighInPopup } from '@/components/fittrack/WeeklyWeighInPopup';
@@ -27,7 +27,7 @@ function FitTrackShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="ft-app min-h-screen bg-background text-foreground">
-      <Navbar />
+      <FitTrackNavbar />
       <div className="flex">
         <WorkoutSidebar />
         <main className="flex-1 min-h-[calc(100vh-4rem)] pb-20 lg:pb-8 relative overflow-x-hidden">

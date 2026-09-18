@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plane, Eye, EyeOff } from 'lucide-react';
+import { Dumbbell, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -43,7 +43,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await signInWithEmailOrPhone(data.email, data.password);
-      router.push('/dashboard');
+      router.push('/fittrack/dashboard');
     } catch (e) {
       const msg = (e as { message?: string }).message ?? 'Login failed';
       if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password')) {
@@ -62,7 +62,7 @@ export default function LoginPage() {
     <Card>
       <CardHeader className="text-center">
         <div className="flex justify-center mb-2">
-          <Plane className="h-10 w-10 text-primary" />
+          <Dumbbell className="h-10 w-10 text-primary" />
         </div>
         <CardTitle className="text-2xl">Welcome back</CardTitle>
         <CardDescription>Sign in with Gmail / email and password</CardDescription>

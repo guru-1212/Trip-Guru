@@ -11,8 +11,8 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!initialized) return;
-    router.replace(isAuthenticated ? '/dashboard' : '/login');
+    router.replace(isAuthenticated ? '/fittrack/dashboard' : '/login');
   }, [initialized, isAuthenticated, router]);
 
-  return <LoadingSpinner label="Loading TripMate..." />;
+  return <LoadingSpinner label="Loading FitTrack..." />;
 }

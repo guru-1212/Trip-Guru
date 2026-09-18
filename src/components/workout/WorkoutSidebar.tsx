@@ -20,7 +20,6 @@ import {
   PersonStanding,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAppMode } from '@/hooks/useAppMode';
 
 const navItems = [
   { href: '/fittrack/dashboard', label: 'Dashboard', icon: LayoutDashboard },

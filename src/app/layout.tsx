@@ -4,7 +4,6 @@ import './globals.css';
 import { ReduxProvider } from '@/components/providers/ReduxProvider';
 import { FCMProvider } from '@/components/providers/FCMProvider';
 import { AuthProvider } from '@/components/providers/AuthProvider';
-import { AppModeProvider } from '@/components/providers/AppModeProvider';
 import { PWAInstallPrompt } from '@/components/common/PWAInstallPrompt';
 import { ToastProvider } from '@/components/providers/ToastProvider';
 import { OfflineStatus } from '@/components/common/OfflineStatus';
@@ -12,8 +11,8 @@ import { OfflineStatus } from '@/components/common/OfflineStatus';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'TripMate — Group Travel Expenses',
-  description: 'Track group travel expenses and settle up with friends',
+  title: 'FitTrack — Gym & Nutrition Tracker',
+  description: 'Log workouts, track water and diet, and follow your training split',
   manifest: '/manifest.json',
   icons: {
     icon: [{ url: '/logo.svg', type: 'image/svg+xml' }],
@@ -23,7 +22,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'TripMate',
+    title: 'FitTrack',
   },
 };
 
@@ -46,14 +45,12 @@ export default function RootLayout({
       <body className={inter.className}>
         <ReduxProvider>
           <AuthProvider>
-            <AppModeProvider>
             <FCMProvider>
               {children}
               <OfflineStatus />
               <PWAInstallPrompt />
               <ToastProvider />
             </FCMProvider>
-            </AppModeProvider>
           </AuthProvider>
         </ReduxProvider>
       </body>

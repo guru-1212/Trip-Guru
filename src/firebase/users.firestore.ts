@@ -4,8 +4,8 @@ import {
   getDoc,
   getDocs,
   query,
+  updateDoc,
   where,
-  writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/firebase/db';
 import { normalizePhone } from '@/lib/utils';
@@ -21,32 +21,10 @@ export async function updateUser(
   uid: string,
   data: Partial<User>
 ): Promise<void> {
-  const batch = writeBatch(db());
-  const userRef = doc(db(), 'users', uid);
-
-  batch.update(userRef, data);
-
-  if (data.name || data.phone) {
-    const update: Record<string, string> = {};
-    if (data.name) update.name = data.name;
-    if (data.phone) update.phone = normalizePhone(data.phone);
-
-    const tripQ = query(
-      collection(db(), 'tripMembers'),
-      where('userId', '==', uid)
-    );
-    const tripSnap = await getDocs(tripQ);
-    tripSnap.docs.forEach((d) => batch.update(d.ref, update));
-
-    const roomQ = query(
-      collection(db(), 'roomMembers'),
-      where('userId', '==', uid)
-    );
-    const roomSnap = await getDocs(roomQ);
-    roomSnap.docs.forEach((d) => batch.update(d.ref, update));
-  }
-
-  await batch.commit();
+  const payload: Partial<User> = { ...data };
+  // Phone is stored normalized so phone-based lookups (login, invites) match.
+  if (typeof data.phone === 'string') payload.phone = normalizePhone(data.phone);
+  await updateDoc(doc(db(), 'users', uid), payload);
 }
 
 export async function getEmailByPhone(phone: string): Promise<string | null> {

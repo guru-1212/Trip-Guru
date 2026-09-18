@@ -11,11 +11,9 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getFirebaseAuth, getFirebaseDb } from '@/firebase/config';
-import { autoLinkMembersOnRegister } from '@/lib/autoLinkMembers';
 import { isEmail, normalizePhone } from '@/lib/utils';
-import { getEmailByPhone, findUserByEmailOrPhone } from '@/firebase/firestore';
-import { PrimaryUseCase, AppMode } from '@/types/user';
-import { defaultModeForUseCase } from '@/lib/appMode';
+import { getEmailByPhone, findUserByEmailOrPhone } from '@/firebase/users.firestore';
+import { autoLinkPendingFitTrackInviteOnRegister } from '@/firebase/fittrackPartners.firestore';
 import { getOrCreateAppCalendar } from '@/services/googleCalendarService';
 
 const auth = () => getFirebaseAuth();
@@ -46,8 +44,7 @@ export async function registerWithEmail(
   email: string,
   password: string,
   name: string,
-  phone: string,
-  primaryUseCase: PrimaryUseCase = 'trips'
+  phone: string
 ): Promise<FirebaseUser> {
   const normalizedEmail = email.trim().toLowerCase();
   const normalizedPhone = normalizePhone(phone);
@@ -70,8 +67,8 @@ export async function registerWithEmail(
 
   try {
     await updateProfile(result.user, { displayName: name });
-    await createUserDocument(result.user, name, normalizedPhone, primaryUseCase);
-    await autoLinkMembersOnRegister(result.user.uid, normalizedEmail, normalizedPhone, name);
+    await createUserDocument(result.user, name, normalizedPhone);
+    await autoLinkPendingFitTrackInviteOnRegister(result.user.uid, normalizedEmail, name);
     return result.user;
   } catch (error) {
     try {
@@ -86,11 +83,8 @@ export async function registerWithEmail(
 async function createUserDocument(
   user: FirebaseUser,
   name: string,
-  phone: string,
-  primaryUseCase: PrimaryUseCase = 'trips'
+  phone: string
 ): Promise<void> {
-  const activeMode: AppMode = defaultModeForUseCase(primaryUseCase);
-
   await setDoc(doc(db(), 'users', user.uid), {
     uid: user.uid,
     name,
@@ -99,8 +93,6 @@ async function createUserDocument(
     photoURL: user.photoURL ?? '',
     fcmToken: '',
     notifyEnabled: true,
-    primaryUseCase,
-    activeMode,
     createdAt: serverTimestamp(),
   });
 }

@@ -69,7 +69,10 @@ interface WorkoutContextValue {
   syncing: boolean;
   fittrackOwnerId: string | null;
   isFitTrackPartner: boolean;
-  updateProfile: (p: Partial<Omit<UserProfile, 'prefs'>> & { prefs?: Partial<UserPrefs> }) => void;
+  updateProfile: (
+    p: Partial<Omit<UserProfile, 'prefs'>> & { prefs?: Partial<UserPrefs> },
+    opts?: { silent?: boolean }
+  ) => void;
   saveWorkout: (session: Omit<WorkoutSession, 'id'>) => WorkoutSession;
   startActiveWorkout: (state: ActiveWorkoutState) => void;
   updateActiveWorkout: (state: ActiveWorkoutState) => void;
@@ -252,17 +255,20 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     }
   }, [hydrated, profile.prefs.theme]);
 
-  const updateProfile = useCallback((p: Partial<Omit<UserProfile, 'prefs'>> & { prefs?: Partial<UserPrefs> }) => {
-    setProfile((prev) => {
-      const next = { ...prev, ...p, prefs: { ...prev.prefs, ...(p.prefs ?? {}) } };
-      const currentUid = uidRef.current;
-      if (currentUid) {
-        fittrackDb.saveFitTrackProfile(currentUid, next).catch(() => toast.error('Failed to save profile'));
-      }
-      toast.success('Profile saved');
-      return next;
-    });
-  }, []);
+  const updateProfile = useCallback(
+    (p: Partial<Omit<UserProfile, 'prefs'>> & { prefs?: Partial<UserPrefs> }, opts?: { silent?: boolean }) => {
+      setProfile((prev) => {
+        const next = { ...prev, ...p, prefs: { ...prev.prefs, ...(p.prefs ?? {}) } };
+        const currentUid = uidRef.current;
+        if (currentUid) {
+          fittrackDb.saveFitTrackProfile(currentUid, next).catch(() => toast.error('Failed to save profile'));
+        }
+        if (!opts?.silent) toast.success('Profile saved');
+        return next;
+      });
+    },
+    []
+  );
 
   const saveWorkout = useCallback((session: Omit<WorkoutSession, 'id'>) => {
     const id = generateId();

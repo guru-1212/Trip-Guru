@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { PageTransition } from '@/components/workout/PageTransition';
-import { WorkoutAnalytics } from '@/components/analytics/WorkoutAnalytics';
-import { DietAnalytics } from '@/components/analytics/DietAnalytics';
+import { WorkoutAnalytics } from '@/components/fittrack/WorkoutAnalytics';
+import { DietAnalytics } from '@/components/fittrack/DietAnalytics';
 import { cn } from '@/lib/utils';
 import { Dumbbell, Utensils } from 'lucide-react';
 

@@ -64,8 +64,8 @@ export function WaterNotificationPrompt({ className }: WaterNotificationPromptPr
             <p className="font-medium">Notifications blocked</p>
             <p className="text-muted-foreground mt-1">
               Enable notifications in your browser settings, or use the{' '}
-              <Link href="/profile" className="underline text-primary font-medium">
-                App Profile
+              <Link href="/fittrack/profile#notifications" className="underline text-primary font-medium">
+                Profile → Push Notifications
               </Link>{' '}
               page to set them up.
             </p>
