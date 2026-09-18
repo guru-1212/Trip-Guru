@@ -1,8 +1,8 @@
 {
-  "name": "TripMate",
-  "short_name": "TripMate",
-  "description": "Group travel expense tracking and settlement",
-  "start_url": "/",
+  "name": "FitTrack",
+  "short_name": "FitTrack",
+  "description": "Gym workout, water and nutrition tracker",
+  "start_url": "/fittrack/dashboard",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#6366F1",

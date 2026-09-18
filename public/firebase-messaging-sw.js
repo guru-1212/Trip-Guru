@@ -14,14 +14,14 @@ firebase.initializeApp({
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage((payload) => {
-  const title = payload.notification?.title || payload.data?.title || 'TripMate';
+  const title = payload.notification?.title || payload.data?.title || 'FitTrack';
   const body = payload.notification?.body || payload.data?.body || '';
   const data = payload.data || {};
   const options = {
     body,
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-192x192.png',
-    tag: data.type || 'tripmate',
+    tag: data.type || 'fittrack',
     data,
   };
   return self.registration.showNotification(title, options);
@@ -30,16 +30,7 @@ messaging.onBackgroundMessage((payload) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const data = event.notification.data || {};
-  let url = data.url || data.path || '/dashboard';
-  if (!data.url && !data.path && data.roomId) {
-    url = '/rooms/' + data.roomId;
-    if (data.path) url += data.path;
-  } else if (!data.url && !data.path && data.tripId) {
-    const tripPath = data.type && String(data.type).startsWith('settlement')
-      ? '/settlement'
-      : '/expenses';
-    url = '/trips/' + data.tripId + (data.path || tripPath);
-  }
+  const url = data.url || data.path || '/fittrack/dashboard';
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {

@@ -1,5 +1,5 @@
 {
-  "name": "tripmate",
+  "name": "fittrack",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -7,7 +7,7 @@
     "build": "node scripts/generate-messaging-sw.js && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "npx tsx src/lib/settlementAlgorithm.test.ts && npx tsx src/lib/tripPackProgress.test.ts && npx tsx src/workout/fittrack.test.ts && npx tsx src/lib/nutrition/dietImportParser.test.ts",
+    "test": "npx tsx src/workout/fittrack.test.ts && npx tsx src/lib/nutrition/dietImportParser.test.ts",
     "icons": "node scripts/generate-icons.js",
     "messaging-sw": "node scripts/generate-messaging-sw.js",
     "firebase:deploy": "firebase deploy --only firestore:rules,firestore:indexes,storage && node scripts/deploy-functions.js",
@@ -32,8 +32,6 @@
     "firebase": "^10",
     "framer-motion": "^11",
     "html2canvas": "^1.4.1",
-    "jspdf": "^2",
-    "jspdf-autotable": "^3",
     "lucide-react": "^0.400",
     "next": "14.2.0",
     "next-pwa": "^5",
