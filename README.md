@@ -1,38 +1,38 @@
-# TripMate
+# FitTrack
 
-Group travel expense tracking and settlement platform built with Next.js 14, Firebase, Redux Toolkit, and Tailwind CSS.
+Gym workout, water and nutrition tracker built with Next.js 14, Firebase, and Tailwind CSS. Installable as a PWA with push reminders.
 
 ## Features
 
 - Firebase Auth (email/password; sign in with email or mobile)
-- Trip management with auto status transitions (planned → ongoing → completed)
-- Expense tracking with 4 split types: equal, unequal, percent, single
-- Debt simplification settlement algorithm
-- Real-time Firestore sync for expenses and members
-- Trip memories (photos, videos, notes, voice)
-- Analytics charts and PDF/Excel export
-- PWA support via next-pwa
+- Weekly training split with rotation-aware "today" (Push / Pull / Legs presets, classic splits, custom days)
+- Pre-session exercise picker with muscle-coverage body map, recommended exercises, and any-muscle-group browsing
+- Live workout logging: sets, reps, rest timer, drag-to-reorder, mid-session add/remove, PRs
+- History, weekly recap, progress charts, body distribution map, recovery map, progress photos
+- Water tracker with scheduled reminders; diet tracker with Indian food database, macros and AI import
+- Training partners (share a plan with a gym buddy)
+- Push notifications via Cloud Functions (gym reminders, water reminders, partner invites)
+- Optional Google Calendar sync for water/meal reminders
 - Dark mode
 
 ## Prerequisites
 
 - Node.js 18+
-- npm or yarn
+- npm
 - Firebase project with Auth, Firestore, Storage, and Cloud Messaging enabled
 
 ## Setup
 
-### 1. Clone and install
+### 1. Install
 
 ```bash
-cd tripmate
 npm install
 ```
 
 ### 2. Firebase project
 
 1. Create a project at [Firebase Console](https://console.firebase.google.com/)
-2. Enable **Authentication** → **Email/Password** only (Google sign-in is not used)
+2. Enable **Authentication** → **Email/Password** (Google is only used for the optional Calendar link)
 3. Create **Firestore** database (production mode)
 4. Enable **Storage**
 5. Enable **Cloud Messaging** and generate a Web Push certificate (VAPID key)
@@ -40,29 +40,7 @@ npm install
 
 ### 3. Firebase project link
 
-Copy `.firebaserc.example` to `.firebaserc` and set your project ID:
-
-```bash
-cp .firebaserc.example .firebaserc
-```
-
-### 4. Deploy Firestore rules, indexes, Storage, and Functions
-
-```bash
-npx -y firebase-tools@latest login
-cd functions && npm install && cd ..
-
-# Generate FCM service worker from .env.local
-npm run messaging-sw
-
-npx -y firebase-tools@latest deploy --only firestore,storage,functions
-```
-
-Or use the npm script:
-
-```bash
-npm run firebase:deploy
-```
+Copy `.firebaserc.example` to `.firebaserc` and set your project ID.
 
 ### 4. Environment variables
 
@@ -78,38 +56,44 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 NEXT_PUBLIC_FIREBASE_VAPID_KEY=
 ```
 
-### 6. PWA icons
+Run `npm run messaging-sw` after changing these so `public/firebase-messaging-sw.js` picks up the config (the `dev` and `build` scripts do this automatically).
 
-Add PNG icons at:
+### 5. Deploy Firestore rules, indexes, Storage, and Functions
+
+```bash
+npx -y firebase-tools@latest login
+cd functions && npm install && cd ..
+npm run firebase:deploy
+```
+
+### 6. PWA icons
 
 - `public/icons/icon-192x192.png`
 - `public/icons/icon-512x512.png`
 
-### 7. Run development server
+### 7. Run
 
 ```bash
-npm run dev
+npm run dev        # http://localhost:3000
+npm run build && npm start
+npm test           # FitTrack + diet-import unit tests
 ```
 
-Open [http://localhost:3000](http://localhost:3000)
+## Firestore layout
 
-### 7. Production build
+Everything is per user under `users/{uid}`:
 
-```bash
-npm run build
-npm start
-```
-
-## Firestore collections
-
-| Collection     | Description                          |
-|----------------|--------------------------------------|
-| `users`        | User profiles and FCM tokens         |
-| `trips`        | Trip metadata                        |
-| `tripMembers`  | Members (doc ID: `{tripId}_{userId}`)|
-| `expenses`     | Trip expenses                        |
-| `settlements`  | Payment records                      |
-| `memories`     | Photos, videos, notes                |
+| Path | Description |
+|------|-------------|
+| `users/{uid}` | Account profile, FCM tokens, `fittrackLinkedOwnerId` |
+| `users/{uid}/fittrack/profile` | FitTrack profile incl. `weekSchedule` |
+| `users/{uid}/fittrack/state` | PRs, habits, goals, checklist, per-split picks, active workout |
+| `users/{uid}/fittrackWorkouts/{id}` | Completed sessions |
+| `users/{uid}/fittrackCustomExercises`, `fittrackBodyStats`, `fittrackProgressPhotos`, `fittrackReminders` | Supporting collections |
+| `users/{uid}/waterSettings`, `waterLogs`, `waterReminders` | Water tracker |
+| `users/{uid}/nutrition*` | Diet tracker |
+| `fittrackPartners/{ownerId}_{partnerId}` | Training partner invites |
+| `globalFoods` | Shared food database |
 
 ## Push notifications
 
@@ -117,20 +101,22 @@ Cloud Functions in `functions/`:
 
 | Function | Purpose |
 |----------|---------|
-| `sendTripInvite` | Notifies a user when added to a trip |
-| `onExpenseCreated` | Notifies trip members when a new expense is added |
-
-The client registers FCM tokens on login and calls these via `httpsCallable`. Run `npm run messaging-sw` after updating `.env.local` so `public/firebase-messaging-sw.js` has your Firebase config.
+| `sendFitTrackInvite` | Notifies a user when invited as a training partner |
+| `onFitTrackWorkoutCreated` | "Workout saved" push + schedules the protein reminder |
+| `onFitTrackProfileWritten` | Reschedules pre-gym reminders when the profile/schedule changes |
+| `onWaterSettingsWritten`, `onWaterLogWritten` | Water reminder scheduling, goal + streak pushes |
+| `dispatchFitTrackReminders` | Every 5 minutes, sends due gym and water reminders |
+| `rescheduleWaterRemindersCallable` | Client-triggered reschedule |
 
 ## Tech stack
 
 - Next.js 14 App Router (TypeScript)
 - Tailwind CSS + shadcn/ui (Radix)
 - Framer Motion
-- Redux Toolkit
+- Redux Toolkit (auth only) + React context for FitTrack data
 - React Hook Form + Zod
-- Firebase (Auth, Firestore, Storage, FCM)
-- Recharts, dayjs, jsPDF, xlsx, next-pwa
+- Firebase (Auth, Firestore, Storage, FCM, Cloud Functions)
+- Recharts, dayjs, html2canvas, xlsx, next-pwa
 
 ## License
 
