@@ -4,37 +4,9 @@ service cloud.firestore {
 
     function isAuth() { return request.auth != null; }
     function isOwner(uid) { return request.auth.uid == uid; }
-    function isTripMember(tripId) {
-      return exists(/databases/$(database)/documents/tripMembers/$(tripId + '_' + request.auth.uid));
-    }
-    function getTripMemberData(tripId) {
-      return get(/databases/$(database)/documents/tripMembers/$(tripId + '_' + request.auth.uid)).data;
-    }
-    function isTripEditor(tripId) {
-      return isTripMember(tripId) && (getTripMemberData(tripId).role == 'owner' || getTripMemberData(tripId).role == 'editor');
-    }
-    function isTripOwner(tripId) {
-      return get(/databases/$(database)/documents/trips/$(tripId)).data.createdBy == request.auth.uid;
-    }
-    function isRoomMember(roomId) {
-      return exists(/databases/$(database)/documents/roomMembers/$(roomId + '_' + request.auth.uid));
-    }
-    function getRoomMemberData(roomId) {
-      return get(/databases/$(database)/documents/roomMembers/$(roomId + '_' + request.auth.uid)).data;
-    }
-    function isRoomEditor(roomId) {
-      return isRoomMember(roomId) && (getRoomMemberData(roomId).role == 'owner' || getRoomMemberData(roomId).role == 'editor');
-    }
-    function isRoomOwner(roomId) {
-      return get(/databases/$(database)/documents/rooms/$(roomId)).data.createdBy == request.auth.uid;
-    }
     function isFitTrackPartner(ownerUid) {
       return exists(/databases/$(database)/documents/fittrackPartners/$(ownerUid + '_' + request.auth.uid))
         && get(/databases/$(database)/documents/fittrackPartners/$(ownerUid + '_' + request.auth.uid)).data.inviteStatus == 'accepted';
-    }
-    function isYogaPartner(ownerUid) {
-      return exists(/databases/$(database)/documents/yogaPartners/$(ownerUid + '_' + request.auth.uid))
-        && get(/databases/$(database)/documents/yogaPartners/$(ownerUid + '_' + request.auth.uid)).data.inviteStatus == 'accepted';
     }
     function isFitTrackOwnerManagingPartner() {
       return resource.data.fittrackLinkedOwnerId == request.auth.uid
@@ -47,9 +19,10 @@ service cloud.firestore {
       allow update: if isOwner(uid) || isFitTrackOwnerManagingPartner();
       allow delete: if isOwner(uid);
     }
+    // FitTrack, water and nutrition data live under users/{uid}/...
     match /users/{uid}/{document=**} {
       allow read: if isAuth();
-      allow write: if isOwner(uid) || isFitTrackPartner(uid) || isYogaPartner(uid);
+      allow write: if isOwner(uid) || isFitTrackPartner(uid);
     }
     match /fittrackPartners/{memberId} {
       allow read: if isAuth();
@@ -57,163 +30,9 @@ service cloud.firestore {
       allow update: if isAuth();
       allow delete: if isAuth();
     }
-    match /yogaPartners/{memberId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth();
-      allow delete: if isAuth();
-    }
-    match /yogaPoses/{poseId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
-    }
-    match /yogaFlows/{flowId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
-    }
     match /globalFoods/{foodId} {
       allow read: if isAuth();
       allow write: if isAuth();
-    }
-    match /trips/{tripId} {
-      allow read: if isTripMember(tripId);
-      allow create: if isAuth();
-      allow update: if isTripEditor(tripId);
-      allow delete: if isTripOwner(tripId);
-    }
-    match /tripMembers/{memberId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth();
-      allow delete: if isAuth();
-    }
-    match /expenses/{expenseId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update, delete: if isAuth();
-    }
-    match /settlements/{settlementId} {
-      allow read: if isAuth();
-      allow write: if isAuth();
-    }
-    match /memories/{memoryId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow delete: if request.auth.uid == resource.data.uploadedBy;
-    }
-    match /tripPlans/{tripId} {
-      allow read: if isTripMember(tripId);
-      allow create, update: if isTripEditor(tripId);
-      allow delete: if isTripOwner(tripId);
-    }
-    function tripMemberDocExists(memberKey) {
-      return memberKey != null
-        && exists(/databases/$(database)/documents/tripMembers/$(memberKey));
-    }
-    function tripMemberUserId(memberKey) {
-      return get(/databases/$(database)/documents/tripMembers/$(memberKey)).data.userId;
-    }
-    function isTripPackAssignee(tripId, memberKey) {
-      return isTripMember(tripId)
-        && tripMemberDocExists(memberKey)
-        && tripMemberUserId(memberKey) == request.auth.uid;
-    }
-    function isTripPackStatusOnlyUpdate() {
-      return request.resource.data.diff(resource.data).affectedKeys()
-        .hasOnly(['status', 'packedAt']);
-    }
-    match /tripPackItems/{itemId} {
-      allow read: if isTripMember(resource.data.tripId);
-      allow create: if isAuth() && isTripEditor(request.resource.data.tripId);
-      allow delete: if isAuth() && request.auth.uid == resource.data.createdBy;
-      allow update: if isAuth() && isTripMember(resource.data.tripId) && (
-        isTripEditor(resource.data.tripId)
-        || request.auth.uid == resource.data.createdBy
-        || (
-          isTripPackStatusOnlyUpdate()
-          && isTripPackAssignee(resource.data.tripId, resource.data.assignedToMemberKey)
-        )
-      );
-    }
-
-    match /rooms/{roomId} {
-      allow read: if isRoomMember(roomId);
-      allow create: if isAuth();
-      allow update: if isRoomEditor(roomId);
-      allow delete: if isRoomOwner(roomId);
-    }
-    match /roomMembers/{memberId} {
-      allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth();
-      allow delete: if isAuth();
-    }
-    match /cycles/{cycleId} {
-      allow read: if isRoomMember(resource.data.roomId);
-      allow create: if isAuth() && isRoomEditor(request.resource.data.roomId);
-      allow update: if isRoomEditor(resource.data.roomId);
-      allow delete: if isRoomOwner(resource.data.roomId);
-    }
-    match /roomExpenses/{expenseId} {
-      allow read: if isRoomMember(resource.data.roomId);
-      allow create: if isAuth() && isRoomEditor(request.resource.data.roomId);
-      allow update, delete: if isAuth() && request.auth.uid == resource.data.createdBy;
-    }
-    function roomMemberUserId(memberKey) {
-      return get(/databases/$(database)/documents/roomMembers/$(memberKey)).data.userId;
-    }
-    function isRoomSettlementDebtor(roomId, memberKey) {
-      return isRoomMember(roomId)
-        && roomMemberUserId(memberKey) == request.auth.uid;
-    }
-    function isRoomSettlementCreditor(roomId, memberKey) {
-      return isRoomMember(roomId)
-        && roomMemberUserId(memberKey) == request.auth.uid;
-    }
-    match /roomSettlements/{settlementId} {
-      allow read: if isRoomMember(resource.data.roomId);
-      allow create: if isAuth() && isRoomMember(request.resource.data.roomId);
-      allow delete: if isRoomEditor(resource.data.roomId);
-      allow update: if isRoomMember(resource.data.roomId) && (
-        isRoomEditor(resource.data.roomId)
-        || (
-          isRoomSettlementDebtor(resource.data.roomId, resource.data.fromMemberKey)
-          && resource.data.status == 'pending'
-          && request.resource.data.status == 'awaiting_confirmation'
-        )
-        || (
-          isRoomSettlementCreditor(resource.data.roomId, resource.data.toMemberKey)
-          && resource.data.status == 'awaiting_confirmation'
-          && request.resource.data.status == 'paid'
-        )
-      );
-    }
-    match /carryForwardBalances/{balanceId} {
-      allow read: if isRoomMember(resource.data.roomId);
-      allow write: if isRoomEditor(resource.data.roomId);
-    }
-    match /rentPayments/{paymentId} {
-      allow read: if isRoomMember(resource.data.roomId);
-      allow write: if isRoomEditor(resource.data.roomId);
-    }
-    match /roomBringItems/{itemId} {
-      allow read: if isRoomMember(resource.data.roomId);
-      allow create: if isAuth() && isRoomEditor(request.resource.data.roomId);
-      allow update, delete: if isRoomEditor(resource.data.roomId);
-    }
-    match /roomAuditLogs/{logId} {
-      allow read: if isRoomMember(resource.data.roomId);
-      allow create: if isAuth()
-        && isRoomMember(request.resource.data.roomId)
-        && request.auth.uid == request.resource.data.actorUid;
-      allow update, delete: if false;
-    }
-    match /tripAuditLogs/{logId} {
-      allow read: if isTripMember(resource.data.tripId);
-      allow create: if isAuth()
-        && isTripMember(request.resource.data.tripId)
-        && request.auth.uid == request.resource.data.actorUid;
-      allow update, delete: if false;
     }
   }
 }
