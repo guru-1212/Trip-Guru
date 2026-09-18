@@ -129,7 +129,7 @@ export function ShareDietModal({
       if (vitB12) text += `- Vitamin B12: ${vitB12}mcg\n`;
     }
 
-    text += `\nTracked via Trip-Guru FitTrack`;
+    text += `\nTracked via FitTrack`;
     return text;
   };
 

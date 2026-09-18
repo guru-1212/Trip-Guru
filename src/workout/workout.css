@@ -1,4 +1,0 @@
-@import '../fittrack/fittrack.css';
-
-/* Legacy aliases for (workout) route */
-.wk-app { font-family: inherit; color: hsl(var(--foreground)); min-height: 100vh; }

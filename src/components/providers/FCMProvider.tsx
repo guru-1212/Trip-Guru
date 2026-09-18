@@ -8,28 +8,12 @@ import {
   requestFCMToken,
 } from '@/services/fcmService';
 
+/** Every FitTrack push sets `data.url` (see functions/src/notifications.ts). */
 function getPayloadUrl(payload: unknown): string | null {
   const p = payload as {
-    data?: {
-      url?: string;
-      roomId?: string;
-      tripId?: string;
-      path?: string;
-      type?: string;
-    };
-    notification?: { title?: string; body?: string };
+    data?: { url?: string; path?: string };
   };
-  if (p.data?.url) return p.data.url;
-  if (p.data?.path) return p.data.path;
-  if (p.data?.roomId) {
-    return `/rooms/${p.data.roomId}${p.data.path ?? ''}`;
-  }
-  if (p.data?.tripId) {
-    const defaultPath =
-      p.data.type?.startsWith('settlement') ? '/settlement' : '/expenses';
-    return `/trips/${p.data.tripId}${p.data.path ?? defaultPath}`;
-  }
-  return null;
+  return p.data?.url ?? p.data?.path ?? null;
 }
 
 export function FCMProvider({ children }: { children: React.ReactNode }) {
@@ -70,10 +54,10 @@ export function FCMProvider({ children }: { children: React.ReactNode }) {
         Notification.permission === 'granted' &&
         data.notification
       ) {
-        const n = new Notification(data.notification.title ?? 'TripMate', {
+        const n = new Notification(data.notification.title ?? 'FitTrack', {
           body: data.notification.body,
           icon: '/logo.svg',
-          tag: 'tripmate-foreground',
+          tag: 'fittrack-foreground',
         });
         n.onclick = () => {
           n.close();

@@ -76,7 +76,7 @@ export function DietPageHeader({
 
           const eventDetails = {
             summary: 'Diet: Log your meals',
-            description: 'Daily reminder to log your food and track macros in Trip-Guru.',
+            description: 'Daily reminder to log your food and track macros in FitTrack.',
             start: {
               dateTime: startDate.toISOString(),
               timeZone: timezone,

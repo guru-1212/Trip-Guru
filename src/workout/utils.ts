@@ -1149,7 +1149,7 @@ export async function showLocalNotification(title: string, body: string) {
   const options: NotificationOptions = {
     body,
     icon: '/logo.svg',
-    tag: 'tripmate-local',
+    tag: 'fittrack-local',
   };
 
   if ('serviceWorker' in navigator) {

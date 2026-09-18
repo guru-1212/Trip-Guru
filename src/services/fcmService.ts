@@ -378,81 +378,6 @@ export async function onForegroundMessage(
   return onMessage(messaging, callback);
 }
 
-export async function notifyRoomMembersOfExpense(
-  roomId: string,
-  amount: number,
-  category: string,
-  paidByName: string,
-  title?: string
-): Promise<void> {
-  try {
-    const fn = httpsCallable(getFirebaseFunctions(), 'onRoomExpenseCreated');
-    await fn({
-      roomId,
-      amount,
-      category,
-      paidByName,
-      title: title ?? category,
-    });
-  } catch (error) {
-    console.warn('Room expense notification failed:', error);
-  }
-}
-
-export async function notifyRoomMembersOfActivity(
-  roomId: string,
-  title: string,
-  body: string,
-  path?: string
-): Promise<void> {
-  try {
-    const fn = httpsCallable(getFirebaseFunctions(), 'onRoomActivityNotify');
-    await fn({ roomId, title, body, path: path ?? '' });
-  } catch (error) {
-    console.warn('Room activity notification failed:', error);
-  }
-}
-
-export async function notifyTripMembersOfExpense(
-  tripId: string,
-  amount: number,
-  category: string,
-  paidByName: string,
-  title?: string
-): Promise<void> {
-  try {
-    const fn = httpsCallable(getFirebaseFunctions(), 'onExpenseCreated');
-    await fn({
-      tripId,
-      amount,
-      category,
-      paidByName,
-      title: title ?? category,
-    });
-  } catch (error) {
-    console.warn('Trip expense notification failed:', error);
-  }
-}
-
-export async function sendTripInviteNotification(
-  targetUserId: string,
-  tripId: string,
-  tripName: string
-): Promise<{ sent: boolean }> {
-  try {
-    const fn = httpsCallable<
-      { targetUserId: string; tripId: string; tripName: string },
-      { sent: boolean }
-    >(getFirebaseFunctions(), 'sendTripInvite');
-
-    const result = await fn({ targetUserId, tripId, tripName });
-    return { sent: result.data.sent };
-  } catch (error) {
-    console.warn('Trip invite notification failed (deploy Cloud Functions):', error);
-    return { sent: false };
-  }
-}
-
 export async function sendFitTrackInviteNotification(
   targetUserId: string,
   ownerName: string
@@ -471,21 +396,3 @@ export async function sendFitTrackInviteNotification(
   }
 }
 
-export async function sendRoomInviteNotification(
-  targetUserId: string,
-  roomId: string,
-  roomName: string
-): Promise<{ sent: boolean }> {
-  try {
-    const fn = httpsCallable<
-      { targetUserId: string; roomId: string; roomName: string },
-      { sent: boolean }
-    >(getFirebaseFunctions(), 'sendRoomInvite');
-
-    const result = await fn({ targetUserId, roomId, roomName });
-    return { sent: result.data.sent };
-  } catch (error) {
-    console.warn('Room invite notification failed (deploy Cloud Functions):', error);
-    return { sent: false };
-  }
-}

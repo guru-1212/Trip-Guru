@@ -1,72 +1,18 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { useDispatch, useSelector, TypedUseSelectorHook } from 'react-redux';
 import authReducer from '@/features/auth/authSlice';
-import tripsReducer from '@/features/trips/tripsSlice';
-import expensesReducer from '@/features/expenses/expensesSlice';
-import settlementsReducer from '@/features/settlements/settlementsSlice';
-import memoriesReducer from '@/features/memories/memoriesSlice';
-import roomsReducer from '@/features/rooms/roomsSlice';
-import roomExpensesReducer from '@/features/roomExpenses/roomExpensesSlice';
-import roomSettlementsReducer from '@/features/roomSettlements/roomSettlementsSlice';
-import roomBringItemsReducer from '@/features/roomBringItems/roomBringItemsSlice';
-import tripPackItemsReducer from '@/features/tripPackItems/tripPackItemsSlice';
-import appModeReducer from '@/features/appMode/appModeSlice';
-import gymReducer from '@/features/gym/gymSlice';
-import yogaReducer from '@/features/yoga/yogaSlice';
 
+// Only the auth profile lives in Redux; FitTrack data is served by
+// WorkoutContext (see src/workout/WorkoutContext.tsx) via Firestore listeners.
 export const store = configureStore({
   reducer: {
     auth: authReducer,
-    trips: tripsReducer,
-    expenses: expensesReducer,
-    settlements: settlementsReducer,
-    memories: memoriesReducer,
-    rooms: roomsReducer,
-    roomExpenses: roomExpensesReducer,
-    roomSettlements: roomSettlementsReducer,
-    roomBringItems: roomBringItemsReducer,
-    tripPackItems: tripPackItemsReducer,
-    appMode: appModeReducer,
-    gym: gymReducer,
-    yoga: yogaReducer,
   },
   middleware: (getDefaultMiddleware) =>
     getDefaultMiddleware({
       serializableCheck: {
-        ignoredActions: [
-          'auth/setUser',
-          'auth/updateProfileLocal',
-          'expenses/setExpenses',
-          'trips/setTrips',
-          'trips/fetchUserTrips/fulfilled',
-          'trips/fetchTripById/fulfilled',
-          'trips/create/fulfilled',
-          'trips/update/fulfilled',
-          'trips/setCurrentTrip',
-          'trips/updateTripInList',
-          'trips/addTripToList',
-          'rooms/setRooms',
-          'rooms/fetchUser/fulfilled',
-          'rooms/create/fulfilled',
-          'appMode/setAppModeState',
-          'yoga/setYogaSessionLogs',
-          'yoga/addYogaSessionLog',
-          'yoga/setMeditationLogs',
-          'yoga/addMeditationLog',
-          'yoga/setPosturePhotoLogs',
-          'yoga/addPosturePhotoLog',
-        ],
-        ignoredPaths: [
-          'auth.user.createdAt',
-          'trips.trips',
-          'trips.currentTrip',
-          'expenses.expenses',
-          'rooms.rooms',
-          'rooms.currentRoom',
-          'yoga.sessionLogs',
-          'yoga.meditationLogs',
-          'yoga.posturePhotoLogs',
-        ],
+        ignoredActions: ['auth/setUser', 'auth/updateProfileLocal'],
+        ignoredPaths: ['auth.user.createdAt'],
       },
     }),
 });

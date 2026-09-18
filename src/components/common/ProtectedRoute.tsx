@@ -16,7 +16,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }, [initialized, isAuthenticated, router]);
 
   if (!initialized) {
-    return <LoadingSpinner label="Loading TripMate..." />;
+    return <LoadingSpinner label="Loading FitTrack..." />;
   }
 
   if (!isAuthenticated) {

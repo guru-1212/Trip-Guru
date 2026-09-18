@@ -82,12 +82,12 @@ export function PWAInstallPrompt() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Download className="h-5 w-5 text-primary" />
-            Install TripMate
+            Install FitTrack
           </DialogTitle>
         </DialogHeader>
         <div className="flex flex-col items-center gap-4 py-4 text-center">
           <p className="text-muted-foreground">
-            Install TripMate on your device for a better experience, faster access, and offline support.
+            Install FitTrack on your device for faster access, offline support and reminders.
           </p>
           <div className="flex w-full gap-3 mt-2">
             <Button variant="outline" className="flex-1" onClick={handleClose}>

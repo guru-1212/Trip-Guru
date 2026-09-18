@@ -50,49 +50,12 @@ export async function deleteFileAtPath(path: string): Promise<void> {
   }
 }
 
-export async function uploadReceipt(
-  tripId: string,
-  expenseId: string,
-  file: File
-): Promise<string> {
-  const ext = file.name.split('.').pop() ?? 'jpg';
-  return uploadFile(`trips/${tripId}/receipts/${expenseId}.${ext}`, file);
-}
-
-export async function uploadRoomReceipt(
-  roomId: string,
-  expenseId: string,
-  file: File
-): Promise<string> {
-  const ext = file.name.split('.').pop() ?? 'jpg';
-  return uploadFile(`rooms/${roomId}/receipts/${expenseId}.${ext}`, file);
-}
-
 export async function uploadProfilePhoto(
   uid: string,
   file: File
 ): Promise<string> {
   const ext = file.name.split('.').pop() ?? 'jpg';
   return uploadFile(`users/${uid}/profile.${ext}`, file);
-}
-
-export async function uploadMemoryFile(
-  tripId: string,
-  memoryId: string,
-  file: File
-): Promise<string> {
-  const ext = file.name.split('.').pop() ?? 'bin';
-  return uploadFile(`trips/${tripId}/memories/${memoryId}.${ext}`, file);
-}
-
-export async function uploadTripPlanImage(
-  tripId: string,
-  assetKey: string,
-  file: File
-): Promise<string> {
-  const ext = file.name.split('.').pop() ?? 'jpg';
-  const safeKey = assetKey.replace(/[^a-zA-Z0-9/_-]/g, '_');
-  return uploadFile(`trips/${tripId}/plan/${safeKey}.${ext}`, file);
 }
 
 function sanitizeStorageSegment(value: string): string {
@@ -127,15 +90,4 @@ export async function uploadFitTrackProgressPhoto(
   const path = `users/${uid}/fittrack/progress/${safeId}.${safeExt}`;
   const url = await uploadFileWithProgress(path, file, onProgress);
   return { url, path };
-}
-
-export async function uploadYogaPosturePhoto(
-  uid: string,
-  poseId: string,
-  file: File
-): Promise<string> {
-  const ext = file.name.split('.').pop() ?? 'jpg';
-  const timestamp = Date.now();
-  const safePoseId = sanitizeStorageSegment(poseId);
-  return uploadFile(`users/${uid}/yoga/postures/${safePoseId}_${timestamp}.${ext}`, file);
 }
