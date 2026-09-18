@@ -1,6 +1,6 @@
 import anatomy from './muscleAnatomy.json';
-import { EXERCISE_LIBRARY } from './exerciseLibrary';
-import { COMBINED_SPLIT_COMPONENTS, SPLIT_DEFINITIONS } from './constants';
+import { EXERCISE_LIBRARY, getExercisesForSplit } from './exerciseLibrary';
+import { SPLIT_DEFINITIONS } from './constants';
 import type { CustomExercise, LibraryExercise, SplitId, TodayExercisePick } from './types';
 
 /** A fine-grained muscle region id from muscleAnatomy.json (e.g. 'chest-upper'). */
@@ -101,15 +101,6 @@ export interface CoverageSuggestion {
   exerciseName: string;
 }
 
-/** Split-aware library pool (mirrors getExercisesForSplit's combined-split logic). */
-function exercisesForSplit(splitId: SplitId) {
-  const components = COMBINED_SPLIT_COMPONENTS[splitId];
-  if (components) {
-    return EXERCISE_LIBRARY.filter((e) => components.some((c) => e.splitIds.includes(c)));
-  }
-  return EXERCISE_LIBRARY.filter((e) => e.splitIds.includes(splitId));
-}
-
 export interface MuscleExerciseMatch {
   exercise: LibraryExercise;
   /** How the exercise hits the tapped muscle(s). */
@@ -127,7 +118,7 @@ export function getExercisesForMuscles(
   muscleIds: SubMuscleId[],
   splitId: SplitId
 ): MuscleExerciseMatch[] {
-  const splitIds = new Set(exercisesForSplit(splitId).map((e) => e.id));
+  const splitIds = new Set(getExercisesForSplit(splitId).map((e) => e.id));
   const wanted = new Set(muscleIds);
   const matches: MuscleExerciseMatch[] = [];
 
@@ -161,7 +152,7 @@ export function getCoverageSuggestions(
 ): CoverageSuggestion[] {
   const states = computeMuscleStates(splitId, picks, customExercises);
   const pickedIds = new Set(picks.map((p) => p.exerciseId));
-  const pool = exercisesForSplit(splitId);
+  const pool = getExercisesForSplit(splitId);
   const suggestions: CoverageSuggestion[] = [];
 
   for (const muscle of SUB_MUSCLES) {

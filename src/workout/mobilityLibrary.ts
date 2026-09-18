@@ -1,4 +1,5 @@
 import type { MobilityExercise, MobilityType, SplitId } from './types';
+import { MUSCLE_GROUPS } from './constants';
 
 export const MOBILITY_LIBRARY: MobilityExercise[] = [
   // ── CHEST + TRICEPS warm-ups ──
@@ -535,7 +536,7 @@ export function groupMobilityByMuscle(
     list.push(ex);
     groups.set(muscle, list);
   }
-  const order = ['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core', 'Other'];
+  const order: string[] = [...MUSCLE_GROUPS, 'Other'];
   return order
     .filter((m) => groups.has(m))
     .map((muscle) => ({ muscle, exercises: groups.get(muscle)! }));
@@ -548,6 +549,9 @@ export function groupMobilityByMuscle(
 const MERGED_MOBILITY_SPLITS: Partial<Record<SplitId, SplitId[]>> = {
   ctbb: ['ct', 'bb'],
   legsh: ['legs', 'sh'],
+  push: ['ct', 'sh'],
+  pull: ['bb'],
+  legscore: ['legs', 'core'],
 };
 
 export function getWarmupForSplitMerged(splitId: SplitId): MobilityExercise[] {

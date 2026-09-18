@@ -14,9 +14,10 @@ import type {
   WorkoutSession,
   WorkoutSet,
   VariationImageMap,
+  WeekSchedule,
 } from './types';
-import { COMBINED_SPLIT_COMPONENTS, DAY_KEYS } from './constants';
-import { getExerciseById, getExercisesForSplit } from './exerciseLibrary';
+import { COMBINED_SPLIT_COMPONENTS, DAY_KEYS, MUSCLE_GROUPS } from './constants';
+import { EXPLICIT_SPLIT_MEMBERS, getExerciseById, getExercisesForSplit } from './exerciseLibrary';
 
 export function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -262,6 +263,15 @@ export function getRemainingSplitsForDate(
 /** Training days in the weekly split (non-rest days). */
 export function countScheduledWorkoutDays(profile: UserProfile): number {
   return DAY_KEYS.reduce((count, day) => count + getScheduledSplitsForDay(profile, day).length, 0);
+}
+
+/** True when both schedules train the same splits (in the same order) every weekday. */
+export function weekSchedulesEqual(a: WeekSchedule, b: WeekSchedule): boolean {
+  return DAY_KEYS.every((day) => {
+    const av = normalizeScheduleValue(a[day]).filter((s) => s !== 'rest');
+    const bv = normalizeScheduleValue(b[day]).filter((s) => s !== 'rest');
+    return av.length === bv.length && av.every((s, i) => s === bv[i]);
+  });
 }
 
 export function getLastTrainedDate(workouts: WorkoutSession[], splitId: SplitId): string | null {
@@ -1227,7 +1237,9 @@ export function groupLibraryExercisesByMuscle(
   exercises: LibraryExercise[],
   splitId: SplitId
 ): { muscle: string; exercises: LibraryExercise[] }[] {
-  const order = getMuscleOrderForSplit(splitId);
+  // Split muscles first, then any remaining groups in canonical order.
+  const splitOrder = getMuscleOrderForSplit(splitId);
+  const order = [...splitOrder, ...MUSCLE_GROUPS.filter((m) => !splitOrder.includes(m))];
   const groups = new Map<string, LibraryExercise[]>();
 
   for (const ex of exercises) {
@@ -1262,6 +1274,11 @@ export function getMuscleFromSplit(splitId: SplitId): string[] {
     core: ['Core'],
     coresh: ['Core', 'Shoulders'],
     legsh: ['Legs', 'Shoulders'],
+    push: ['Chest', 'Shoulders', 'Triceps'],
+    // Pull omits coarse 'Shoulders' on purpose: only rear delts belong here and
+    // those library exercises are listed explicitly (EXPLICIT_SPLIT_MEMBERS).
+    pull: ['Back', 'Biceps'],
+    legscore: ['Legs', 'Core'],
     rest: [],
   };
   return map[splitId];
@@ -1269,10 +1286,14 @@ export function getMuscleFromSplit(splitId: SplitId): string[] {
 
 /** True when an exercise targets muscles in the active split (e.g. Chest/Triceps for ct). */
 export function exerciseBelongsToSplit(
-  ex: Pick<LibraryExercise, 'muscle' | 'secondary' | 'splitIds'>,
+  ex: Pick<LibraryExercise, 'muscle' | 'secondary' | 'splitIds'> & { id?: string },
   splitId: SplitId
 ): boolean {
   if (splitId === 'rest') return false;
+  // Library exercises in explicit-list splits (push/pull) are decided by the
+  // list; custom exercises fall through to the coarse muscle rule below.
+  const members = EXPLICIT_SPLIT_MEMBERS[splitId];
+  if (members && ex.id && getExerciseById(ex.id)) return members.includes(ex.id);
   const splitMuscles = getMuscleFromSplit(splitId);
   if (splitMuscles.includes(ex.muscle)) return true;
   if (ex.secondary && splitMuscles.includes(ex.secondary)) return true;
@@ -1293,6 +1314,9 @@ export function getMuscleOrderForSplit(splitId: SplitId): MuscleGroup[] {
     core: ['Core'],
     coresh: ['Core', 'Shoulders'],
     legsh: ['Legs', 'Shoulders'],
+    push: ['Chest', 'Shoulders', 'Triceps'],
+    pull: ['Back', 'Biceps', 'Shoulders'],
+    legscore: ['Legs', 'Core'],
     rest: [],
   };
   return map[splitId] ?? [];
@@ -1352,16 +1376,6 @@ export function mobilityStorageId(mobilityId: string): string {
   return `mobility::${mobilityId}`;
 }
 
-const LIBRARY_MUSCLE_ORDER: MuscleGroup[] = [
-  'Chest',
-  'Back',
-  'Shoulders',
-  'Triceps',
-  'Biceps',
-  'Legs',
-  'Core',
-];
-
 export function groupLibraryExercisesByMuscleAll(
   exercises: LibraryExercise[]
 ): { muscle: string; exercises: LibraryExercise[] }[] {
@@ -1373,7 +1387,7 @@ export function groupLibraryExercisesByMuscleAll(
   }
 
   const result: { muscle: string; exercises: LibraryExercise[] }[] = [];
-  for (const muscle of LIBRARY_MUSCLE_ORDER) {
+  for (const muscle of MUSCLE_GROUPS) {
     const list = groups.get(muscle);
     if (list?.length) {
       result.push({ muscle, exercises: [...list].sort((a, b) => a.name.localeCompare(b.name)) });

@@ -6,10 +6,11 @@ import { History, Share2, Calendar, Timer, TrendingUp, Dumbbell, Filter } from '
 import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { formatDuration, formatWeight, toSubVariationLabel } from '@/workout/utils';
+import { MUSCLE_GROUPS } from '@/workout/constants';
 import toast from 'react-hot-toast';
 import { WorkoutSession } from '@/workout/types';
 
-const MUSCLE_GROUPS = ['All', 'Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core'];
+const MUSCLE_FILTERS = ['All', ...MUSCLE_GROUPS];
 
 export default function HistoryPage() {
   const { workouts, profile, hydrated } = useWorkoutStore();
@@ -135,7 +136,7 @@ export default function HistoryPage() {
                 value={muscleFilter}
                 onChange={(e) => setMuscleFilter(e.target.value)}
               >
-                {MUSCLE_GROUPS.map(m => (
+                {MUSCLE_FILTERS.map(m => (
                   <option key={m} value={m}>{m === 'All' ? 'All Muscles' : m}</option>
                 ))}
               </select>

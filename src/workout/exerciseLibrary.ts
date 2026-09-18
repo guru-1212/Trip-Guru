@@ -610,7 +610,63 @@ export const EXERCISE_LIBRARY: LibraryExercise[] = [
   },
 ];
 
+/** Push = chest, front/side delts, triceps. */
+const PUSH_EXERCISE_IDS: string[] = [
+  'bench-press',
+  'incline-press',
+  'chest-press-machine',
+  'chest-fly',
+  'push-ups',
+  'dumbbell-pullover',
+  'overhead-press',
+  'landmine-press',
+  'lateral-raises',
+  'front-raises',
+  'upright-row',
+  'tricep-pushdown',
+  'skull-crushers',
+  'overhead-tricep-extension',
+  'tricep-dips',
+];
+
+/** Pull = lats, mid/lower back, traps, rear delts, biceps, forearms. */
+const PULL_EXERCISE_IDS: string[] = [
+  'deadlift',
+  'pull-ups',
+  'lat-pulldown',
+  'rows',
+  'straight-arm-pulldown',
+  'back-extension',
+  'face-pulls',
+  'rear-delt',
+  'shrugs',
+  'farmers-carry',
+  'barbell-curl',
+  'hammer-curl',
+  'preacher-curl',
+  'concentration-curl',
+  'spider-curl',
+  'reverse-curl',
+  'wrist-curls',
+];
+
+/**
+ * Splits whose library pool is an explicit id list rather than per-exercise
+ * `splitIds` tags. Lets Push/Pull cut across the coarse muscle groups (e.g.
+ * rear delts belong to Pull, front/side delts to Push) without re-tagging
+ * every exercise.
+ */
+export const EXPLICIT_SPLIT_MEMBERS: Partial<Record<SplitId, string[]>> = {
+  push: PUSH_EXERCISE_IDS,
+  pull: PULL_EXERCISE_IDS,
+};
+
 export function getExercisesForSplit(splitId: string): LibraryExercise[] {
+  const members = EXPLICIT_SPLIT_MEMBERS[splitId as SplitId];
+  if (members) {
+    const set = new Set(members);
+    return EXERCISE_LIBRARY.filter((e) => set.has(e.id));
+  }
   const components = COMBINED_SPLIT_COMPONENTS[splitId as SplitId];
   if (components) {
     return EXERCISE_LIBRARY.filter((e) => components.some((c) => e.splitIds.includes(c)));

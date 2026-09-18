@@ -17,7 +17,7 @@ import toast from 'react-hot-toast';
 import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { EXERCISE_LIBRARY } from '@/workout/exerciseLibrary';
-import { MUSCLE_COLORS } from '@/workout/constants';
+import { MUSCLE_COLORS, MUSCLE_GROUPS } from '@/workout/constants';
 import type {
   BodyPartFilter,
   CustomExercise,
@@ -644,15 +644,7 @@ function CustomExerciseFormModal({
   const [newVar, setNewVar] = useState('');
   const [notes, setNotes] = useState(initial?.notes ?? '');
 
-  const muscles: MuscleGroup[] = [
-    'Chest',
-    'Back',
-    'Shoulders',
-    'Triceps',
-    'Biceps',
-    'Legs',
-    'Core',
-  ];
+  const muscles: MuscleGroup[] = MUSCLE_GROUPS;
 
   return (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>

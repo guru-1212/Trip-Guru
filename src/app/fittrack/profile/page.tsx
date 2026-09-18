@@ -7,11 +7,18 @@ import { Pencil, Upload, Download, Trash2, AlertTriangle, Bell, BellOff, Moon } 
 import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { useAuth } from '@/hooks/useAuth';
-import { DAY_KEYS, SPLIT_DEFINITIONS, SPLIT_ICONS } from '@/workout/constants';
+import { DAY_KEYS, SPLIT_DEFINITIONS, SPLIT_ICONS, WEEK_SCHEDULE_PRESETS } from '@/workout/constants';
 import { cn } from '@/lib/utils';
 import { getFavouriteSplit, getFavouriteExercise } from '@/workout/analytics';
-import { formatWeight, formatDuration, countScheduledWorkoutDays, getBrowserTimezone, getScheduledSplitsForDay } from '@/workout/utils';
-import type { DayKey, FitnessGoal, SplitId, ThemePref, WeekScheduleValue } from '@/workout/types';
+import {
+  formatWeight,
+  formatDuration,
+  countScheduledWorkoutDays,
+  getBrowserTimezone,
+  getScheduledSplitsForDay,
+  weekSchedulesEqual,
+} from '@/workout/utils';
+import type { DayKey, FitnessGoal, SplitId, ThemePref, WeekSchedule, WeekScheduleValue } from '@/workout/types';
 import { TrainingPartnersSection } from '@/components/workout/TrainingPartnersSection';
 import { WorkspacesSettingsCard } from '@/components/profile/WorkspacesSettingsCard';
 
@@ -60,6 +67,18 @@ export default function ProfilePage() {
     updateWeeklyGoals({ workoutsPerWeek: countScheduledWorkoutDays(next) });
     setEditing(false);
   };
+
+  /** Apply a preset program. While editing it only updates the form; otherwise it saves immediately. */
+  const applySchedulePreset = (schedule: WeekSchedule) => {
+    if (editing) {
+      setForm({ ...form, weekSchedule: schedule });
+      return;
+    }
+    const next = { ...profile, weekSchedule: schedule };
+    updateProfile({ weekSchedule: schedule });
+    updateWeeklyGoals({ workoutsPerWeek: countScheduledWorkoutDays(next) });
+  };
+  const scheduleSource = editing ? form : profile;
 
   const handleAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -141,6 +160,42 @@ export default function ProfilePage() {
               ? `Tap to toggle splits — select more than one to train them as separate sessions that day (${countScheduledWorkoutDays(form)} sessions/week).`
               : `Training days here set your dashboard weekly goal (${countScheduledWorkoutDays(profile)} sessions/week).`}
           </p>
+
+          {/* Programs: one-tap presets (Push/Pull/Legs etc.) */}
+          <div className="mb-4">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Programs
+              </span>
+              {!editing && (
+                <span className="text-[11px] text-muted-foreground">Tap to apply instantly</span>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {WEEK_SCHEDULE_PRESETS.map((preset) => {
+                const active = weekSchedulesEqual(scheduleSource.weekSchedule, preset.schedule);
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    aria-pressed={active}
+                    title={preset.description}
+                    onClick={() => applySchedulePreset(preset.schedule)}
+                    className={cn(
+                      'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors',
+                      active
+                        ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                        : 'border-border bg-background/60 text-foreground hover:border-primary/50'
+                    )}
+                  >
+                    <span className="text-sm font-semibold">{preset.name}</span>
+                    <span className="text-[11px] text-muted-foreground">{preset.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {DAY_KEYS.map((day) => {
               const selectedSplits = getScheduledSplitsForDay(form, day);

@@ -1,6 +1,18 @@
 export type DayKey = 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri' | 'Sat' | 'Sun';
 
-export type SplitId = 'ct' | 'bb' | 'sh' | 'ctbb' | 'legs' | 'core' | 'coresh' | 'legsh' | 'rest';
+export type SplitId =
+  | 'ct'
+  | 'bb'
+  | 'sh'
+  | 'ctbb'
+  | 'legs'
+  | 'core'
+  | 'coresh'
+  | 'legsh'
+  | 'push'
+  | 'pull'
+  | 'legscore'
+  | 'rest';
 
 export type MuscleGroup =
   | 'Chest'

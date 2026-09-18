@@ -155,6 +155,19 @@ function buildExerciseLines(
     .map(({ name, detail }) => ({ name, detail }));
 }
 
+/** Accent colours on the story card, keyed by split (falls back to the multi-muscle mix). */
+const SPLIT_SHARE_COLORS: Partial<Record<SplitId, string[]>> = {
+  rest: ['#64748b'],
+  legs: ['#F97316', '#FB923C'],
+  ct: ['#1D9E75', '#A855F7'],
+  bb: ['#378ADD', '#EC4899'],
+  sh: ['#BA7517', '#F59E0B'],
+  push: ['#1D9E75', '#BA7517', '#A855F7'],
+  pull: ['#378ADD', '#EC4899', '#F472B6'],
+  legscore: ['#F97316', '#14B8A6'],
+};
+const DEFAULT_SHARE_COLORS = ['#1D9E75', '#378ADD', '#A855F7', '#EC4899'];
+
 export function buildShareCardData(input: ShareInput): WorkoutShareCardData {
   const { profile, workouts, prs, exercises } = input;
   const unit = profile.prefs.unit;
@@ -162,18 +175,7 @@ export function buildShareCardData(input: ShareInput): WorkoutShareCardData {
     ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs))
   ).length;
 
-  const muscleColors =
-    input.splitId === 'rest'
-      ? ['#64748b']
-      : input.splitId === 'legs'
-        ? ['#F97316', '#FB923C']
-        : input.splitId === 'ct'
-          ? ['#1D9E75', '#A855F7']
-          : input.splitId === 'bb'
-            ? ['#378ADD', '#EC4899']
-            : input.splitId === 'sh'
-              ? ['#BA7517', '#F59E0B']
-              : ['#1D9E75', '#378ADD', '#A855F7', '#EC4899'];
+  const muscleColors = SPLIT_SHARE_COLORS[input.splitId] ?? DEFAULT_SHARE_COLORS;
 
   return {
     athleteName: profile.name || 'Athlete',
