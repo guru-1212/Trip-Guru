@@ -27,8 +27,17 @@ import {
   migrateActiveWorkoutState,
   workoutExerciseKey,
 } from './utils';
-import { getExercisesForSplit } from './exerciseLibrary';
+import { getExercisesForSplit, getExerciseById, EXPLICIT_SPLIT_MEMBERS } from './exerciseLibrary';
 import { getWarmupForSplitMerged, getStretchForSplitMerged } from './mobilityLibrary';
+import { getSplitSubMuscles, getExerciseTargets } from './muscleCoverage';
+import {
+  RECOMMENDED_EXERCISES,
+  RECOMMENDED_BY_MUSCLE,
+  getRecommendedForSplit,
+  isRecommendedForSplit,
+  isRecommendedForMuscle,
+} from './recommendedExercises';
+import { MUSCLE_GROUPS, SPLIT_DEFINITIONS } from './constants';
 import {
   filterByRange,
   calcTrainingOverview,
@@ -645,6 +654,104 @@ function testReorderPreservedOnSave() {
   );
 }
 
+function testPushPullLegsSplits() {
+  console.log('Testing Push / Pull / Legs splits...');
+
+  const ids = (split: SplitId) => new Set(getExercisesForSplit(split).map((e) => e.id));
+  const push = ids('push');
+  const pull = ids('pull');
+  const legscore = ids('legscore');
+
+  for (const id of ['overhead-press', 'lateral-raises', 'front-raises', 'landmine-press', 'dumbbell-pullover', 'bench-press', 'tricep-pushdown']) {
+    assert(push.has(id), `Push includes ${id}`);
+  }
+  for (const id of ['rear-delt', 'face-pulls', 'shrugs', 'squat', 'plank']) {
+    assert(!push.has(id), `Push excludes ${id}`);
+  }
+  for (const id of ['rear-delt', 'face-pulls', 'shrugs', 'deadlift', 'back-extension', 'wrist-curls', 'reverse-curl', 'farmers-carry', 'barbell-curl']) {
+    assert(pull.has(id), `Pull includes ${id}`);
+  }
+  for (const id of ['bench-press', 'overhead-press', 'lateral-raises', 'squat']) {
+    assert(!pull.has(id), `Pull excludes ${id}`);
+  }
+  assert(legscore.has('squat') && legscore.has('plank'), 'Legs + Core pool merges legs and core');
+  assert(!legscore.has('bench-press'), 'Legs + Core excludes chest work');
+
+  // Every explicit member must be a real library exercise.
+  for (const [split, members] of Object.entries(EXPLICIT_SPLIT_MEMBERS)) {
+    for (const id of members ?? []) assert(!!getExerciseById(id), `${split} member ${id} exists in library`);
+  }
+
+  // Anatomy sanity: push/pull members primarily hit muscles inside their split.
+  const pushRegions = getSplitSubMuscles('push');
+  const pullRegions = getSplitSubMuscles('pull');
+  assert(pullRegions.has('forearms') && pullRegions.has('rear-delts'), 'Pull coverage includes forearms + rear delts');
+  assert(!pushRegions.has('rear-delts') && pushRegions.has('front-delts'), 'Push coverage has front delts but not rear delts');
+  for (const id of EXPLICIT_SPLIT_MEMBERS.push ?? []) {
+    const primary = getExerciseTargets(id).primary;
+    assert(primary.some((m) => pushRegions.has(m)), `${id} primarily hits a push muscle`);
+  }
+  for (const id of EXPLICIT_SPLIT_MEMBERS.pull ?? []) {
+    const primary = getExerciseTargets(id).primary;
+    assert(primary.some((m) => pullRegions.has(m)), `${id} primarily hits a pull muscle`);
+  }
+
+  // exerciseBelongsToSplit follows the explicit list for library exercises...
+  const rearDelt = getExerciseById('rear-delt')!;
+  assert(!exerciseBelongsToSplit(rearDelt, 'push'), 'Rear delt does not belong to Push');
+  assert(exerciseBelongsToSplit(rearDelt, 'pull'), 'Rear delt belongs to Pull');
+  // ...and the coarse muscle rule for custom exercises.
+  const customChest = { id: 'custom-1', muscle: 'Chest', splitIds: [] } as Pick<LibraryExercise, 'muscle' | 'secondary' | 'splitIds'> & { id: string };
+  assert(exerciseBelongsToSplit(customChest, 'push'), 'Custom chest exercise belongs to Push');
+  assert(!exerciseBelongsToSplit(customChest, 'pull'), 'Custom chest exercise does not belong to Pull');
+
+  // Mobility routines merge from component splits.
+  for (const split of ['push', 'pull', 'legscore'] as SplitId[]) {
+    const warmups = getWarmupForSplitMerged(split);
+    assert(warmups.length > 0, `${split} has warmups`);
+    assert(new Set(warmups.map((w) => w.id)).size === warmups.length, `${split} warmups are deduped`);
+    assert(getStretchForSplitMerged(split).length > 0, `${split} has stretches`);
+  }
+
+  // A PPL weekly plan rotates through the 3 splits.
+  const profile = getDefaultProfile();
+  profile.weekSchedule = { Mon: 'push', Tue: 'pull', Wed: 'legscore', Thu: 'push', Fri: 'pull', Sat: 'legscore', Sun: 'rest' };
+  assert(JSON.stringify(getRotationQueue(profile)) === JSON.stringify(['push', 'pull', 'legscore']), 'PPL rotation queue is push → pull → legscore');
+}
+
+function testRecommendedExercises() {
+  console.log('Testing Recommended Exercises...');
+
+  // Every split (except rest) has a curated list of real exercises drawn from its own pool.
+  for (const split of SPLIT_DEFINITIONS) {
+    const list = getRecommendedForSplit(split.id);
+    assert(list.length >= 6 && list.length <= 8, `${split.id} has 6-8 recommended exercises (got ${list.length})`);
+    assert(new Set(list).size === list.length, `${split.id} recommended list has no duplicates`);
+    const pool = new Set(getExercisesForSplit(split.id).map((e) => e.id));
+    for (const id of list) {
+      assert(!!getExerciseById(id), `${split.id} recommended ${id} exists`);
+      assert(pool.has(id), `${split.id} recommended ${id} is in the split pool`);
+    }
+  }
+  assert(RECOMMENDED_EXERCISES.rest.length === 0, 'Rest has no recommendations');
+
+  // Per-muscle lists match their muscle group.
+  for (const muscle of MUSCLE_GROUPS) {
+    for (const id of RECOMMENDED_BY_MUSCLE[muscle]) {
+      const ex = getExerciseById(id);
+      assert(!!ex, `${muscle} recommended ${id} exists`);
+      assert(ex!.muscle === muscle || ex!.secondary === muscle, `${id} targets ${muscle}`);
+    }
+  }
+
+  assert(isRecommendedForSplit('face-pulls', 'pull'), 'Face pulls recommended for Pull');
+  assert(!isRecommendedForSplit('rear-delt', 'push'), 'Rear delt not recommended for Push');
+  // Combined splits inherit their components' recommendations for badges.
+  assert(isRecommendedForSplit('skull-crushers', 'ctbb'), 'ctbb inherits ct recommendations');
+  assert(isRecommendedForMuscle('squat', 'Legs'), 'Squat recommended for Legs');
+  assert(!isRecommendedForMuscle('squat', 'Chest'), 'Squat not recommended for Chest');
+}
+
 function runTests() {
   try {
     testVolumeCalculations();
@@ -664,6 +771,8 @@ function runTests() {
     testMuscleRecoveryTiming();
     testAutofillLastLoggedSets();
     testReorderPreservedOnSave();
+    testPushPullLegsSplits();
+    testRecommendedExercises();
     console.log('\nAll FitTrack tests passed! ✅');
   } catch (error) {
     console.error('\nTests failed! ❌');

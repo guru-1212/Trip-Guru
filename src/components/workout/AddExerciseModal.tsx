@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Search, Plus, X, Eye } from 'lucide-react';
+import { Search, Plus, X, Eye, Star } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 import { EXERCISE_LIBRARY, getExerciseById } from '@/workout/exerciseLibrary';
-import { SPLIT_DEFINITIONS } from '@/workout/constants';
+import { MUSCLE_GROUPS, SPLIT_DEFINITIONS } from '@/workout/constants';
+import { isRecommendedForMuscle, isRecommendedForSplit } from '@/workout/recommendedExercises';
 import type { CustomExercise, LibraryExercise, MuscleGroup, SplitId } from '@/workout/types';
 import {
   libraryItemToWorkoutExercise,
@@ -50,7 +51,12 @@ export function AddExerciseModal({
   onClose,
 }: AddExerciseModalProps) {
   const splitDef = SPLIT_DEFINITIONS.find((s) => s.id === splitId);
-  const muscleOptions = getMuscleOrderForSplit(splitId);
+  // Split muscles first, then every other group (custom exercises can target anything).
+  const splitMuscles = getMuscleOrderForSplit(splitId);
+  const muscleOptions: MuscleGroup[] = [
+    ...splitMuscles,
+    ...MUSCLE_GROUPS.filter((m) => !splitMuscles.includes(m)),
+  ];
   const [search, setSearch] = useState('');
   const [remember, setRemember] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -98,13 +104,19 @@ export function AddExerciseModal({
           variations,
           availableVariations,
           belongsToSplit: exerciseBelongsToSplit(ex, splitId),
+          recommended: isRecommendedForSplit(ex.id, splitId) || isRecommendedForMuscle(ex.id, ex.muscle),
         };
       })
       .filter(({ exercise, variations, availableVariations }) => {
         if (!availableVariations.length) return false;
         return exerciseMatchesSearch(exercise, search, variations);
       })
-      .sort((a, b) => (a.belongsToSplit === b.belongsToSplit ? 0 : a.belongsToSplit ? -1 : 1));
+      // Split-relevant first; within each group, recommended exercises first.
+      .sort((a, b) => {
+        if (a.belongsToSplit !== b.belongsToSplit) return a.belongsToSplit ? -1 : 1;
+        if (a.recommended !== b.recommended) return a.recommended ? -1 : 1;
+        return 0;
+      });
   }, [search, customAsLibrary, getVariationsForExercise, selectedSet, splitId]);
 
   const searchQuery = search.toLowerCase().trim();
@@ -448,7 +460,7 @@ export function AddExerciseModal({
                   <p>All exercise variations already added</p>
                 </div>
               ) : (
-                available.map(({ exercise, availableVariations }) => {
+                available.map(({ exercise, availableVariations, recommended }) => {
                   const previewVariation = availableVariations[0] ?? exercise.variations[0] ?? 'Standard';
                   const imageUrl = resolveImage(exercise.id, previewVariation);
                   return (
@@ -470,7 +482,15 @@ export function AddExerciseModal({
                           }}
                         />
                         <div className="min-w-0 flex-1">
-                          <p className="font-semibold text-sm truncate">{exercise.name}</p>
+                          <p className="font-semibold text-sm truncate inline-flex items-center gap-1.5 max-w-full">
+                            <span className="truncate">{exercise.name}</span>
+                            {recommended && (
+                              <Star
+                                className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0"
+                                aria-label="Recommended"
+                              />
+                            )}
+                          </p>
                           <p className="text-xs text-muted-foreground mt-0.5 truncate">
                             {exercise.muscle} · {exercise.equipment} · {availableVariations.length} variation(s)
                           </p>

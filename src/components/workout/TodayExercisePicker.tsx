@@ -3,12 +3,25 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { AnimatePresence, Reorder, motion } from 'framer-motion';
-import { Check, Eye, GripVertical, ListOrdered, Lock, LockOpen, Plus, Search, X } from 'lucide-react';
+import {
+  Check,
+  Eye,
+  GripVertical,
+  ListOrdered,
+  Lock,
+  LockOpen,
+  Plus,
+  Search,
+  Sparkles,
+  Star,
+  X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { PinConfirm, FINISH_WORKOUT_PIN } from '@/components/workout/PinConfirm';
 import { MuscleCoveragePanel } from '@/components/fittrack/MuscleCoveragePanel';
-import { EXERCISE_LIBRARY } from '@/workout/exerciseLibrary';
+import { EXERCISE_LIBRARY, getExerciseById } from '@/workout/exerciseLibrary';
 import type {
+  BodyPartFilter,
   CustomExercise,
   LibraryExercise,
   MuscleGroup,
@@ -16,15 +29,20 @@ import type {
   TodayExercisePick,
   WorkoutSession,
 } from '@/workout/types';
-import { MUSCLE_COLORS } from '@/workout/constants';
+import { MUSCLE_COLORS, MUSCLE_GROUPS, SPLIT_NAMES } from '@/workout/constants';
+import {
+  getRecommendedForSplit,
+  isRecommendedForMuscle,
+  isRecommendedForSplit,
+} from '@/workout/recommendedExercises';
 import {
   countVariationsInTodayPicks,
   defaultExerciseImageUrl,
   exerciseMatchesSearch,
-  exerciseBelongsToSplit,
   exerciseSearchRank,
   generateId,
   getMatchingVariations,
+  getMuscleOrderForSplit,
   groupLibraryExercisesByMuscle,
   toSubVariationLabel,
   variationMatchesSearch,
@@ -94,6 +112,7 @@ export function TodayExercisePicker({
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [pickerSearch, setPickerSearch] = useState('');
   const [addPanelSearch, setAddPanelSearch] = useState('');
+  const [addMuscleFilter, setAddMuscleFilter] = useState<BodyPartFilter>('All');
   const [rememberAdded, setRememberAdded] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -177,16 +196,33 @@ export function TodayExercisePicker({
     });
   }, [searchResults, pickerSearch, pickerQuery, getVariationsForExercise, getVariationImage, picks, exercises]);
 
+  // The add panel offers the whole library (every muscle group), not just this
+  // split's muscles — split muscles are simply grouped first.
   const addableExercises = useMemo(() => {
-    const all = [...EXERCISE_LIBRARY, ...customAsLibrary].filter((ex) =>
-      exerciseBelongsToSplit(ex, splitId)
-    );
+    const all = [...EXERCISE_LIBRARY, ...customAsLibrary];
     return all.filter((ex) => {
       if (pickerIds.has(ex.id)) return false;
+      if (addMuscleFilter !== 'All' && ex.muscle !== addMuscleFilter) return false;
       const variations = getVariationsForExercise(ex.id, ex.variations);
       return exerciseMatchesSearch(ex, addPanelSearch, variations);
     });
-  }, [addPanelSearch, pickerIds, customAsLibrary, getVariationsForExercise, splitId]);
+  }, [addPanelSearch, addMuscleFilter, pickerIds, customAsLibrary, getVariationsForExercise]);
+  const addableGrouped = useMemo(
+    () => groupLibraryExercisesByMuscle(addableExercises, splitId),
+    [addableExercises, splitId]
+  );
+  const splitMuscles = getMuscleOrderForSplit(splitId);
+
+  // Curated recommendations for this split.
+  const pickedExerciseIds = useMemo(() => new Set(picks.map((p) => p.exerciseId)), [picks]);
+  const recommendedItems = useMemo(
+    () =>
+      getRecommendedForSplit(splitId)
+        .map((id) => exerciseById.get(id) ?? getExerciseById(id))
+        .filter((ex): ex is LibraryExercise => !!ex),
+    [splitId, exerciseById]
+  );
+  const recommendedMissing = recommendedItems.filter((ex) => !pickedExerciseIds.has(ex.id));
 
   const toggle = (ex: LibraryExercise) => {
     if (sequenceLocked) return;
@@ -241,6 +277,35 @@ export function TodayExercisePicker({
   const clearAll = () => {
     if (sequenceLocked) return;
     onPicksChange([]);
+  };
+
+  /** Adds every recommended exercise not yet picked (default variation); never removes user picks. */
+  const useRecommended = () => {
+    if (sequenceLocked) return;
+    if (!recommendedMissing.length) {
+      toast.success('All recommended exercises are already picked');
+      return;
+    }
+    const nextPicks = [...picks];
+    const newExercises: LibraryExercise[] = [];
+    for (const ex of recommendedMissing) {
+      nextPicks.push({ id: generateId(), exerciseId: ex.id, variation: ex.variations[0] ?? 'Standard' });
+      if (!pickerIds.has(ex.id)) newExercises.push(ex);
+    }
+    onPicksChange(nextPicks);
+    if (newExercises.length) onExercisesChange([...exercises, ...newExercises]);
+    toast.success(
+      `Added ${recommendedMissing.length} recommended exercise${recommendedMissing.length === 1 ? '' : 's'}`
+    );
+  };
+
+  /** Toggle a single recommended chip, making sure the exercise is in the picker list. */
+  const toggleRecommended = (ex: LibraryExercise) => {
+    if (sequenceLocked) return;
+    if (!pickedExerciseIds.has(ex.id) && !pickerIds.has(ex.id)) {
+      onExercisesChange([...exercises, ex]);
+    }
+    toggle(ex);
   };
 
   const removeFromSequence = (pickId: string) => {
@@ -714,6 +779,69 @@ export function TodayExercisePicker({
         </button>
       </div>
 
+      {recommendedItems.length > 0 && (
+        <div
+          className={cn(
+            'rounded-xl border p-3 space-y-2.5',
+            picks.length === 0 ? 'border-primary/40 bg-primary/10' : 'border-primary/20 bg-primary/5',
+            sequenceLocked && 'opacity-50 pointer-events-none'
+          )}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <Sparkles className="h-4 w-4 text-primary shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-bold truncate">
+                  Recommended for {SPLIT_NAMES[splitId]}
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  {picks.length === 0
+                    ? 'Start with a proven session, then tweak it'
+                    : recommendedMissing.length
+                      ? `${recommendedMissing.length} not picked yet`
+                      : 'All picked'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={useRecommended}
+              disabled={sequenceLocked || recommendedMissing.length === 0}
+              className={cn(
+                'ft-btn ft-btn--sm shrink-0 disabled:opacity-40 disabled:pointer-events-none',
+                picks.length === 0 ? 'ft-btn--primary shadow-sm' : 'ft-btn--secondary'
+              )}
+            >
+              <Star className="h-3.5 w-3.5" />
+              Use recommended
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {recommendedItems.map((ex) => {
+              const picked = pickedExerciseIds.has(ex.id);
+              return (
+                <button
+                  key={ex.id}
+                  type="button"
+                  aria-pressed={picked}
+                  disabled={sequenceLocked}
+                  onClick={() => toggleRecommended(ex)}
+                  className={cn(
+                    'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors',
+                    picked
+                      ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                      : 'border-border bg-background/60 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                  )}
+                >
+                  {picked ? <Check className="h-3 w-3" /> : <Star className="h-3 w-3" />}
+                  {ex.name}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {onRepeatSession && recentSessions.length > 0 && (
         <div className="space-y-2">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
@@ -811,7 +939,15 @@ export function TodayExercisePicker({
                       >
                         {checked && <Check className="h-3.5 w-3.5" />}
                       </span>
-                      <span className="text-sm font-medium truncate flex-1">{ex.name}</span>
+                      <span className="text-sm font-medium truncate flex-1 inline-flex items-center gap-1.5 min-w-0">
+                        <span className="truncate">{ex.name}</span>
+                        {isRecommendedForSplit(ex.id, splitId) && (
+                          <Star
+                            className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0"
+                            aria-label="Recommended"
+                          />
+                        )}
+                      </span>
                       {checked && (
                         <span className="text-xs text-primary font-medium shrink-0 truncate max-w-[40%]">
                           {pickVariations.join(', ')}
@@ -852,10 +988,43 @@ export function TodayExercisePicker({
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
                 className="ft-input !pl-10"
-                placeholder="Search exercises to add..."
+                placeholder="Search any exercise — all muscle groups"
                 value={addPanelSearch}
                 onChange={(e) => setAddPanelSearch(e.target.value)}
               />
+            </div>
+
+            <div className="flex gap-1.5 flex-wrap">
+              {(['All', ...MUSCLE_GROUPS] as BodyPartFilter[]).map((m) => {
+                const active = addMuscleFilter === m;
+                const inSplit = m !== 'All' && splitMuscles.includes(m);
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setAddMuscleFilter(m)}
+                    className={cn(
+                      'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors',
+                      active
+                        ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                        : 'border-border bg-background/60 text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                    )}
+                  >
+                    {m !== 'All' && (
+                      <span
+                        className="w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ backgroundColor: MUSCLE_COLORS[m] ?? 'hsl(var(--primary))' }}
+                        aria-hidden
+                      />
+                    )}
+                    {m}
+                    {inSplit && !active && (
+                      <span className="text-[9px] uppercase tracking-wider opacity-70">today</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
@@ -892,13 +1061,11 @@ export function TodayExercisePicker({
                     value={newMuscle}
                     onChange={(e) => setNewMuscle(e.target.value as MuscleGroup)}
                   >
-                    {(['Chest', 'Back', 'Shoulders', 'Triceps', 'Biceps', 'Legs', 'Core'] as MuscleGroup[]).map(
-                      (m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      )
-                    )}
+                    {MUSCLE_GROUPS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
                   </select>
                   <input
                     className="ft-input"
@@ -954,27 +1121,59 @@ export function TodayExercisePicker({
               })()
             ) : addableExercises.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-2">
-                {addPanelSearch ? 'No matching exercises' : 'All library exercises are already listed above'}
+                {addPanelSearch || addMuscleFilter !== 'All'
+                  ? 'No matching exercises'
+                  : 'All library exercises are already listed above'}
               </p>
             ) : (
-              <ul className="space-y-1 max-h-48 overflow-y-auto">
-                {addableExercises.slice(0, 12).map((ex) => (
-                  <li key={ex.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPendingAddId(ex.id);
-                        setPendingVariations([ex.variations[0] ?? 'Standard']);
-                      }}
-                      className="w-full ft-today-picker-row text-left"
-                    >
-                      <span className="text-sm font-medium truncate flex-1">{ex.name}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">{ex.muscle}</span>
-                      <Plus className="h-4 w-4 text-primary shrink-0" />
-                    </button>
-                  </li>
+              <div className="space-y-3 max-h-72 overflow-y-auto pr-1">
+                {addableGrouped.map(({ muscle, exercises: muscleExercises }) => (
+                  <div key={muscle} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-1 h-3.5 rounded-full shrink-0"
+                        style={{ backgroundColor: MUSCLE_COLORS[muscle] ?? 'hsl(var(--primary))' }}
+                      />
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                        {muscle}
+                        {splitMuscles.includes(muscle as MuscleGroup) && (
+                          <span className="ml-1.5 text-primary">· today</span>
+                        )}
+                      </h4>
+                    </div>
+                    <ul className="space-y-1">
+                      {muscleExercises.map((ex) => {
+                        const recommended =
+                          isRecommendedForSplit(ex.id, splitId) || isRecommendedForMuscle(ex.id, ex.muscle);
+                        return (
+                          <li key={ex.id}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPendingAddId(ex.id);
+                                setPendingVariations([ex.variations[0] ?? 'Standard']);
+                              }}
+                              className="w-full ft-today-picker-row text-left"
+                            >
+                              <span className="text-sm font-medium truncate flex-1 inline-flex items-center gap-1.5 min-w-0">
+                                <span className="truncate">{ex.name}</span>
+                                {recommended && (
+                                  <Star
+                                    className="h-3.5 w-3.5 text-amber-500 fill-amber-500 shrink-0"
+                                    aria-label="Recommended"
+                                  />
+                                )}
+                              </span>
+                              <span className="text-xs text-muted-foreground shrink-0">{ex.equipment}</span>
+                              <Plus className="h-4 w-4 text-primary shrink-0" />
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             )}
           </div>
         )}
