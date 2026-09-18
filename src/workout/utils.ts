@@ -434,7 +434,7 @@ export function migrateActiveWorkoutState(
   const pickOrder =
     state.pickOrder?.length
       ? state.pickOrder
-      : exercises.filter(isPickedToday).map((e) => e.exerciseId);
+      : exercises.filter(isPickedToday).map(workoutExerciseKey);
   return {
     ...state,
     exercises,
@@ -703,8 +703,13 @@ export function mapToTodayPicks(picksMap: Map<string, string[]>): TodayExerciseP
   return result;
 }
 
+/** Key used by `ActiveWorkoutState.pickOrder`: `${exerciseId}::${variation}`. */
+export function workoutExerciseKey(ex: Pick<WorkoutExercise, 'exerciseId' | 'variation'>): string {
+  return `${ex.exerciseId}::${ex.variation}`;
+}
+
 export function pickOrderFromPicks(picks: TodayExercisePick[]): string[] {
-  return picks.map((p) => `${p.exerciseId}::${p.variation}`);
+  return picks.map(workoutExerciseKey);
 }
 
 export function sortExercisesByPickOrder(
@@ -713,15 +718,26 @@ export function sortExercisesByPickOrder(
 ): WorkoutExercise[] {
   const orderIndex = new Map(pickOrderKeys.map((key, i) => [key, i]));
   return [...exercises].sort((a, b) => {
-    const aKey = `${a.exerciseId}::${a.variation}`;
-    const bKey = `${b.exerciseId}::${b.variation}`;
-    const aIdx = orderIndex.get(aKey);
-    const bIdx = orderIndex.get(bKey);
+    const aIdx = orderIndex.get(workoutExerciseKey(a));
+    const bIdx = orderIndex.get(workoutExerciseKey(b));
     const aOrder = aIdx === undefined ? Number.MAX_SAFE_INTEGER : aIdx;
     const bOrder = bIdx === undefined ? Number.MAX_SAFE_INTEGER : bIdx;
     if (aOrder !== bOrder) return aOrder - bOrder;
     return a.name.localeCompare(b.name);
   });
+}
+
+/**
+ * Exercises in the user's latest in-session sequence: picked exercises sorted
+ * by `pickOrder` (falling back to their current order), then unpicked ones in
+ * their original order. This is the order that must be saved and shared.
+ */
+export function orderActiveWorkoutExercises(
+  state: Pick<ActiveWorkoutState, 'exercises' | 'pickOrder'>
+): WorkoutExercise[] {
+  const { picked, unpicked } = partitionExercisesByPick(state.exercises);
+  const order = state.pickOrder?.length ? state.pickOrder : picked.map(workoutExerciseKey);
+  return [...sortExercisesByPickOrder(picked, order), ...unpicked];
 }
 
 export function buildWorkoutExercisesInPickOrder(

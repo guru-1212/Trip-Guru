@@ -332,13 +332,19 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const removeExerciseFromActiveWorkout = useCallback((exerciseId: string, variation: string) => {
     setActiveWorkout((prev) => {
       if (!prev) return prev;
+      // addedExerciseIds stores bare exercise ids; pickOrder stores `${id}::${variation}` keys.
+      const added = prev.addedExerciseIds ?? [];
+      if (!added.includes(exerciseId)) return prev;
       const key = `${exerciseId}::${variation}`;
-      if (!(prev.addedExerciseIds ?? []).includes(key)) return prev;
+      const exercises = prev.exercises.filter(
+        (e) => !(e.exerciseId === exerciseId && e.variation === variation)
+      );
+      const stillPresent = exercises.some((e) => e.exerciseId === exerciseId);
       const next: ActiveWorkoutState = {
         ...prev,
-        exercises: prev.exercises.filter((e) => !(e.exerciseId === exerciseId && e.variation === variation)),
-        addedExerciseIds: (prev.addedExerciseIds ?? []).filter((id) => id !== key),
-        pickOrder: (prev.pickOrder ?? []).filter((id) => id !== key), // Assuming pickOrder stores IDs/keys
+        exercises,
+        addedExerciseIds: stillPresent ? added : added.filter((id) => id !== exerciseId),
+        pickOrder: (prev.pickOrder ?? []).filter((id) => id !== key),
       };
       persistState({ activeWorkout: next });
       return next;

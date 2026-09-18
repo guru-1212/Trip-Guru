@@ -22,6 +22,10 @@ import {
   getScheduledSplitsForDay,
   getRemainingSplitsForDate,
   getMuscleFromSplit,
+  orderActiveWorkoutExercises,
+  filterExercisesForSave,
+  migrateActiveWorkoutState,
+  workoutExerciseKey,
 } from './utils';
 import { getExercisesForSplit } from './exerciseLibrary';
 import { getWarmupForSplitMerged, getStretchForSplitMerged } from './mobilityLibrary';
@@ -31,7 +35,15 @@ import {
 } from './analytics';
 import { computeMuscleRecovery } from './recovery';
 import { normalizeChecklist } from '../firebase/fittrack.firestore';
-import type { WorkoutSession, WorkoutExercise, WorkoutSet, ChecklistData, LibraryExercise, SplitId } from './types';
+import type {
+  WorkoutSession,
+  WorkoutExercise,
+  WorkoutSet,
+  ChecklistData,
+  LibraryExercise,
+  SplitId,
+  ActiveWorkoutState,
+} from './types';
 
 function assert(condition: boolean, message: string) {
   if (!condition) throw new Error(`Assertion Failed: ${message}`);
@@ -593,6 +605,46 @@ function testAutofillLastLoggedSets() {
   assert(getLastLoggedSets(workouts, 'bench', 'Incline Dumbbell') === null, 'Different variation does not match');
 }
 
+function testReorderPreservedOnSave() {
+  console.log('Testing In-Session Reorder Is Preserved On Save...');
+
+  const mk = (id: string, pickedToday: boolean, done: boolean): WorkoutExercise => ({
+    exerciseId: id,
+    name: id.toUpperCase(),
+    variation: 'Standard',
+    muscle: 'Chest',
+    pickedToday,
+    sets: [{ weight: 50, reps: 10, done }],
+  });
+
+  // Session started as [a, b, c]; user dragged to [c, a, b]; `d` was not
+  // picked today but has a logged set so it must still be saved (last).
+  const state: ActiveWorkoutState = {
+    splitId: 'ct',
+    splitName: 'Chest + Triceps',
+    startedAt: 0,
+    restTimerSeconds: 60,
+    restTimerEnd: null,
+    exercises: [mk('a', true, true), mk('b', true, true), mk('c', true, true), mk('d', false, true)],
+    pickOrder: ['c::Standard', 'a::Standard', 'b::Standard'],
+  };
+
+  const saved = filterExercisesForSave(orderActiveWorkoutExercises(state)).map((e) => e.exerciseId);
+  assert(saved.join(',') === 'c,a,b,d', `Saved order follows pickOrder then unpicked: got ${saved.join(',')}`);
+
+  // Without a pickOrder the original sequence is kept.
+  const untouched = orderActiveWorkoutExercises({ ...state, pickOrder: undefined }).map((e) => e.exerciseId);
+  assert(untouched.join(',') === 'a,b,c,d', 'No pickOrder keeps the original order');
+
+  // Migration fallback must produce `${id}::${variation}` keys, matching the sort key format.
+  const migrated = migrateActiveWorkoutState({ ...state, pickOrder: undefined }, 3);
+  assert(migrated.pickOrder?.[0] === 'a::Standard', 'Migrated pickOrder uses id::variation keys');
+  assert(
+    migrated.pickOrder?.every((k) => state.exercises.some((e) => workoutExerciseKey(e) === k)) === true,
+    'Every migrated key resolves to an exercise'
+  );
+}
+
 function runTests() {
   try {
     testVolumeCalculations();
@@ -611,6 +663,7 @@ function runTests() {
     testCombinedLegShouldersSplit();
     testMuscleRecoveryTiming();
     testAutofillLastLoggedSets();
+    testReorderPreservedOnSave();
     console.log('\nAll FitTrack tests passed! ✅');
   } catch (error) {
     console.error('\nTests failed! ❌');

@@ -85,6 +85,8 @@ import {
   buildWorkoutExercisesInPickOrder,
   pickOrderFromPicks,
   sortExercisesByPickOrder,
+  orderActiveWorkoutExercises,
+  workoutExerciseKey,
   toSubVariationLabel,
   switchActiveVariation,
   patchExerciseSets,
@@ -909,7 +911,9 @@ export default function WorkoutPage() {
 
   const confirmFinish = () => {
     if (!activeWorkout) return;
-    const exercisesToSave = filterExercisesForSave(activeWorkout.exercises);
+    // Save in the user's latest in-session sequence (drag reorder lives in
+    // pickOrder) so History and share text reflect what was actually done.
+    const exercisesToSave = filterExercisesForSave(orderActiveWorkoutExercises(activeWorkout));
     const isFirstWorkoutToday = !habits[workoutDate]?.workout;
     const prCount = activeWorkout.exercises.filter((ex) =>
       ex.sets.some((s) => s.done && isPR(ex.exerciseId, s.weight, prs))
@@ -991,7 +995,7 @@ export default function WorkoutPage() {
           splitName: activeWorkout.splitName,
           date: workoutDate,
           durationSeconds: elapsed,
-          exercises: activeWorkout.exercises,
+          exercises: orderActiveWorkoutExercises(activeWorkout),
           profile,
           workouts,
           prs,
@@ -1021,8 +1025,7 @@ export default function WorkoutPage() {
       activeWorkout.exercises
     );
     const pickOrder =
-      activeWorkout.pickOrder ??
-      pickedExercises.filter(isPickedToday).map((e) => `${e.exerciseId}::${e.variation}`);
+      activeWorkout.pickOrder ?? pickedExercises.filter(isPickedToday).map(workoutExerciseKey);
     const pickedSorted = sortExercisesByPickOrder(pickedExercises, pickOrder);
     const unpickedGroups = groupExercisesByMuscle(unpickedExercises, activeWorkout.splitId);
     const { done: pickedDone, total: pickedTotal } = countPickedVariationsDone(activeWorkout.exercises);
@@ -1302,8 +1305,13 @@ export default function WorkoutPage() {
     };
 
     const handleReorderPicked = (newOrder: WorkoutExercise[]) => {
-      const newPickOrder = newOrder.map((ex) => `${ex.exerciseId}::${ex.variation}`);
-      patchActiveWorkout((prev) => ({ ...prev, pickOrder: newPickOrder }));
+      const newPickOrder = newOrder.map(workoutExerciseKey);
+      // Keep `exercises` in sync with `pickOrder` so the persisted session
+      // never drifts from what the user sees.
+      patchActiveWorkout((prev) => {
+        const next = { ...prev, pickOrder: newPickOrder };
+        return { ...next, exercises: orderActiveWorkoutExercises(next) };
+      });
     };
 
     const renderMuscleGroups = (
