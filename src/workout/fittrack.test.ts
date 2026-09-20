@@ -38,6 +38,7 @@ import {
   isRecommendedForMuscle,
 } from './recommendedExercises';
 import { MUSCLE_GROUPS, SPLIT_DEFINITIONS } from './constants';
+import { parsePastedWorkout, parseImportedWeight, ImportFormatError } from './aiImportParser';
 import {
   filterByRange,
   calcTrainingOverview,
@@ -752,6 +753,54 @@ function testRecommendedExercises() {
   assert(!isRecommendedForMuscle('squat', 'Chest'), 'Squat not recommended for Chest');
 }
 
+function testAIImportParser() {
+  console.log('Testing AI Import Parser...');
+
+  // Real AI response: "Tricep Dips" has no weight (bodyweight) — must import, not fail.
+  const pasted = `[
+{ "exerciseName": "Bench Press", "sets": 3, "reps": "8", "weight": 60, "notes": "Baseline session at RPE 7." },
+{ "exerciseName": "Overhead Press", "sets": 3, "reps": "8", "weight": 40, "notes": "Keep core braced." },
+{ "exerciseName": "Lateral Raises", "sets": 3, "reps": "12", "weight": 8, "notes": "Avoid swinging." },
+{ "exerciseName": "Tricep Dips", "sets": 3, "reps": "8", "notes": "Bodyweight compound." },
+{ "exerciseName": "Tricep Pushdown", "sets": 3, "reps": "12", "weight": 20, "notes": "Lock elbows." }
+]`;
+  const parsed = parsePastedWorkout(pasted);
+  assert(parsed.length === 5, 'All 5 rows parsed');
+  assert(parsed[3].exerciseName === 'Tricep Dips' && parsed[3].weight === 0, 'Missing weight is treated as bodyweight (0)');
+  assert(parsed[0].weight === 60 && parsed[0].sets === 3 && parsed[0].reps === '8', 'Numeric rows parse as before');
+
+  // Lenient weight forms the AI tends to produce.
+  assert(parseImportedWeight(null) === 0, 'null weight -> 0');
+  assert(parseImportedWeight('bodyweight') === 0, '"bodyweight" -> 0');
+  assert(parseImportedWeight('BW') === 0, '"BW" -> 0');
+  assert(parseImportedWeight('60 kg') === 60, '"60 kg" -> 60');
+  assert(parseImportedWeight('22.5kg') === 22.5, '"22.5kg" -> 22.5');
+  assert(parseImportedWeight(-5) === null, 'negative weight rejected');
+  assert(parseImportedWeight('heavy') === null, 'non-numeric text rejected');
+
+  // Markdown fence and an object wrapper are tolerated.
+  const fenced = '```json\n{ "workout": [ { "exerciseName": "Squat", "sets": 4, "reps": "6-8", "weight": 100 } ] }\n```';
+  const fromFence = parsePastedWorkout(fenced);
+  assert(fromFence.length === 1 && fromFence[0].reps === '6', 'Fenced + wrapped JSON parses; rep range keeps the low end');
+
+  // Shape errors name the exercise and the field.
+  let message = '';
+  try {
+    parsePastedWorkout('[{ "exerciseName": "Squat", "sets": 0, "reps": "8", "weight": 100 }]');
+  } catch (e) {
+    message = e instanceof ImportFormatError ? e.message : 'wrong error type';
+  }
+  assert(message.includes('Squat') && message.includes('"sets"'), `Error names the row and field: ${message}`);
+
+  let notJson = false;
+  try {
+    parsePastedWorkout('Here is your plan: Bench Press 3x8');
+  } catch (e) {
+    notJson = e instanceof SyntaxError;
+  }
+  assert(notJson, 'Non-JSON text raises a SyntaxError (generic JSON message in the UI)');
+}
+
 function runTests() {
   try {
     testVolumeCalculations();
@@ -773,6 +822,7 @@ function runTests() {
     testReorderPreservedOnSave();
     testPushPullLegsSplits();
     testRecommendedExercises();
+    testAIImportParser();
     console.log('\nAll FitTrack tests passed! ✅');
   } catch (error) {
     console.error('\nTests failed! ❌');

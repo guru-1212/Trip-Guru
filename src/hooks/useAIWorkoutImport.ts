@@ -14,20 +14,13 @@ import {
   formatFullWorkoutProtocol,
   formatTrainingHistoryBlock,
   getTargetMuscles,
-  normalizeImportedReps,
 } from '@/workout/aiImportPrompt';
 import { buildSplitExerciseLibrary, generateId, inputToKg } from '@/workout/utils';
+import { ImportFormatError, parsePastedWorkout } from '@/workout/aiImportParser';
 import type { ImportedExercise, MatchResult, AIImportStep } from '@/types/aiImport';
 import type { LibraryExercise, SplitId, TodayExercisePick } from '@/workout/types';
 
 const PROCESSING_DURATION_MS = 1500;
-
-function extractJsonPayload(text: string): string {
-  const trimmed = text.trim();
-  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  if (fenceMatch) return fenceMatch[1].trim();
-  return trimmed;
-}
 
 function matchExerciseByName(
   name: string,
@@ -35,32 +28,6 @@ function matchExerciseByName(
 ): LibraryExercise | undefined {
   const normalized = name.trim().toLowerCase();
   return library.find((e) => e.name.trim().toLowerCase() === normalized);
-}
-
-function parseImportedExercises(raw: unknown): ImportedExercise[] {
-  if (!Array.isArray(raw)) {
-    throw new Error('invalid');
-  }
-  return raw.map((item) => {
-    if (!item || typeof item !== 'object') throw new Error('invalid');
-    const row = item as Record<string, unknown>;
-    if (typeof row.exerciseName !== 'string' || !row.exerciseName.trim()) {
-      throw new Error('invalid');
-    }
-    const sets = Number(row.sets);
-    if (!Number.isFinite(sets) || sets < 1) throw new Error('invalid');
-    const reps = normalizeImportedReps(String(row.reps ?? ''));
-    if (!reps) throw new Error('invalid');
-    const weight = Number(row.weight);
-    if (!Number.isFinite(weight) || weight < 0) throw new Error('invalid');
-    return {
-      exerciseName: row.exerciseName.trim(),
-      sets: Math.round(sets),
-      reps,
-      weight,
-      notes: typeof row.notes === 'string' ? row.notes : undefined,
-    };
-  });
 }
 
 function matchImportedExercises(
@@ -197,8 +164,7 @@ export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImp
   const runValidation = useCallback(
     (text: string) => {
       try {
-        const payload = extractJsonPayload(text);
-        const parsed = parseImportedExercises(JSON.parse(payload));
+        const parsed = parsePastedWorkout(text);
         const unit = profile.prefs.unit;
         const clamped = parsed.map((ex) => ({
           ...ex,
@@ -219,10 +185,14 @@ export function useAIWorkoutImport({ splitId, onImportSuccess }: UseAIWorkoutImp
         setMatchedExercises(matched);
         setErrorMessage(null);
         setStep('preview');
-      } catch {
+      } catch (err) {
         setProgressValue(0);
         setStep('error');
-        setErrorMessage('Invalid format. Please make sure you pasted the exact AI response.');
+        setErrorMessage(
+          err instanceof ImportFormatError
+            ? `Could not import: ${err.message}`
+            : 'Could not read the pasted text as JSON. Paste the exact AI response — it should start with "[" and end with "]".'
+        );
       }
     },
     [exerciseLibrary, profile.goal, profile.prefs.unit, lastWorkoutForSplit]

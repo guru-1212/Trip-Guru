@@ -340,15 +340,17 @@ ${params.lastSessionBlock}
 Your task:
 
 Select the best exercises from the available list above only
-selected workouts shoudl Ensure all muscle parts of ${params.splitName} are fully covered
+Selected exercises should ensure all muscle parts of ${params.splitName} are fully covered
 Sequence should be correct as per the real time trainer suggestions.
 Apply progressive overload or variation based on my last workout history
 
 Return ONLY this JSON format, no extra text, no markdown, no explanation:
 [
-  { "exerciseName": "Barbell Bench Press", "sets": 4, "reps": "8", "weight": 80, "notes": "Focus on full range" },
-  { "exerciseName": "Incline Dumbbell Press", "sets": 3, "reps": "10", "weight": 22, "notes": "Progressive overload from last session" }
+  { "exerciseName": "Bench Press", "sets": 4, "reps": "8", "weight": 80, "notes": "Focus on full range" },
+  { "exerciseName": "Incline Press", "sets": 3, "reps": "10", "weight": 22, "notes": "Progressive overload from last session" },
+  { "exerciseName": "Push-ups", "sets": 3, "reps": "12", "weight": 0, "notes": "Bodyweight" }
 ]
+Rules for every row: "exerciseName" must match my list exactly; "sets" is a whole number; "reps" is a string; "weight" is REQUIRED as a plain number in ${params.weightUnit} (use 0 for bodyweight exercises, never omit it or write text).
 Remember: only exercises from my list, valid JSON only, no other text.`;
 }
 
