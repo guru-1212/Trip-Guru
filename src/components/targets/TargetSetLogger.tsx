@@ -1,10 +1,12 @@
 'use client';
 
-import { Check, Minus, Plus, Flame } from 'lucide-react';
+import { useState } from 'react';
+import { Camera, Check, Minus, Plus, Flame } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { describeSessionKind, formatTargetValue } from '@/workout/targets';
 import type { Target } from '@/workout/targets';
 import type { TargetLogger } from '@/hooks/useTargets';
+import { RepCounterModal } from './RepCounterModal';
 
 interface TargetSetLoggerProps {
   target: Target;
@@ -25,6 +27,8 @@ export function TargetSetLogger({
   onSetLogged,
   className,
 }: TargetSetLoggerProps) {
+  const [countingSet, setCountingSet] = useState<number | null>(null);
+
   const prescription = logger.livePrescription;
   if (!prescription) return null;
 
@@ -121,6 +125,17 @@ export function TargetSetLogger({
                   </button>
                 </div>
               </div>
+
+              {!isLogged && target.unit === 'reps' && (
+                <button
+                  type="button"
+                  className="ft-btn ft-btn--ghost ft-btn--sm"
+                  onClick={() => setCountingSet(set.index)}
+                >
+                  <Camera className="h-4 w-4" />
+                  Count for me
+                </button>
+              )}
             </div>
 
             <button
@@ -141,6 +156,19 @@ export function TargetSetLogger({
       <p className="text-xs text-muted-foreground text-center">
         {describeSessionKind(prescription.kind)} · rest {prescription.restSeconds}s between sets
       </p>
+
+      {/* The camera fills the stepper; tapping "Log Set" is the confirmation. */}
+      <RepCounterModal
+        open={countingSet !== null}
+        onOpenChange={(o) => !o && setCountingSet(null)}
+        ghost={countingSet === 0 ? logger.ghost : null}
+        allTimeBest={logger.allTimeBest}
+        unit={target.unit}
+        onConfirm={(count) => {
+          if (countingSet !== null) logger.setValue(countingSet, count);
+          setCountingSet(null);
+        }}
+      />
     </div>
   );
 }
