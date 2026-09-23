@@ -43,9 +43,9 @@ function speak(count: number) {
   }
 }
 
-function makeBeeper(): () => void {
+function makeBeeper(): (tone: 'count' | 'reject') => void {
   let ctx: AudioContext | null = null;
-  return () => {
+  return (tone) => {
     try {
       const Ctor =
         window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -54,9 +54,10 @@ function makeBeeper(): () => void {
       if (ctx.state === 'suspended') void ctx.resume();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.frequency.value = 880;
+      // Low buzz for a rejected rep: you hear "that did not count" without looking.
+      osc.frequency.value = tone === 'reject' ? 200 : 880;
       gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(tone === 'reject' ? 0.18 : 0.25, ctx.currentTime + 0.01);
       gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
       osc.connect(gain).connect(ctx.destination);
       osc.start();
@@ -83,7 +84,7 @@ export function useCameraRepCounter(options?: {
   const rafRef = useRef<number | null>(null);
   const lastSampleRef = useRef(0);
   const detectorRef = useRef<RepDetectorState>(createRepDetectorState());
-  const beepRef = useRef<(() => void) | null>(null);
+  const beepRef = useRef<((tone: 'count' | 'reject') => void) | null>(null);
   const autoStopFiredRef = useRef(false);
 
   const [status, setStatus] = useState<CameraStatus>('idle');
@@ -146,8 +147,10 @@ export function useCameraRepCounter(options?: {
     detectorRef.current = next;
 
     if (next.count > previous.count) {
-      beepRef.current?.();
+      beepRef.current?.('count');
       if (optionsRef.current?.voice !== false) speak(next.count);
+    } else if (next.shallowReps > previous.shallowReps) {
+      beepRef.current?.('reject');
     }
 
     setState(next);

@@ -150,6 +150,7 @@ export function RepCounterModal({
               <p className="text-sm text-muted-foreground mt-2">
                 {state.phase === 'down' ? 'Down' : 'Up'}
                 {tempo !== null && ` · ${tempo}s per rep`}
+                {state.calibratedContrast === null && ' · setting your depth'}
               </p>
             </div>
 
@@ -181,15 +182,22 @@ export function RepCounterModal({
 
             <p className={cn('text-center text-xs', quality.tone)}>{quality.label}</p>
 
+            {state.lastRepRejected && !state.formBroken && (
+              <p className="text-center text-sm ft-pace-behind font-semibold">
+                Too shallow — didn&apos;t count. Chest all the way down.
+              </p>
+            )}
+
             {state.formBroken ? (
               <p className="text-center text-sm ft-pace-behind font-medium">
                 Last reps came up short of depth — that is your set. Good stopping point.
               </p>
             ) : (
-              state.shallowReps > 0 && (
+              state.shallowReps > 0 &&
+              !state.lastRepRejected && (
                 <p className="text-center text-xs text-muted-foreground">
-                  {state.shallowReps} shallow {state.shallowReps === 1 ? 'rep' : 'reps'} so far —
-                  chest all the way down
+                  {state.shallowReps} {state.shallowReps === 1 ? 'rep' : 'reps'} didn&apos;t count —
+                  too shallow
                 </p>
               )
             )}

@@ -107,13 +107,22 @@ function testDepthJudging() {
   const deep = repSignal(5, { bright: 200, dark: 40 });
   const half = repSignal(4, { bright: 200, dark: 125, startMs: deep.endMs });
   const degrading = run([...deep.samples, ...half.samples]);
-  // 8 of 9: an abrupt collapse from full to half depth costs one rep while the
-  // envelope re-adapts. Real fatigue degrades gradually and loses nothing —
-  // see the graded-fatigue case below.
-  assert(degrading.count === 8, 'Shallow reps keep counting once the envelope adapts');
-  assert(degrading.shallowReps >= 2, 'Half-depth reps are flagged as shallow');
+  assert(degrading.count === 5, 'Strict mode counts only the five full-depth reps');
+  assert(degrading.shallowReps === 3, 'The half-depth attempts are all detected');
+  assert(degrading.repDepths.length === 8, 'Rejected attempts are still recorded');
+  assert(degrading.lastRepRejected === true, 'The last attempt was thrown out for being short');
   assert(degrading.formBroken === true, 'Consecutive shallow reps mean form has broken');
   assert(degrading.shouldStop === true, 'Broken form ends the set');
+
+  // Lenient mode counts the same attempts but keeps the shallow ones.
+  // 8 not 9: an abrupt collapse costs one attempt while the envelope re-adapts.
+  const lenient = run([...deep.samples, ...half.samples], {
+    ...opts,
+    strictDepth: false,
+  });
+  assert(lenient.count === 8, 'Lenient mode counts shallow reps too');
+  assert(lenient.lastRepRejected === false, 'Lenient mode rejects nothing');
+  assert(lenient.shallowReps === 3, 'Lenient mode still flags them');
 
   // Graded fatigue — how a real AMRAP actually decays. Nothing is lost.
   let graded: { luminance: number; now: number }[] = [];
@@ -130,9 +139,15 @@ function testDepthJudging() {
     graded = [...graded, ...seg.samples];
     at = seg.endMs;
   }
+  // Strict mode banks only the reps that held full range; lenient counts them all.
   const fatigued = run(graded);
-  assert(fatigued.count === 30, 'Gradually shallower, slower reps all still count');
-  assert(fatigued.shallowReps > 0, 'The late shallow reps are still flagged');
+  const fatiguedLenient = run(graded, { ...opts, strictDepth: false });
+  assert(fatiguedLenient.count === 30, 'Every attempt is detected');
+  assert(fatigued.count === 19, 'Strict mode banks only the full-range reps');
+  assert(
+    fatigued.count + fatigued.shallowReps === fatiguedLenient.count,
+    'Counted plus rejected accounts for every attempt'
+  );
 
   // One shallow rep in the middle is a wobble, not a broken set.
   const a = repSignal(5, { bright: 200, dark: 40 });
@@ -214,12 +229,19 @@ function testAdaptsToLight() {
   const dim = run(repSignal(10, { bright: 90, dark: 25 }).samples);
   assert(dim.count === 10, 'Counts correctly in low light with a reduced swing');
 
-  // Ambient light drifts up mid-set (someone opens a door); the envelope
-  // releases toward the new level rather than losing the signal.
+  // Ambient light rises mid-set (someone opens a door). Real light scales both
+  // levels together — the lit top and the blocked bottom — so relative depth is
+  // unchanged and the contrast measure must not read it as a shallower rep.
+  const SCALE = 230 / 150;
   const drifting = repSignal(6, { bright: 150, dark: 40 }).samples;
-  const brighter = repSignal(6, { bright: 230, dark: 110, startMs: 20000 }).samples;
+  const brighter = repSignal(6, {
+    bright: 150 * SCALE,
+    dark: 40 * SCALE,
+    startMs: 20000,
+  }).samples;
   const combined = run([...drifting, ...brighter]);
   assert(combined.count === 12, 'Keeps counting after the ambient light shifts');
+  assert(combined.shallowReps === 0, 'A pure light change is not mistaken for shallow reps');
 }
 
 function testLuminanceSampling() {
