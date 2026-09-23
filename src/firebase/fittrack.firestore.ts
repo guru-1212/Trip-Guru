@@ -29,6 +29,7 @@ import type {
   WeeklyGoals,
   WorkoutSession,
 } from '@/workout/types';
+import type { Target } from '@/workout/targets';
 import {
   getDefaultChecklistItems,
   getDefaultProfile,
@@ -54,6 +55,8 @@ export interface FitTrackStateDoc {
   activeWorkout: ActiveWorkoutState | null;
   /** Dates (YYYY-MM-DD) the user explicitly marked as a rest day. */
   restDays: string[];
+  /** Goal targets ("100 non-stop push-ups"). Attempts live in fittrackTargetAttempts. */
+  targets: Target[];
   migratedFromLocal?: boolean;
   updatedAt?: unknown;
 }
@@ -116,6 +119,7 @@ export function defaultStateDoc(): FitTrackStateDoc {
     splitMobilityPicks: {},
     activeWorkout: null,
     restDays: [],
+    targets: [],
   };
 }
 

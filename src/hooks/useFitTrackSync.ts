@@ -23,6 +23,7 @@ import type {
   WeeklyGoals,
   WorkoutSession,
 } from '@/workout/types';
+import type { Target, TargetAttempt } from '@/workout/targets';
 import { getDefaultProfile, mergeVariationImages, normalizeProfile } from '@/workout/utils';
 import {
   loadSplitSequenceLocked,
@@ -52,6 +53,8 @@ export interface FitTrackSyncCallbacks {
   setSplitSequenceLocked: (l: Partial<Record<SplitId, boolean>>) => void;
   setSplitMobilityPicks: (p: Partial<Record<SplitId, Record<string, string>>>) => void;
   setRestDays: (d: string[]) => void;
+  setTargets: (t: Target[]) => void;
+  setTargetAttempts: (a: TargetAttempt[]) => void;
   setProgressPhotos: (p: ProgressPhoto[]) => void;
   setHydrated: (h: boolean) => void;
   setSyncing: (s: boolean) => void;
@@ -141,6 +144,7 @@ export function useFitTrackSync(
           cb().setSplitMobilityPicks(cloudMobilityPicks);
           saveSplitMobilityPicks(cloudMobilityPicks);
           cb().setRestDays(data.restDays ?? []);
+          cb().setTargets(data.targets ?? []);
 
           if (!migratedLocalPlanRef.current.locks) {
             const localLocks = loadSplitSequenceLocked();
@@ -223,6 +227,24 @@ export function useFitTrackSync(
           );
         },
         (err) => console.error('[FitTrack] progress photos listener:', err)
+      )
+    );
+
+    // Deliberately does not touch `hydrated` — that is owned by the body stats
+    // listener above, so target UIs must render correctly with no attempts yet.
+    unsubs.push(
+      onSnapshot(
+        query(
+          collection(db(), 'users', uid, 'fittrackTargetAttempts'),
+          orderBy('date', 'desc')
+        ),
+        (snap) => {
+          if (cancelled) return;
+          cb().setTargetAttempts(
+            snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<TargetAttempt, 'id'>) }))
+          );
+        },
+        (err) => console.error('[FitTrack] target attempts listener:', err)
       )
     );
 

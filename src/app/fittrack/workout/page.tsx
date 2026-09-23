@@ -39,6 +39,7 @@ import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workou
 import { TodayExercisePicker } from '@/components/workout/TodayExercisePicker';
 import { MobilityRoutineModal } from '@/components/workout/MobilityRoutineModal';
 import { AIImportModal } from '@/components/workout/AIImportModal';
+import { TargetWorkoutBlock } from '@/components/targets/TargetWorkoutBlock';
 import { useAIWorkoutImport } from '@/hooks/useAIWorkoutImport';
 import type { ImportedExercise } from '@/types/aiImport';
 import { useFitTrackCelebration } from '@/components/fittrack/FitTrackCelebrationProvider';
@@ -215,6 +216,7 @@ export default function WorkoutPage() {
     removeMobilityImage,
     restDays,
     setRestDay,
+    linkTargetAttemptsToSession,
   } = useWorkoutStore();
 
   const { celebratePR, celebrateWorkoutComplete, resetPRSession } = useFitTrackCelebration();
@@ -781,6 +783,14 @@ export default function WorkoutPage() {
     }));
   };
 
+  /** Rest between target sets uses the prescribed rest, not the profile default. */
+  const startTargetRest = (seconds: number) => {
+    patchActiveWorkout((prev) => ({
+      ...prev,
+      restTimerEnd: Date.now() + seconds * 1000,
+    }));
+  };
+
   const startTimer = () => {
     patchActiveWorkout((prev) => ({
       ...prev,
@@ -923,7 +933,7 @@ export default function WorkoutPage() {
     const sets = countCompletedSets(exercisesToSave);
     const volume = calcWorkoutVolume(exercisesToSave);
 
-    saveWorkout({
+    const saved = saveWorkout({
       date: workoutDate,
       completedAt: Date.now(),
       splitId: activeWorkout.splitId,
@@ -933,6 +943,9 @@ export default function WorkoutPage() {
       totalSets: sets,
       totalVolume: volume,
     });
+    // Link today's target work to the session it was done in, so History can
+    // show it. Must happen before clearActiveWorkout.
+    linkTargetAttemptsToSession(workoutDate, saved.id);
     clearActiveWorkout();
     releaseWakeLock();
     setShowSummary(false);
@@ -1392,6 +1405,9 @@ export default function WorkoutPage() {
               </span>
             </div>
             <div className="space-y-4">
+              {/* Target work comes before the lifts, outside Reorder.Group so it
+                  can never be dragged into the exercise sequence. */}
+              <TargetWorkoutBlock date={workoutDate} onRest={startTargetRest} />
               {pickedSorted.length > 1 && (
                 <p className="ft-drag-hint">
                   <GripVertical className="h-3.5 w-3.5" />

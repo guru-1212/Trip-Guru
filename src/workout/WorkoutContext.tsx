@@ -27,6 +27,9 @@ import type {
   TodayExercisePick,
   SplitMobilityPicks,
 } from './types';
+import type { Target, TargetAttempt } from './targets';
+import { hasReachedGoal } from './targets';
+import * as targetsDb from '@/firebase/targets.firestore';
 import { prepareProgressUpload, type UploadProgress } from './progressPhotos';
 import {
   generateId,
@@ -64,6 +67,8 @@ interface WorkoutContextValue {
   splitSequenceLocked: Partial<Record<SplitId, boolean>>;
   splitMobilityPicks: SplitMobilityPicks;
   restDays: string[];
+  targets: Target[];
+  targetAttempts: TargetAttempt[];
   progressPhotos: ProgressPhoto[];
   hydrated: boolean;
   syncing: boolean;
@@ -131,6 +136,18 @@ interface WorkoutContextValue {
   ) => Promise<boolean>;
   /** Delete a progress photo (Firestore doc + Storage file). */
   deleteProgressPhoto: (photo: ProgressPhoto) => Promise<void>;
+  addTarget: (target: Target) => void;
+  updateTarget: (id: string, patch: Partial<Target>) => void;
+  /** Removes the target and every attempt logged against it. */
+  deleteTarget: (id: string) => void;
+  /**
+   * Upserts an attempt. Called on every logged set so progress survives a reload
+   * mid-session, and flips the target to 'achieved' once the goal is reached.
+   */
+  saveTargetAttempt: (attempt: TargetAttempt) => void;
+  deleteTargetAttempt: (id: string) => void;
+  /** Links the day's attempts to the session they were performed in. */
+  linkTargetAttemptsToSession: (date: string, sessionId: string) => void;
 }
 
 const WorkoutContext = createContext<WorkoutContextValue | null>(null);
@@ -158,6 +175,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [splitSequenceLocked, setSplitSequenceLocked] = useState<Partial<Record<SplitId, boolean>>>({});
   const [splitMobilityPicks, setSplitMobilityPicks] = useState<SplitMobilityPicks>({});
   const [restDays, setRestDays] = useState<string[]>([]);
+  const [targets, setTargets] = useState<Target[]>([]);
+  const [targetAttempts, setTargetAttempts] = useState<TargetAttempt[]>([]);
   const [progressPhotos, setProgressPhotos] = useState<ProgressPhoto[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [syncing, setSyncing] = useState(true);
@@ -197,6 +216,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setSplitSequenceLocked,
     setSplitMobilityPicks,
     setRestDays,
+    setTargets,
+    setTargetAttempts,
     setProgressPhotos,
     setHydrated,
     setSyncing,
@@ -443,6 +464,97 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, [persistState]);
+
+  const addTarget = useCallback((target: Target) => {
+    setTargets((prev) => {
+      const next = [...prev, target];
+      persistState({ targets: next });
+      return next;
+    });
+    toast.success('Target created');
+  }, [persistState]);
+
+  const updateTarget = useCallback((id: string, patch: Partial<Target>) => {
+    setTargets((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, ...patch, updatedAt: Date.now() } : t));
+      persistState({ targets: next });
+      return next;
+    });
+  }, [persistState]);
+
+  const deleteTarget = useCallback((id: string) => {
+    setTargets((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      persistState({ targets: next });
+      return next;
+    });
+    setTargetAttempts((prev) => prev.filter((a) => a.targetId !== id));
+    const currentUid = uidRef.current;
+    if (currentUid) {
+      targetsDb
+        .deleteFitTrackTargetAttempts(currentUid, id)
+        .catch((err) => console.error('[FitTrack] delete target attempts failed:', err));
+    }
+    toast.success('Target removed');
+  }, [persistState]);
+
+  const saveTargetAttempt = useCallback((attempt: TargetAttempt) => {
+    setTargetAttempts((prev) => {
+      const next = prev.some((a) => a.id === attempt.id)
+        ? prev.map((a) => (a.id === attempt.id ? attempt : a))
+        : [attempt, ...prev];
+
+      // Reaching the goal retires the target, so the coach stops prescribing it.
+      setTargets((prevTargets) => {
+        const target = prevTargets.find((t) => t.id === attempt.targetId);
+        if (!target || target.status !== 'active' || !hasReachedGoal(target, next)) {
+          return prevTargets;
+        }
+        const updated = prevTargets.map((t) =>
+          t.id === target.id
+            ? { ...t, status: 'achieved' as const, achievedDate: attempt.date, updatedAt: Date.now() }
+            : t
+        );
+        persistState({ targets: updated });
+        return updated;
+      });
+
+      return next;
+    });
+
+    const currentUid = uidRef.current;
+    if (currentUid) {
+      // Fire-and-forget: offline writes stay pending in the local cache.
+      targetsDb
+        .saveFitTrackTargetAttempt(currentUid, attempt)
+        .catch((err) => console.error('[FitTrack] save target attempt failed:', err));
+    }
+  }, [persistState]);
+
+  const deleteTargetAttempt = useCallback((id: string) => {
+    setTargetAttempts((prev) => prev.filter((a) => a.id !== id));
+    const currentUid = uidRef.current;
+    if (currentUid) {
+      targetsDb
+        .deleteFitTrackTargetAttempt(currentUid, id)
+        .catch((err) => console.error('[FitTrack] delete target attempt failed:', err));
+    }
+  }, []);
+
+  const linkTargetAttemptsToSession = useCallback((date: string, sessionId: string) => {
+    const currentUid = uidRef.current;
+    setTargetAttempts((prev) =>
+      prev.map((a) => {
+        if (a.date !== date || a.sessionId) return a;
+        if (currentUid) {
+          targetsDb
+            .patchFitTrackTargetAttempt(currentUid, a.id, { sessionId })
+            .catch((err) => console.error('[FitTrack] link target attempt failed:', err));
+        }
+        return { ...a, sessionId };
+      })
+    );
+  }, []);
 
   const markChecklistItemDone = useCallback((id: string) => {
     setChecklist((prev) => {
@@ -969,6 +1081,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitSequenceLocked,
       splitMobilityPicks,
       restDays,
+      targets,
+      targetAttempts,
       progressPhotos,
       hydrated,
       syncing,
@@ -1017,6 +1131,12 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       setRestDay,
       addProgressPhoto,
       deleteProgressPhoto,
+      addTarget,
+      updateTarget,
+      deleteTarget,
+      saveTargetAttempt,
+      deleteTargetAttempt,
+      linkTargetAttemptsToSession,
     }),
     [
       profile,
@@ -1035,6 +1155,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitSequenceLocked,
       splitMobilityPicks,
       restDays,
+      targets,
+      targetAttempts,
       progressPhotos,
       hydrated,
       syncing,
@@ -1083,6 +1205,12 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       setRestDay,
       addProgressPhoto,
       deleteProgressPhoto,
+      addTarget,
+      updateTarget,
+      deleteTarget,
+      saveTargetAttempt,
+      deleteTargetAttempt,
+      linkTargetAttemptsToSession,
     ]
   );
 

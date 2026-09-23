@@ -66,6 +66,7 @@ import { PageTransition } from '@/components/workout/PageTransition';
 import { FitTrackInvitations } from '@/components/workout/FitTrackInvitations';
 import { WaterDashboardWidget } from '@/components/water/WaterDashboardWidget';
 import { NutritionDashboardWidget } from '@/components/nutrition/NutritionDashboardWidget';
+import { TargetDashboardWidget } from '@/components/targets/TargetDashboardWidget';
 import { getWeeklyMuscleTrainingCounts } from '@/workout/analytics';
 import { computeMuscleRecovery } from '@/workout/recovery';
 import { MuscleRecoveryMap } from '@/components/fittrack/MuscleRecoveryMap';
@@ -314,6 +315,10 @@ export default function DashboardPage() {
         >
           <MuscleRecoveryMap data={recoveryData} />
         </DashboardPanel>
+      </motion.div>
+
+      <motion.div variants={item}>
+        <TargetDashboardWidget />
       </motion.div>
 
       <motion.div variants={item}>

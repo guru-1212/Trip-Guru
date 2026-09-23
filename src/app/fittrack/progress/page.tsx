@@ -3,8 +3,11 @@
 import { useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Trophy } from 'lucide-react';
+import Link from 'next/link';
+import { Trophy, Target as TargetIcon } from 'lucide-react';
 import { PRWall } from '@/components/fittrack/PRWall';
+import { TargetCard } from '@/components/targets/TargetCard';
+import { useTargets } from '@/hooks/useTargets';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { getMuscleVolumeTrend, getExerciseHistory } from '@/workout/analytics';
@@ -18,6 +21,7 @@ type SortPR = 'recent' | 'heaviest' | 'name';
 
 export default function ProgressPage() {
   const { workouts, prs, bodyStats, profile, customExercises, hydrated, addBodyStat } = useWorkoutStore();
+  const { active: targetSummaries } = useTargets();
   const [range, setRange] = useState<Range>('30d');
   const [muscleFilter, setMuscleFilter] = useState('');
   const [volumeMetric, setVolumeMetric] = useState<VolumeMetric>('volume');
@@ -125,6 +129,25 @@ export default function ProgressPage() {
             </div>
           )}
         </section>
+
+        {/* Targets */}
+        {targetSummaries.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="ft-title text-lg font-semibold flex items-center gap-2">
+                <TargetIcon className="h-5 w-5 text-primary" /> Targets
+              </h2>
+              <Link href="/fittrack/targets" className="text-sm font-medium text-primary hover:underline">
+                All targets
+              </Link>
+            </div>
+            <div className="space-y-3">
+              {targetSummaries.map((summary) => (
+                <TargetCard key={summary.target.id} summary={summary} />
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Volume Trends */}
         <section className="ft-card ft-card-padded">

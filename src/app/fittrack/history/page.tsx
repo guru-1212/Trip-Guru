@@ -2,18 +2,19 @@
 
 import { useState, useMemo } from 'react';
 import dayjs from 'dayjs';
-import { History, Share2, Calendar, Timer, TrendingUp, Dumbbell, Filter } from 'lucide-react';
+import { History, Share2, Calendar, Timer, TrendingUp, Dumbbell, Filter, Target as TargetIcon } from 'lucide-react';
 import { PageTransition } from '@/components/workout/PageTransition';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { formatDuration, formatWeight, toSubVariationLabel } from '@/workout/utils';
 import { MUSCLE_GROUPS } from '@/workout/constants';
+import { formatAttemptSets } from '@/workout/targets';
 import toast from 'react-hot-toast';
 import { WorkoutSession } from '@/workout/types';
 
 const MUSCLE_FILTERS = ['All', ...MUSCLE_GROUPS];
 
 export default function HistoryPage() {
-  const { workouts, profile, hydrated } = useWorkoutStore();
+  const { workouts, profile, hydrated, targets, targetAttempts } = useWorkoutStore();
   const [muscleFilter, setMuscleFilter] = useState('All');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -26,6 +27,18 @@ export default function HistoryPage() {
     }
     return [...filtered].sort((a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf());
   }, [workouts, muscleFilter]);
+
+  // Target attempts index by the session they were performed in.
+  const attemptsBySession = useMemo(() => {
+    const map = new Map<string, typeof targetAttempts>();
+    for (const a of targetAttempts) {
+      if (!a.sessionId) continue;
+      const list = map.get(a.sessionId);
+      if (list) list.push(a);
+      else map.set(a.sessionId, [a]);
+    }
+    return map;
+  }, [targetAttempts]);
 
   const formatDurationHMS = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -185,6 +198,26 @@ export default function HistoryPage() {
                   </button>
                 </div>
                 
+                {/* Target work is logged separately from the session; join on
+                    sessionId so it still shows up in the day's record. */}
+                {(attemptsBySession.get(workout.id) ?? []).map((attempt) => {
+                  const target = targets.find((t) => t.id === attempt.targetId);
+                  if (!target) return null;
+                  return (
+                    <div
+                      key={attempt.id}
+                      className="flex items-center gap-2 text-sm bg-primary/10 border border-primary/20 px-3 py-2 rounded-lg"
+                    >
+                      <TargetIcon className="h-4 w-4 text-primary shrink-0" />
+                      <span className="font-medium truncate">{target.name}</span>
+                      <span className="text-muted-foreground tabular-nums ml-auto shrink-0">
+                        {formatAttemptSets(attempt, target.unit)}
+                      </span>
+                      {attempt.isPR && <span className="ft-badge ft-badge--warning">PR</span>}
+                    </div>
+                  );
+                })}
+
                 <div className="space-y-3">
                   {workout.exercises.map((ex, idx) => {
                     const doneSets = ex.sets.filter(s => s.done);

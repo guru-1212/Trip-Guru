@@ -55,3 +55,11 @@ export {
   deleteGlobalFood,
   updateGlobalFood,
 } from '@/firebase/nutrition.firestore';
+
+export {
+  getFitTrackTargetAttempts,
+  saveFitTrackTargetAttempt,
+  patchFitTrackTargetAttempt,
+  deleteFitTrackTargetAttempt,
+  deleteFitTrackTargetAttempts,
+} from '@/firebase/targets.firestore';

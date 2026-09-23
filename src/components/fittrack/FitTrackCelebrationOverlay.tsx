@@ -8,12 +8,20 @@ import {
   Dumbbell,
   TrendingUp,
   Flame,
+  Target,
 } from 'lucide-react';
 import { formatDuration, formatWeight, displayWeight } from '@/workout/utils';
+import { formatTargetValue } from '@/workout/targets';
 import type { WeightUnit } from '@/workout/types';
 import type { CelebrationEvent } from './FitTrackCelebrationProvider';
 
 const SPRING = { type: 'spring' as const, stiffness: 260, damping: 18 };
+
+const CELEBRATION_LABELS: Record<CelebrationEvent['variant'], string> = {
+  pr: 'New personal best',
+  target_pr: 'New target best',
+  workout_complete: 'Workout complete',
+};
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -33,7 +41,7 @@ function useReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
-async function fireConfetti(intensity: 'pr' | 'workout_complete') {
+async function fireConfetti(intensity: CelebrationEvent['variant']) {
   const { default: confetti } = await import('canvas-confetti');
   const colors = ['#F59E0B', '#EAB308', '#10B981', '#34D399', '#FFFFFF'];
   const particleCount = intensity === 'workout_complete' ? 120 : 80;
@@ -86,7 +94,7 @@ export function FitTrackCelebrationOverlay({ event, onDismiss }: FitTrackCelebra
 
   useEffect(() => {
     if (!event) return;
-    const duration = event.variant === 'pr' ? 3500 : 4500;
+    const duration = event.variant === 'workout_complete' ? 4500 : 3500;
     const timer = setTimeout(onDismiss, duration);
     return () => clearTimeout(timer);
   }, [event, onDismiss]);
@@ -109,7 +117,7 @@ export function FitTrackCelebrationOverlay({ event, onDismiss }: FitTrackCelebra
         onClick={handleBackdropClick}
         role="dialog"
         aria-modal="true"
-        aria-label={event.variant === 'pr' ? 'New personal best' : 'Workout complete'}
+        aria-label={CELEBRATION_LABELS[event.variant]}
       >
         <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
@@ -121,9 +129,9 @@ export function FitTrackCelebrationOverlay({ event, onDismiss }: FitTrackCelebra
           className="relative z-10 w-full max-w-sm"
           onClick={(e) => e.stopPropagation()}
         >
-          {event.variant === 'pr' ? (
-            <PRContent payload={event.payload} />
-          ) : (
+          {event.variant === 'pr' && <PRContent payload={event.payload} />}
+          {event.variant === 'target_pr' && <TargetPRContent payload={event.payload} />}
+          {event.variant === 'workout_complete' && (
             <WorkoutCompleteContent payload={event.payload} onDismiss={onDismiss} />
           )}
         </motion.div>
@@ -180,6 +188,69 @@ function PRContent({ payload }: { payload: Extract<CelebrationEvent, { variant: 
       <motion.p variants={itemVariants} className="text-sm font-semibold text-amber-600 dark:text-amber-400">
         {subtext}
       </motion.p>
+
+      <motion.p variants={itemVariants} className="text-xs text-muted-foreground mt-6">
+        Tap anywhere to keep going
+      </motion.p>
+    </motion.div>
+  );
+}
+
+function TargetPRContent({
+  payload,
+}: {
+  payload: Extract<CelebrationEvent, { variant: 'target_pr' }>['payload'];
+}) {
+  const { targetName, exerciseName, value, unit, previousBest, goalValue } = payload;
+  const delta = value - previousBest;
+  const remaining = Math.max(0, goalValue - value);
+
+  return (
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="bg-card border border-amber-500/30 rounded-3xl shadow-2xl p-8 text-center"
+    >
+      <motion.div variants={itemVariants} className="mb-5">
+        <div className="w-20 h-20 rounded-full bg-amber-500/15 border border-amber-500/30 flex items-center justify-center mx-auto shadow-[0_0_40px_rgba(245,158,11,0.25)]">
+          <Target className="h-10 w-10 text-amber-500" />
+        </div>
+      </motion.div>
+
+      <motion.div variants={itemVariants}>
+        <span className="inline-block px-4 py-1.5 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400 text-xs font-black uppercase tracking-[0.15em] mb-4">
+          New Best!
+        </span>
+      </motion.div>
+
+      <motion.h2 variants={itemVariants} className="text-xl font-bold text-foreground mb-1">
+        {exerciseName}
+      </motion.h2>
+
+      <motion.p variants={itemVariants} className="text-sm text-muted-foreground mb-4">
+        {targetName}
+      </motion.p>
+
+      <motion.p
+        variants={itemVariants}
+        className="text-5xl font-black tabular-nums text-foreground mb-2"
+      >
+        {formatTargetValue(value, unit)}
+      </motion.p>
+
+      <motion.p
+        variants={itemVariants}
+        className="text-sm font-semibold text-amber-600 dark:text-amber-400"
+      >
+        {delta > 0 ? `+${delta} on your last best` : 'First record logged!'}
+      </motion.p>
+
+      {remaining > 0 && (
+        <motion.p variants={itemVariants} className="text-xs text-muted-foreground mt-3">
+          {formatTargetValue(remaining, unit)} to go
+        </motion.p>
+      )}
 
       <motion.p variants={itemVariants} className="text-xs text-muted-foreground mt-6">
         Tap anywhere to keep going

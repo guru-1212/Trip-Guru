@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { FitTrackCelebrationOverlay } from './FitTrackCelebrationOverlay';
 import type { WeightUnit } from '@/workout/types';
+import type { TargetUnit } from '@/workout/targets';
 
 export interface PRCelebrationPayload {
   exerciseId: string;
@@ -33,12 +34,28 @@ export interface WorkoutCompletePayload {
   onDismiss?: () => void;
 }
 
+/**
+ * Target bests are reps or seconds, not load, so they need their own payload —
+ * PRCelebrationPayload would render a bodyweight best as "0 kg × 43".
+ */
+export interface TargetPRCelebrationPayload {
+  targetId: string;
+  targetName: string;
+  exerciseName: string;
+  value: number;
+  unit: TargetUnit;
+  previousBest: number;
+  goalValue: number;
+}
+
 export type CelebrationEvent =
   | { id: string; variant: 'pr'; payload: PRCelebrationPayload }
+  | { id: string; variant: 'target_pr'; payload: TargetPRCelebrationPayload }
   | { id: string; variant: 'workout_complete'; payload: WorkoutCompletePayload };
 
 interface FitTrackCelebrationContextValue {
   celebratePR: (payload: PRCelebrationPayload) => void;
+  celebrateTargetPR: (payload: TargetPRCelebrationPayload) => void;
   celebrateWorkoutComplete: (payload: WorkoutCompletePayload) => void;
   resetPRSession: () => void;
 }
@@ -85,6 +102,18 @@ export function FitTrackCelebrationProvider({ children }: { children: ReactNode 
     [enqueue]
   );
 
+  // Keyed by targetId, not exerciseId: a push-up target best and a weighted
+  // push-up PR are separate achievements and both deserve their moment.
+  const celebrateTargetPR = useCallback(
+    (payload: TargetPRCelebrationPayload) => {
+      const key = `target:${payload.targetId}:${payload.value}`;
+      if (prCelebratedRef.current.has(key)) return;
+      prCelebratedRef.current.add(key);
+      enqueue({ id: nextId(), variant: 'target_pr', payload });
+    },
+    [enqueue]
+  );
+
   const celebrateWorkoutComplete = useCallback(
     (payload: WorkoutCompletePayload) => {
       enqueue({ id: nextId(), variant: 'workout_complete', payload });
@@ -116,7 +145,7 @@ export function FitTrackCelebrationProvider({ children }: { children: ReactNode 
 
   return (
     <FitTrackCelebrationContext.Provider
-      value={{ celebratePR, celebrateWorkoutComplete, resetPRSession }}
+      value={{ celebratePR, celebrateTargetPR, celebrateWorkoutComplete, resetPRSession }}
     >
       {children}
       <FitTrackCelebrationOverlay event={current} onDismiss={handleDismiss} />
