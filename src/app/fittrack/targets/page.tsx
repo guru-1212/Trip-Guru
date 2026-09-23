@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { TargetCard } from '@/components/targets/TargetCard';
 import { CreateTargetSheet } from '@/components/targets/CreateTargetSheet';
 import { QuickLogDialog } from '@/components/targets/QuickLogDialog';
+import { CountRepsButton } from '@/components/targets/CountRepsButton';
 import { useTargets } from '@/hooks/useTargets';
 import type { Target } from '@/workout/targets';
 
@@ -54,12 +55,19 @@ export default function TargetsPage() {
               {summary.prescription && !summary.needsBaseline && (
                 <button
                   type="button"
-                  className="ft-btn ft-btn--secondary ft-btn--block ft-btn--sm"
+                  className="ft-btn ft-btn--primary ft-btn--block ft-btn--sm"
                   onClick={() => setQuickLog(summary.target)}
                 >
                   <ClipboardCheck className="h-4 w-4" />
                   {summary.todayAttempt ? 'Update today' : 'Log today'}
                 </button>
+              )}
+              {!summary.needsBaseline && (
+                <CountRepsButton
+                  target={summary.target}
+                  ghost={summary.prescription?.ghost ?? summary.currentBest}
+                  allTimeBest={summary.currentBest}
+                />
               )}
             </div>
           ))}

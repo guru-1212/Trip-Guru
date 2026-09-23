@@ -11,6 +11,7 @@ import { TargetProgressChart } from '@/components/targets/TargetProgressChart';
 import { TargetProjectionLine } from '@/components/targets/TargetProjectionLine';
 import { TargetSetLogger } from '@/components/targets/TargetSetLogger';
 import { BaselineTestCard } from '@/components/targets/BaselineTestCard';
+import { CountRepsButton } from '@/components/targets/CountRepsButton';
 import { useWorkoutStore } from '@/workout/WorkoutContext';
 import { useTargetLogger, useTargetSummary, todayKey } from '@/hooks/useTargets';
 import {
@@ -112,12 +113,21 @@ export default function TargetDetailPage() {
 
       {!needsBaseline && isActive && <TodaysSession target={target} />}
 
-      {!needsBaseline && isActive && !summary.prescription && nextDate && (
+      {!needsBaseline && isActive && !summary.prescription && (
         <section className="ft-card ft-card-padded">
-          <h2 className="ft-title text-base mb-1">Next session</h2>
-          <p className="text-sm text-muted-foreground">
-            {dayjs(nextDate).format('dddd D MMM')} — rest until then is part of the plan.
+          <h2 className="ft-title text-base mb-1">Not a training day</h2>
+          <p className="text-sm text-muted-foreground mb-4">
+            {nextDate
+              ? `Next session ${dayjs(nextDate).format('dddd D MMM')} — the rest until then is part of the plan.`
+              : 'No sessions scheduled.'}{' '}
+            You can still knock out a set; it is logged as extra volume and will not touch your
+            programmed numbers.
           </p>
+          <CountRepsButton
+            target={target}
+            ghost={currentBest}
+            allTimeBest={currentBest}
+          />
         </section>
       )}
 

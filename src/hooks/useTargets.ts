@@ -243,6 +243,38 @@ export function useTargetLogger(
 }
 
 /**
+ * Logs a set done outside the plan — an extra session, or one on a day the
+ * target does not normally train.
+ *
+ * Recorded as a volume attempt on purpose: only test attempts move
+ * `currentBest` or feed the autoregulation, so off-plan work adds to your
+ * lifetime total without quietly rewriting the programme.
+ */
+export function useLogExtraSet(target: Target) {
+  const { targetAttempts, saveTargetAttempt } = useWorkoutStore();
+
+  return useCallback(
+    (count: number, date: string = todayKey()) => {
+      if (count <= 0) return;
+      const existing = getAttemptForDate(target.id, targetAttempts, date);
+      saveTargetAttempt(
+        createAttempt({
+          id: existing?.id ?? generateId(),
+          targetId: target.id,
+          date,
+          kind: existing?.kind ?? 'volume',
+          prescribed: existing?.prescribed ?? [count],
+          actual: existing ? [...existing.actual, count] : [count],
+          allTimeBest: getAllTimeBest(target, attemptsBefore(target.id, targetAttempts, date)),
+          note: existing?.note ?? 'Extra set',
+        })
+      );
+    },
+    [target, targetAttempts, saveTargetAttempt]
+  );
+}
+
+/**
  * Baseline test — the one-off first entry that unlocks the coach.
  *
  * Deliberately does NOT write an attempt: it lives on the target itself. Logged
