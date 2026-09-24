@@ -3,18 +3,20 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/generate-messaging-sw.js && next dev",
-    "build": "node scripts/generate-messaging-sw.js && next build",
+    "dev": "node scripts/generate-messaging-sw.js && node scripts/copy-pose-assets.js && next dev",
+    "build": "node scripts/generate-messaging-sw.js && node scripts/copy-pose-assets.js && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "npx tsx src/workout/fittrack.test.ts && npx tsx src/workout/targets.test.ts && npx tsx src/workout/repCounter.test.ts && npx tsx src/lib/nutrition/dietImportParser.test.ts",
+    "test": "npx tsx src/workout/fittrack.test.ts && npx tsx src/workout/targets.test.ts && npx tsx src/workout/repCounter.test.ts && npx tsx src/workout/poseRepCounter.test.ts && npx tsx src/lib/nutrition/dietImportParser.test.ts",
     "icons": "node scripts/generate-icons.js",
     "messaging-sw": "node scripts/generate-messaging-sw.js",
     "firebase:deploy": "firebase deploy --only firestore:rules,firestore:indexes,storage && node scripts/deploy-functions.js",
-    "firebase:deploy:functions": "node scripts/deploy-functions.js"
+    "firebase:deploy:functions": "node scripts/deploy-functions.js",
+    "pose-assets": "node scripts/copy-pose-assets.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^3",
+    "@mediapipe/tasks-vision": "^1.0.1",
     "@radix-ui/react-avatar": "^1",
     "@radix-ui/react-dialog": "^1",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

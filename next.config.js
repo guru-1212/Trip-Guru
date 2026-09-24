@@ -8,6 +8,10 @@ const withPWA = require('next-pwa')({
   skipWaiting: true,
   disable: pwaDisabled,
   buildExcludes: [/middleware-manifest\.json$/, /app-build-manifest\.json$/],
+  // The pose-counter WASM is ~34MB. Precaching it would blow up the service
+  // worker install for everyone, including the people who never open the
+  // camera counter, so it is fetched on demand instead.
+  publicExcludes: ['!noprecache/**/*', '!mediapipe/**/*'],
   importScripts: ['/firebase-messaging-sw.js'],
 });
 

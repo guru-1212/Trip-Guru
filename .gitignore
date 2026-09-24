@@ -16,3 +16,4 @@ functions/node_modules
 firebase-debug.log
 firebase-debug.*.log
 .firebase/
+public/mediapipe

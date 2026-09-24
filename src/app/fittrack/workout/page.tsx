@@ -1276,6 +1276,9 @@ export default function WorkoutPage() {
                             onToggleDone={() => toggleSetDone(ex.exerciseId, ex.variation, idx)}
                             onRemove={() => removeSet(ex.exerciseId, ex.variation, idx)}
                             onUnitChange={handleWeightUnitChange}
+                            exerciseId={ex.exerciseId}
+                            exerciseName={ex.name}
+                            lastReps={lastSession?.sets[idx]?.reps ?? null}
                           />
                         </motion.div>
                       ))}

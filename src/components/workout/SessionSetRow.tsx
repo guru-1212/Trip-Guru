@@ -1,9 +1,12 @@
 'use client';
 
-import { Minus, Plus, Check, Trash2, Trophy } from 'lucide-react';
+import { useState } from 'react';
+import { Minus, Plus, Check, ScanLine, Trash2, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { displayWeight } from '@/workout/utils';
+import { specForExercise } from '@/workout/poseExerciseSpecs';
 import type { WorkoutSet, WeightUnit } from '@/workout/types';
+import { PoseRepCounterModal } from './PoseRepCounterModal';
 
 const WEIGHT_STEP: Record<WeightUnit, number> = { kg: 2.5, lbs: 5 };
 
@@ -17,6 +20,15 @@ interface SessionSetRowProps {
   onToggleDone: () => void;
   onRemove: () => void;
   onUnitChange?: (unit: WeightUnit) => void;
+  /**
+   * Identifies the movement so the camera counter knows which joint to watch.
+   * Optional: without it the row behaves exactly as it always has, which is
+   * what keeps the other callers of this component unchanged.
+   */
+  exerciseId?: string;
+  exerciseName?: string;
+  /** Reps on this set last session, shown in the counter as the number to beat. */
+  lastReps?: number | null;
 }
 
 function Stepper({
@@ -70,10 +82,19 @@ export function SessionSetRow({
   onToggleDone,
   onRemove,
   onUnitChange,
+  exerciseId,
+  exerciseName,
+  lastReps = null,
 }: SessionSetRowProps) {
   const displayVal = displayWeight(set.weight, unit);
   const weightStep = WEIGHT_STEP[unit];
   const showReadyRing = !set.done && displayVal > 0 && set.reps > 0;
+
+  const [counting, setCounting] = useState(false);
+  const poseSpec = specForExercise(exerciseId, exerciseName);
+  // Offered only while the set is still open: re-counting a logged set would
+  // silently rewrite history.
+  const canAutoCount = poseSpec !== null && !set.done;
 
   const logSetButton = (
     <button
@@ -177,6 +198,17 @@ export function SessionSetRow({
         />
       </div>
 
+      {canAutoCount && (
+        <button
+          type="button"
+          onClick={() => setCounting(true)}
+          className="ft-btn ft-btn--ghost ft-btn--block ft-btn--sm mt-2"
+        >
+          <ScanLine className="h-4 w-4" />
+          Auto-count reps
+        </button>
+      )}
+
       <div className="ft-set-action">
         {showReadyRing ? (
           <div className="ft-log-set-wrap ft-log-set-wrap--ready">{logSetButton}</div>
@@ -184,6 +216,21 @@ export function SessionSetRow({
           logSetButton
         )}
       </div>
+
+      {canAutoCount && (
+        <PoseRepCounterModal
+          open={counting}
+          onOpenChange={setCounting}
+          spec={poseSpec}
+          exerciseName={exerciseName ?? 'This exercise'}
+          ghost={lastReps}
+          onConfirm={(count) => {
+            // Fills the field rather than logging the set: the number still
+            // has to be looked at, and the weight is usually not filled in yet.
+            if (count > 0) onRepsChange(count);
+          }}
+        />
+      )}
     </div>
   );
 }
