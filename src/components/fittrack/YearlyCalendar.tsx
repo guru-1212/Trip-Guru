@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
+import { CalendarDayLogger } from '@/components/fittrack/CalendarDayLogger';
 import type { UserProfile, WorkoutSession } from '@/workout/types';
 import {
   buildYearlyAttendanceMap,
@@ -52,6 +53,8 @@ function buildMonthCells(
 
 export function YearlyCalendar({ workouts, profile }: YearlyCalendarProps) {
   const [selectedYear, setSelectedYear] = useState(dayjs().year());
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const closeDay = useCallback(() => setSelectedDate(null), []);
 
   const attendanceMap = useMemo(
     () => buildYearlyAttendanceMap(workouts, selectedYear, profile),
@@ -145,11 +148,14 @@ export function YearlyCalendar({ workouts, profile }: YearlyCalendarProps) {
             </div>
             <div className="grid grid-cols-7 gap-1">
               {month.cells.map((cell) => (
-                <div
+                <button
+                  type="button"
                   key={cell.date}
                   title={cell.date}
+                  aria-label={dayjs(cell.date).format('dddd, MMMM D')}
+                  onClick={() => setSelectedDate(cell.date)}
                   className={cn(
-                    'aspect-square rounded-md flex items-center justify-center text-[8px] font-black transition-colors',
+                    'aspect-square rounded-md flex items-center justify-center text-[8px] font-black transition-colors cursor-pointer hover:brightness-110',
                     cellClass(cell.kind),
                     !cell.isCurrentMonth && 'opacity-20',
                     cell.isToday && cell.kind === 'none' && 'ring-2 ring-primary/60',
@@ -157,7 +163,7 @@ export function YearlyCalendar({ workouts, profile }: YearlyCalendarProps) {
                   )}
                 >
                   {cell.day}
-                </div>
+                </button>
               ))}
             </div>
           </div>
@@ -183,6 +189,11 @@ export function YearlyCalendar({ workouts, profile }: YearlyCalendarProps) {
           Before {profile.gymTime ?? '12:00'} is early
         </div>
       </div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">
+        Tap a day to view it or log a workout
+      </p>
+
+      <CalendarDayLogger date={selectedDate} onClose={closeDay} />
     </div>
   );
 }

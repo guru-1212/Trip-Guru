@@ -1,8 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import dayjs from 'dayjs';
 import { ChevronLeft, ChevronRight, Clock3 } from 'lucide-react';
+import { CalendarDayLogger } from '@/components/fittrack/CalendarDayLogger';
 import type { UserProfile, WorkoutSession } from '@/workout/types';
 import { buildYearlyAttendanceMap, getLongestStreakForYear, type AttendanceKind } from '@/workout/utils';
 import { cn } from '@/lib/utils';
@@ -40,6 +41,8 @@ export function GymAttendanceCalendar({ workouts, profile }: GymAttendanceCalend
   const [mode, setMode] = useState<'month' | 'year'>('month');
   const [selectedYear, setSelectedYear] = useState(dayjs().year());
   const [selectedMonth, setSelectedMonth] = useState(() => dayjs().startOf('month'));
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const closeDay = useCallback(() => setSelectedDate(null), []);
 
   // In month mode the attendance data must cover the selected month's year.
   const activeYear = mode === 'month' ? selectedMonth.year() : selectedYear;
@@ -222,11 +225,14 @@ export function GymAttendanceCalendar({ workouts, profile }: GymAttendanceCalend
       {mode === 'month' ? (
         <div className="grid grid-cols-7 gap-1.5">
           {monthCells.map((cell) => (
-            <div
+            <button
+              type="button"
               key={cell.date}
               title={cell.date}
+              aria-label={dayjs(cell.date).format('dddd, MMMM D')}
+              onClick={() => setSelectedDate(cell.date)}
               className={cn(
-                'aspect-square rounded-xl flex items-center justify-center text-[10px] font-black transition-all duration-300',
+                'aspect-square rounded-xl flex items-center justify-center text-[10px] font-black transition-all duration-300 cursor-pointer hover:brightness-110',
                 cellClass(cell.kind),
                 !cell.isCurrentMonth && 'opacity-20',
                 cell.isToday && cell.kind === 'none' && 'ring-2 ring-primary/60 ring-offset-2 ring-offset-background border-primary/20',
@@ -234,7 +240,7 @@ export function GymAttendanceCalendar({ workouts, profile }: GymAttendanceCalend
               )}
             >
               {cell.day}
-            </div>
+            </button>
           ))}
         </div>
       ) : (
@@ -243,11 +249,14 @@ export function GymAttendanceCalendar({ workouts, profile }: GymAttendanceCalend
             {Array.from({ length: 53 }, (_, weekIndex) => (
               <div key={`week-${weekIndex}`} className="grid grid-rows-7 gap-1">
                 {yearCells.slice(weekIndex * 7, weekIndex * 7 + 7).map((cell) => (
-                  <div
+                  <button
+                    type="button"
                     key={cell.date}
                     title={`${cell.date}${cell.workoutCount ? ` - ${cell.workoutCount} session${cell.workoutCount === 1 ? '' : 's'}` : ' - Rest day'}`}
+                    aria-label={dayjs(cell.date).format('dddd, MMMM D')}
+                    onClick={() => setSelectedDate(cell.date)}
                     className={cn(
-                      'h-3 w-3 rounded-[4px] transition-all',
+                      'h-3 w-3 rounded-[4px] transition-all cursor-pointer hover:brightness-110',
                       cellClass(cell.kind),
                       !cell.isCurrentYear && 'opacity-20',
                       cell.isToday && 'ring-2 ring-primary/60 ring-offset-2 ring-offset-background'
@@ -285,6 +294,11 @@ export function GymAttendanceCalendar({ workouts, profile }: GymAttendanceCalend
           Before {profile.gymTime ?? '12:00'} is early
         </div>
       </div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70">
+        Tap a day to view it or log a workout
+      </p>
+
+      <CalendarDayLogger date={selectedDate} onClose={closeDay} />
     </div>
   );
 }

@@ -39,6 +39,7 @@ import { AddExerciseModal, resolveExerciseForWorkout } from '@/components/workou
 import { TodayExercisePicker } from '@/components/workout/TodayExercisePicker';
 import { MobilityRoutineModal } from '@/components/workout/MobilityRoutineModal';
 import { AIImportModal } from '@/components/workout/AIImportModal';
+import { FastLogModal } from '@/components/workout/FastLogModal';
 import { TargetWorkoutBlock } from '@/components/targets/TargetWorkoutBlock';
 import { useAIWorkoutImport } from '@/hooks/useAIWorkoutImport';
 import type { ImportedExercise } from '@/types/aiImport';
@@ -53,12 +54,13 @@ import {
   generateId,
   getGreeting,
   getTodayDayKey,
-  getScheduledSplitForDate,
+  getPlannedSplitForDate,
   getScheduledSplitsForDay,
   getRemainingSplitsForDate,
   getLastTrainedDate,
   getLastSessionsForSplit,
   buildRepeatDataFromSession,
+  buildFastLogSession,
   repeatSessionPresetKey,
   isYesterday,
   getLastExerciseSession,
@@ -243,6 +245,7 @@ export default function WorkoutPage() {
   const [finishPin, setFinishPin] = useState('');
   const [pinError, setPinError] = useState(false);
   const [workoutDate, setWorkoutDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [showFastLog, setShowFastLog] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showReplaceDialog, setShowReplaceDialog] = useState(false);
   const [showAddExercise, setShowAddExercise] = useState(false);
@@ -351,15 +354,15 @@ export default function WorkoutPage() {
   const todayStr = dayjs().format('YYYY-MM-DD');
   const tomorrowStr = dayjs().add(1, 'day').format('YYYY-MM-DD');
 
-  // Rotation-aware: today's split is the next in the cycle after the last
-  // logged workout, carrying over across skipped/rest days.
+  // Follows the weekly plan literally: Thursday = whatever the profile
+  // schedules on Thursday, even after skipped days (matches the dashboard).
   const todaySplit = useMemo(
-    () => getScheduledSplitForDate(todayStr, profile, workouts, restDays),
-    [todayStr, profile, workouts, restDays]
+    () => getPlannedSplitForDate(todayStr, profile, restDays),
+    [todayStr, profile, restDays]
   );
   const tomorrowSplit = useMemo(
-    () => getScheduledSplitForDate(tomorrowStr, profile, workouts, restDays),
-    [tomorrowStr, profile, workouts, restDays]
+    () => getPlannedSplitForDate(tomorrowStr, profile, restDays),
+    [tomorrowStr, profile, restDays]
   );
   const hasTrainedToday = useMemo(
     () => workouts.some((w) => dayjs(w.date).isSame(dayjs(), 'day')),
@@ -972,6 +975,21 @@ export default function WorkoutPage() {
     }
     confirmFinish();
   };
+
+  const closeFastLog = useCallback(() => setShowFastLog(false), []);
+
+  const handleFastLog = useCallback(
+    (source: WorkoutSession, date: string) => {
+      setShowFastLog(false);
+      const session = buildFastLogSession(source, date);
+      if (!session) {
+        toast.error('That workout has no completed sets to log');
+        return;
+      }
+      saveWorkout(session);
+    },
+    [saveWorkout]
+  );
 
   const handleRemoveExercise = (cardKey: string) => {
     if (removePin !== FINISH_WORKOUT_PIN) {
@@ -2017,21 +2035,31 @@ export default function WorkoutPage() {
   return (
     <PageTransition>
       <div className={cn('space-y-6', selectedSplit && 'pb-28')}>
-        <header>
-          <h1 className="ft-title-lg">{getGreeting()}, {profile.name.split(' ')[0]}</h1>
-          <p className="ft-subtitle mt-1">
-            {hasTrainedToday
-              ? remainingTodaySplits.length > 0
-                ? `${todaySessionsDone} of ${todayScheduledSplits.length} sessions done today — next: ${SPLIT_NAMES[remainingTodaySplits[0]]}`
-                : `Workout recorded for ${getTodayDayKey()}. Great job!`
-              : restedToday
-              ? tomorrowSplit !== 'rest'
-                ? `Resting today — next up tomorrow: ${SPLIT_NAMES[tomorrowSplit]}`
-                : `Resting today — tomorrow is a rest day too`
-              : todaySplit !== 'rest'
-              ? `${getTodayDayKey()} — next up: ${SPLIT_NAMES[todaySplit]}`
-              : `${getTodayDayKey()} — rest day on your plan`}
-          </p>
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="ft-title-lg">{getGreeting()}, {profile.name.split(' ')[0]}</h1>
+            <p className="ft-subtitle mt-1">
+              {hasTrainedToday
+                ? remainingTodaySplits.length > 0
+                  ? `${todaySessionsDone} of ${todayScheduledSplits.length} sessions done today — next: ${SPLIT_NAMES[remainingTodaySplits[0]]}`
+                  : `Workout recorded for ${getTodayDayKey()}. Great job!`
+                : restedToday
+                ? tomorrowSplit !== 'rest'
+                  ? `Resting today — next up tomorrow: ${SPLIT_NAMES[tomorrowSplit]}`
+                  : `Resting today — tomorrow is a rest day too`
+                : todaySplit !== 'rest'
+                ? `${getTodayDayKey()} — next up: ${SPLIT_NAMES[todaySplit]}`
+                : `${getTodayDayKey()} — rest day on your plan`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFastLog(true)}
+            className="ft-btn ft-btn--secondary shrink-0 inline-flex items-center gap-1.5"
+          >
+            <Zap className="h-4 w-4" />
+            Fast Log
+          </button>
         </header>
 
         {hasTrainedToday && !restedToday && remainingTodaySplits.length > 0 ? (
@@ -2071,7 +2099,7 @@ export default function WorkoutPage() {
               <p className="text-sm font-semibold text-foreground">Resting today</p>
               <p className="text-sm text-muted-foreground mt-0.5">
                 {tomorrowSplit !== 'rest' ? (
-                  <>Your plan carries over — tomorrow: <span className="font-medium text-primary">{SPLIT_NAMES[tomorrowSplit]}</span>.</>
+                  <>Tomorrow: <span className="font-medium text-primary">{SPLIT_NAMES[tomorrowSplit]}</span>.</>
                 ) : (
                   <>Tomorrow is a planned rest day too.</>
                 )}
@@ -2120,7 +2148,7 @@ export default function WorkoutPage() {
               onClick={() => {
                 setRestDay(todayStr, true);
                 if (tomorrowSplit !== 'rest') setSelectedSplit(tomorrowSplit);
-                toast.success(`Resting today — ${SPLIT_NAMES[todaySplit]} moves to your next session`);
+                toast.success('Resting today');
               }}
               className="ft-btn ft-btn--ghost shrink-0 inline-flex items-center gap-1.5 text-sm"
             >
@@ -2262,6 +2290,15 @@ export default function WorkoutPage() {
             </button>
             <button
               type="button"
+              onClick={() => setShowFastLog(true)}
+              className="ft-btn ft-btn--secondary ft-btn--lg !px-5"
+              title="Fast Log"
+              aria-label="Fast Log"
+            >
+              <Zap className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
               onClick={aiImport.openModal}
               className="ft-btn ft-btn--secondary ft-btn--lg !px-5"
               title="AI Import Workout"
@@ -2279,6 +2316,15 @@ export default function WorkoutPage() {
             </button>
           </div>
         )}
+
+        <FastLogModal
+          open={showFastLog}
+          workouts={workouts}
+          preferredSplit={selectedSplit}
+          unit={profile.prefs.unit}
+          onClose={closeFastLog}
+          onLog={handleFastLog}
+        />
 
         <AIImportModal
           open={aiImport.modalOpen}

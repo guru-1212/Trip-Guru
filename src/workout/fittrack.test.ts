@@ -11,6 +11,11 @@ import {
   getLastSessionsForSplit,
   getLastLoggedSets,
   buildRepeatDataFromSession,
+  buildFastLogSession,
+  getFastLogSuggestions,
+  getPlannedSplitForDate,
+  applyWorkoutEdit,
+  recomputePRsForExercises,
   repeatSessionPresetKey,
   exerciseMatchesSearch,
   getMatchingVariations,
@@ -293,6 +298,260 @@ function testRepeatSessionHelpers() {
   assert(benchSets?.[0].weight === 100 && benchSets?.[0].reps === 10, 'First set values preserved');
   assert(benchSets?.[1].weight === 100 && benchSets?.[1].reps === 8, 'Second set values preserved');
   assert(!presets.has(repeatSessionPresetKey('fly', 'Cable')), 'Exercises without done sets have no preset');
+}
+
+function testFastLogSession() {
+  console.log('Testing Fast Log Session...');
+
+  const source: WorkoutSession = {
+    id: 'src',
+    date: '2024-06-27',
+    completedAt: dayjs('2024-06-27T18:30:00').valueOf(),
+    splitId: 'ct',
+    splitName: 'Chest/Triceps',
+    duration: 3000,
+    totalSets: 3,
+    totalVolume: 2800,
+    exercises: [
+      {
+        exerciseId: 'bench',
+        name: 'Bench Press',
+        variation: 'Barbell',
+        muscle: 'Chest',
+        notes: 'felt heavy',
+        sets: [
+          { weight: 100, reps: 10, done: true },
+          { weight: 90, reps: 8, done: true },
+          { weight: 80, reps: 10, done: false },
+        ],
+      },
+      {
+        exerciseId: 'fly',
+        name: 'Fly',
+        variation: 'Cable',
+        muscle: 'Chest',
+        sets: [{ weight: 0, reps: 0, done: false }],
+      },
+      {
+        exerciseId: 'dip',
+        name: 'Dip',
+        variation: 'Bodyweight',
+        muscle: 'Triceps',
+        sets: [{ weight: 0, reps: 12, done: true }],
+      },
+    ],
+  };
+
+  const now = dayjs('2024-07-02T09:00:00').valueOf();
+
+  const past = buildFastLogSession(source, '2024-06-30', now);
+  assert(past !== null, 'Session with completed sets can be fast-logged');
+  assert(past!.date === '2024-06-30', 'Logged on the chosen date');
+  assert(!('completedAt' in past!), 'Back-dated log has no completedAt');
+  assert(past!.splitId === 'ct' && past!.splitName === 'Chest/Triceps', 'Split carried over');
+  assert(past!.exercises.length === 2, 'Exercises without completed sets are dropped');
+  assert(past!.exercises[0].sets.length === 2, 'Only completed sets are copied');
+  assert(past!.exercises.every((e) => e.sets.every((s) => s.done)), 'Every copied set is marked done');
+  assert(
+    past!.exercises[0].sets[0].weight === 100 && past!.exercises[0].sets[1].reps === 8,
+    'Old weights and reps preserved'
+  );
+  assert(past!.exercises[0].notes === undefined, 'Old notes are not copied');
+  assert(past!.totalSets === 3, 'Total sets recomputed from copied sets');
+  assert(past!.totalVolume === 100 * 10 + 90 * 8, 'Volume recomputed (bodyweight set adds none)');
+  assert(source.exercises[0].sets[2].done === false && source.exercises[0].notes === 'felt heavy', 'Source untouched');
+
+  const today = buildFastLogSession(source, '2024-07-02', now);
+  assert(today?.completedAt === now, 'Logging for today stamps completedAt');
+
+  const empty: WorkoutSession = {
+    ...source,
+    exercises: [{ ...source.exercises[1] }],
+  };
+  assert(buildFastLogSession(empty, '2024-07-02', now) === null, 'Nothing to log returns null');
+}
+
+function testWorkoutEdit() {
+  console.log('Testing Workout Edit...');
+
+  const make = (id: string, date: string, benchWeight: number): WorkoutSession => ({
+    id,
+    date,
+    completedAt: dayjs(`${date}T18:00:00`).valueOf(),
+    splitId: 'ct',
+    splitName: 'Chest/Triceps',
+    duration: 3000,
+    totalSets: 3,
+    totalVolume: 0,
+    exercises: [
+      {
+        exerciseId: 'bench',
+        name: 'Bench Press',
+        variation: 'Barbell',
+        muscle: 'Chest',
+        sets: [
+          { weight: benchWeight, reps: 10, done: true },
+          { weight: 90, reps: 8, done: true },
+          { weight: 80, reps: 10, done: false },
+        ],
+      },
+      {
+        exerciseId: 'fly',
+        name: 'Fly',
+        variation: 'Cable',
+        muscle: 'Chest',
+        sets: [{ weight: 20, reps: 12, done: true }],
+      },
+    ],
+  });
+
+  const session = make('w', '2025-01-08', 100);
+
+  // Raise set 1, drop set 3 (no weight/reps); fly untouched.
+  const edited = applyWorkoutEdit(
+    session,
+    new Map([
+      [
+        0,
+        [
+          { weight: 105, reps: 10 },
+          { weight: 90, reps: 8 },
+          { weight: 0, reps: 0 },
+        ],
+      ],
+    ])
+  );
+  assert(edited.exercises[0].sets.length === 3, 'Two edited sets plus the untouched not-done set');
+  assert(edited.exercises[0].sets[0].weight === 105 && edited.exercises[0].sets[0].done, 'Edited weight saved as done');
+  assert(!edited.exercises[0].sets[2].done && edited.exercises[0].sets[2].weight === 80, 'Not-done set kept as it was');
+  assert(edited.exercises[1] === session.exercises[1], 'Exercises not in the edit map are untouched');
+  assert(edited.totalSets === 3, 'Total sets recomputed');
+  assert(edited.totalVolume === 105 * 10 + 90 * 8 + 20 * 12, 'Total volume recomputed');
+  assert(
+    edited.date === session.date && edited.duration === session.duration && edited.completedAt === session.completedAt,
+    'Date, duration and completedAt unchanged'
+  );
+  assert(session.exercises[0].sets[0].weight === 100, 'Original session not mutated');
+
+  // Removing every set of an exercise removes the exercise.
+  const dropped = applyWorkoutEdit(session, new Map([[1, [] as { weight: number; reps: number }[]]]));
+  assert(dropped.exercises.length === 1 && dropped.exercises[0].exerciseId === 'bench', 'Exercise with no sets left is removed');
+  assert(dropped.totalSets === 2, 'Totals follow the removal');
+
+  // PRs: editing the heavy session down lowers the record back to the earlier one.
+  const w1 = make('w1', '2025-01-01', 100);
+  const w2 = make('w2', '2025-01-08', 110);
+  const existing = {
+    bench: { weight: 110, reps: 10, date: '2025-01-08', variation: 'Barbell' },
+    squat: { weight: 150, reps: 5, date: '2025-01-03', variation: 'Barbell' },
+  };
+  const w2Edited = applyWorkoutEdit(w2, new Map([[0, [{ weight: 95, reps: 10 }]]]));
+  const lowered = recomputePRsForExercises([w1, w2Edited], ['bench'], existing);
+  assert(lowered.bench.weight === 100 && lowered.bench.date === '2025-01-01', 'PR falls back to the best remaining set');
+  assert(lowered.squat === existing.squat, 'PRs of other exercises are untouched');
+
+  const raised = recomputePRsForExercises([w1, w2], ['bench'], { bench: lowered.bench });
+  assert(raised.bench.weight === 110 && raised.bench.date === '2025-01-08', 'PR rises with the edit');
+
+  const gone = recomputePRsForExercises(
+    [applyWorkoutEdit(w1, new Map([[0, []]])), applyWorkoutEdit(w2, new Map([[0, []]]))],
+    ['bench'],
+    existing
+  );
+  assert(!('bench' in gone), 'PR removed when no session has the exercise any more');
+}
+
+function testPlannedSplitForDate() {
+  console.log('Testing Planned Split For Date...');
+
+  const session = (date: string, splitId: SplitId): WorkoutSession => ({
+    id: date + splitId,
+    date,
+    splitId,
+    splitName: splitId,
+    duration: 0,
+    exercises: [],
+    totalSets: 0,
+    totalVolume: 0,
+  });
+
+  const base = getDefaultProfile();
+  const profile = {
+    ...base,
+    weekSchedule: { ...base.weekSchedule, Mon: 'ct', Tue: 'bb', Wed: 'sh', Thu: 'ct', Fri: 'rest' } as typeof base.weekSchedule,
+  };
+
+  // 2025-01-09 is a Thursday. After ct (Mon) and bb (Tue), the rotation rule
+  // carries Wednesday's shoulders over — the plan says Thursday is ct.
+  const history = [session('2025-01-06', 'ct'), session('2025-01-07', 'bb')];
+  assert(getScheduledSplitForDate('2025-01-09', profile, history, []) === 'sh', 'Rotation rule would give sh');
+  assert(getPlannedSplitForDate('2025-01-09', profile) === 'ct', 'Thursday follows the weekly plan');
+  assert(getPlannedSplitForDate('2025-01-09', profile, ['2025-01-09']) === 'rest', 'Explicitly rested date is rest');
+  assert(getPlannedSplitForDate('2025-01-10', profile) === 'rest', 'Planned rest weekday is rest');
+}
+
+function testFastLogSuggestions() {
+  console.log('Testing Fast Log Suggestions...');
+
+  const session = (date: string, splitId: SplitId, done = true): WorkoutSession => ({
+    id: date + splitId,
+    date,
+    splitId,
+    splitName: splitId,
+    duration: 0,
+    totalSets: done ? 1 : 0,
+    totalVolume: 0,
+    exercises: [
+      {
+        exerciseId: 'x',
+        name: 'X',
+        variation: 'Standard',
+        muscle: 'Chest',
+        sets: [{ weight: 50, reps: 10, done }],
+      },
+    ],
+  });
+
+  const base = getDefaultProfile();
+  const profile = {
+    ...base,
+    weekSchedule: { ...base.weekSchedule, Thu: ['ct', 'sh'] } as typeof base.weekSchedule,
+  };
+  const workouts = [
+    session('2025-01-06', 'ct'),
+    session('2025-01-13', 'ct'),
+    session('2025-01-14', 'bb'),
+    session('2025-01-15', 'ct', false), // nothing completed → can't be cloned
+  ];
+
+  // Thursdays: 2025-01-09 and 2025-01-16.
+  const early = getFastLogSuggestions('2025-01-09', profile, workouts);
+  assert(early.length === 2 && early[0].splitId === 'ct' && early[1].splitId === 'sh', "Thursday's planned splits, in plan order");
+  const dates = (s: { sources: WorkoutSession[] }) => s.sources.map((w) => w.date).join(',');
+  assert(dates(early[0]) === '2025-01-06,2025-01-13', 'Session before the date first, nearest later one tops it up');
+  assert(early[1].sources.length === 0, 'Split never logged has no sources');
+
+  const later = getFastLogSuggestions('2025-01-16', profile, workouts);
+  assert(dates(later[0]) === '2025-01-13,2025-01-06', 'Sessions before the date, latest first; empty one is skipped');
+
+  const five = [
+    ...workouts,
+    session('2025-01-01', 'ct'),
+    session('2024-12-30', 'ct'),
+    session('2024-12-25', 'ct'),
+  ];
+  assert(
+    dates(getFastLogSuggestions('2025-01-16', profile, five)[0]) === '2025-01-13,2025-01-06,2025-01-01,2024-12-30',
+    'Capped at the last four'
+  );
+  assert(getFastLogSuggestions('2025-01-16', profile, five, 2)[0].sources.length === 2, 'Limit is adjustable');
+
+  const afterLogging = getFastLogSuggestions('2025-01-16', profile, [...workouts, session('2025-01-16', 'ct')]);
+  assert(afterLogging.length === 1 && afterLogging[0].splitId === 'sh', 'Already-logged split is no longer suggested');
+
+  assert(getFastLogSuggestions('2025-01-10', profile, workouts)[0].splitId === 'ctbb', 'Friday suggests its planned split');
+  const noEarlier = getFastLogSuggestions('2025-01-02', profile, workouts);
+  assert(dates(noEarlier[0]) === '2025-01-06,2025-01-13', 'With nothing earlier, the nearest later sessions are offered');
 }
 
 function testExerciseSearchHelpers() {
@@ -812,9 +1071,13 @@ function runTests() {
     testChecklistNormalization();
     testSyncHabits();
     testRepeatSessionHelpers();
+    testFastLogSession();
+    testFastLogSuggestions();
+    testWorkoutEdit();
     testExerciseSearchHelpers();
     testSplitExerciseFilter();
     testRotationScheduling();
+    testPlannedSplitForDate();
     testMultiSplitScheduling();
     testCombinedLegShouldersSplit();
     testMuscleRecoveryTiming();

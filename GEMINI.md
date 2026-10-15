@@ -47,7 +47,7 @@ Data access: `src/firebase/*.firestore.ts`; the barrel `src/firebase/firestore.t
 - Exercise pools: `getExercisesForSplit` (`src/workout/exerciseLibrary.ts`) — explicit id lists for `push`/`pull` (`EXPLICIT_SPLIT_MEMBERS`), `splitIds` tags otherwise, unions for combined splits. Anatomy in `muscleAnatomy.json` drives the body map (`muscleCoverage.ts`).
 - Adding a split: extend `SplitId`, `SPLIT_DEFINITIONS`, `SPLIT_NAMES`, `SPLIT_ICONS`, `getMuscleFromSplit` / `getMuscleOrderForSplit` (`utils.ts`), `MERGED_MOBILITY_SPLITS` (`mobilityLibrary.ts`), `RECOMMENDED_EXERCISES` (`recommendedExercises.ts`); TS flags the `Record<SplitId, …>` maps. Firestore maps are `Partial<Record<SplitId, …>>` so new ids are additive.
 - Curated recommendations: `src/workout/recommendedExercises.ts` (validated by tests against the library and split pools).
-- "Today's" split is rotation-aware: `getScheduledSplitForDate` in `src/workout/utils.ts`.
+- "Today's" split follows the weekly plan literally: `getPlannedSplitForDate` in `src/workout/utils.ts` (Thursday in the profile = that split on Thursday). The rotation/carry-over variant `getScheduledSplitForDate` is kept and tested but no longer used by the UI.
 
 ## 5. Active workout invariants
 

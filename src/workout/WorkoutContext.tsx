@@ -37,6 +37,7 @@ import {
   updatePRsFromWorkout,
   syncWorkoutHabits,
   updatePRDatesForWorkout,
+  recomputePRsForExercises,
   getDefaultProfile,
   variationImageKey,
   mobilityStorageId,
@@ -117,6 +118,8 @@ interface WorkoutContextValue {
   clearHistory: () => void;
   clearAllPRs: () => void;
   updateWorkoutDate: (id: string, newDate: string) => void;
+  /** Replace a saved session (e.g. edited sets) and refresh the PRs it affects. */
+  updateWorkout: (updated: WorkoutSession) => void;
   deleteWorkout: (id: string) => void;
   rememberSplitExercise: (splitId: SplitId, exerciseId: string) => void;
   rememberTodayPicks: (splitId: SplitId, picks: TodayExercisePick[]) => void;
@@ -929,6 +932,33 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     });
   }, [persistState]);
 
+  const updateWorkout = useCallback((updated: WorkoutSession) => {
+    setWorkouts((prev) => {
+      const previous = prev.find((w) => w.id === updated.id);
+      if (!previous) return prev;
+
+      const next = prev.map((w) => (w.id === updated.id ? updated : w));
+      // PRs are stored separately from the sessions, so a lowered (or removed)
+      // set has to be reflected there too.
+      const affected = Array.from(
+        new Set([...previous.exercises, ...updated.exercises].map((ex) => ex.exerciseId))
+      );
+      setPRs((p) => {
+        const nextPrs = recomputePRsForExercises(next, affected, p);
+        persistState({ prs: nextPrs });
+        return nextPrs;
+      });
+
+      const currentUid = uidRef.current;
+      if (currentUid) {
+        fittrackDb.saveFitTrackWorkout(currentUid, updated).catch(() => toast.error('Failed to update workout'));
+      }
+
+      toast.success('Workout updated');
+      return next;
+    });
+  }, [persistState]);
+
   const rememberSplitExercise = useCallback((splitId: SplitId, exerciseId: string) => {
     setSplitExtras((prev) => {
       const existing = prev[splitId] ?? [];
@@ -1123,6 +1153,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       clearHistory,
       clearAllPRs,
       updateWorkoutDate,
+      updateWorkout,
       deleteWorkout,
       rememberSplitExercise,
       rememberTodayPicks,
@@ -1197,6 +1228,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       clearHistory,
       clearAllPRs,
       updateWorkoutDate,
+      updateWorkout,
       deleteWorkout,
       rememberSplitExercise,
       rememberTodayPicks,

@@ -15,6 +15,7 @@ import type {
   WorkoutSet,
   VariationImageMap,
   WeekSchedule,
+  WeightUnit,
 } from './types';
 import { COMBINED_SPLIT_COMPONENTS, DAY_KEYS, MUSCLE_GROUPS } from './constants';
 import { EXPLICIT_SPLIT_MEMBERS, getExerciseById, getExercisesForSplit } from './exerciseLibrary';
@@ -237,6 +238,22 @@ export function getScheduledSplitForDate(
   return getNextRotationSplit(lastBefore.splitId, queue) ?? fallbackSplit ?? 'rest';
 }
 
+/**
+ * Literal weekday plan for a date: the first split the profile schedules on
+ * that weekday, or 'rest' when none is planned or the date is explicitly
+ * rested. Unlike getScheduledSplitForDate it never rotates or carries a split
+ * over from skipped days, so Thursday = Chest + Triceps in the profile means
+ * Chest + Triceps on Thursday.
+ */
+export function getPlannedSplitForDate(
+  dateStr: string,
+  profile: UserProfile,
+  restDays: string[] = []
+): SplitId {
+  if (restDays.includes(dateStr)) return 'rest';
+  return getScheduledSplitsForDay(profile, getDayKeyForDate(dateStr))[0] ?? 'rest';
+}
+
 /** Split IDs of workouts logged on the given date. */
 export function getSplitsTrainedOnDate(workouts: WorkoutSession[], dateStr: string): SplitId[] {
   return workouts.filter((w) => isSameDay(w.date, dateStr)).map((w) => w.splitId);
@@ -316,6 +333,103 @@ export function buildRepeatDataFromSession(session: WorkoutSession): {
     };
   });
   return { picks, presets };
+}
+
+function isFastLoggableSet(set: WorkoutSet): boolean {
+  return set.done && (set.weight > 0 || set.reps > 0);
+}
+
+/** Sessions Fast Log can clone (at least one completed set), newest first. */
+export function getFastLogCandidates(workouts: WorkoutSession[]): WorkoutSession[] {
+  return workouts
+    .filter((w) => w.exercises.some((ex) => ex.sets.some(isFastLoggableSet)))
+    .sort(
+      (a, b) =>
+        dayjs(b.date).valueOf() - dayjs(a.date).valueOf() || (b.completedAt ?? 0) - (a.completedAt ?? 0)
+    );
+}
+
+export interface FastLogSuggestion {
+  splitId: SplitId;
+  /** Sessions to choose from, closest to the date first; empty when this split was never logged. */
+  sources: WorkoutSession[];
+}
+
+/**
+ * Day-wise Fast Log suggestions: the weekday's planned splits that aren't
+ * logged on `dateStr` yet, each paired with the last `limit` (default 4)
+ * sessions of that split. Sessions before the date come first, latest first (so
+ * back-filling copies what you did last time as of that day); if there are
+ * fewer than `limit`, the nearest later sessions top the list up.
+ */
+export function getFastLogSuggestions(
+  dateStr: string,
+  profile: UserProfile,
+  workouts: WorkoutSession[],
+  limit = 4
+): FastLogSuggestion[] {
+  const trained = new Set(getSplitsTrainedOnDate(workouts, dateStr));
+  const candidates = getFastLogCandidates(workouts);
+  return getScheduledSplitsForDay(profile, getDayKeyForDate(dateStr))
+    .filter((splitId) => !trained.has(splitId))
+    .map((splitId) => {
+      // candidates are newest-first, so reversing the later ones puts the
+      // nearest-to-date session first.
+      const ofSplit = candidates.filter((w) => w.splitId === splitId);
+      const isEarlier = (w: WorkoutSession) => dayjs(w.date).isBefore(dateStr, 'day');
+      const earlier = ofSplit.filter(isEarlier);
+      const later = ofSplit.filter((w) => !isEarlier(w)).reverse();
+      return { splitId, sources: [...earlier, ...later].slice(0, limit) };
+    });
+}
+
+/** "3 × 10 @ 60kg", or "10 @ 60kg, 8 @ 55kg" when the sets differ. */
+export function formatExerciseSetsSummary(ex: WorkoutExercise, unit: WeightUnit): string {
+  const done = ex.sets.filter((s) => s.done && (s.weight > 0 || s.reps > 0));
+  if (done.length === 0) return '';
+  const first = done[0];
+  const load = (weight: number) => (weight > 0 ? ` @ ${formatWeight(weight, unit)}` : '');
+  if (done.every((s) => s.weight === first.weight && s.reps === first.reps)) {
+    return `${done.length} × ${first.reps}${load(first.weight)}`;
+  }
+  return done.map((s) => `${s.reps}${load(s.weight)}`).join(', ');
+}
+
+/**
+ * Fast Log: clone a saved session onto `date` with every completed set marked
+ * done at its old weight and reps. Exercises with no completed sets are
+ * dropped; returns null when nothing is left to log.
+ *
+ * `completedAt` is only set when logging for today. For a back-dated log the
+ * save time says nothing about when the workout happened, and attendance
+ * stats read it as the workout's time of day.
+ */
+export function buildFastLogSession(
+  source: WorkoutSession,
+  date: string,
+  now: number = Date.now()
+): Omit<WorkoutSession, 'id'> | null {
+  const exercises: WorkoutExercise[] = [];
+  for (const ex of source.exercises) {
+    const sets = ex.sets
+      .filter(isFastLoggableSet)
+      .map((s) => ({ weight: s.weight, reps: s.reps, done: true }));
+    if (sets.length === 0) continue;
+    const { notes: _notes, ...rest } = stripSessionExerciseFields(ex);
+    exercises.push({ ...rest, sets });
+  }
+  if (exercises.length === 0) return null;
+
+  return {
+    date,
+    ...(dayjs(now).format('YYYY-MM-DD') === date ? { completedAt: now } : {}),
+    splitId: source.splitId,
+    splitName: source.splitName,
+    duration: source.duration,
+    exercises,
+    totalSets: countCompletedSets(exercises),
+    totalVolume: calcWorkoutVolume(exercises),
+  };
 }
 
 export interface LastExerciseSession {
@@ -872,6 +986,70 @@ export function updatePRsFromWorkout(
     }
   }
   return updated;
+}
+
+/**
+ * Rebuild the personal records of `exerciseIds` from the full workout history.
+ * Needed after an edit or delete: updatePRsFromWorkout only ever raises a record,
+ * so a lowered weight would otherwise leave the old PR standing. Records for
+ * other exercises are left exactly as they are.
+ */
+export function recomputePRsForExercises(
+  workouts: WorkoutSession[],
+  exerciseIds: string[],
+  existing: Record<string, PersonalRecord>
+): Record<string, PersonalRecord> {
+  const ids = new Set(exerciseIds);
+  let prs = { ...existing };
+  for (const id of Array.from(ids)) delete prs[id];
+
+  // Oldest first, so on a tie the first session to hit the weight keeps the record.
+  const chronological = [...workouts].sort((a, b) => dayjs(a.date).valueOf() - dayjs(b.date).valueOf());
+  for (const w of chronological) {
+    const relevant = w.exercises.filter((ex) => ids.has(ex.exerciseId));
+    if (relevant.length > 0) prs = updatePRsFromWorkout(relevant, w.date, prs);
+  }
+  return prs;
+}
+
+/** A set as entered in the day editor: weight in kg, reps. */
+export interface EditedSet {
+  weight: number;
+  reps: number;
+}
+
+/**
+ * Apply edits to a saved session. `edits` maps an exercise's index to its new
+ * list of completed sets; exercises not in the map are untouched. Sets with
+ * neither weight nor reps are dropped, an exercise left with no completed set
+ * is removed, and not-done sets are kept as they were. Totals are recomputed
+ * (the recap and analytics read them off the session); date, duration and
+ * completedAt are never changed.
+ */
+export function applyWorkoutEdit(
+  session: WorkoutSession,
+  edits: Map<number, EditedSet[]>
+): WorkoutSession {
+  const exercises: WorkoutExercise[] = [];
+  session.exercises.forEach((ex, index) => {
+    const edited = edits.get(index);
+    if (!edited) {
+      exercises.push(ex);
+      return;
+    }
+    const done = edited
+      .filter((s) => s.weight > 0 || s.reps > 0)
+      .map((s) => ({ weight: s.weight, reps: s.reps, done: true }));
+    if (done.length === 0) return;
+    exercises.push({ ...ex, sets: [...done, ...ex.sets.filter((s) => !s.done)] });
+  });
+
+  return {
+    ...session,
+    exercises,
+    totalSets: countCompletedSets(exercises),
+    totalVolume: calcWorkoutVolume(exercises),
+  };
 }
 
 export function calcStreak(workouts: WorkoutSession[]): number {
