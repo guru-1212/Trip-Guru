@@ -7,6 +7,7 @@ import { motion, AnimatePresence, LayoutGroup, Reorder, useDragControls } from '
 import {
   AlertTriangle,
   ChevronRight,
+  ClipboardList,
   Trophy,
   Plus,
   Check,
@@ -40,6 +41,7 @@ import { TodayExercisePicker } from '@/components/workout/TodayExercisePicker';
 import { MobilityRoutineModal } from '@/components/workout/MobilityRoutineModal';
 import { AIImportModal } from '@/components/workout/AIImportModal';
 import { FastLogModal } from '@/components/workout/FastLogModal';
+import { WorkoutPlanSheet } from '@/components/workout/WorkoutPlanSheet';
 import { TargetWorkoutBlock } from '@/components/targets/TargetWorkoutBlock';
 import { useAIWorkoutImport } from '@/hooks/useAIWorkoutImport';
 import type { ImportedExercise } from '@/types/aiImport';
@@ -49,8 +51,9 @@ import { getHabitStreak } from '@/workout/analytics';
 import { SPLIT_DEFINITIONS, SPLIT_NAMES, SPLIT_ICONS, MUSCLE_COLORS } from '@/workout/constants';
 import { getExerciseById } from '@/workout/exerciseLibrary';
 import toast from 'react-hot-toast';
-import type { CustomExercise, SplitId, TodayExercisePick, WorkoutExercise, WorkoutSession, WorkoutSet, LibraryExercise, WeightUnit, DayKey } from '@/workout/types';
+import type { CustomExercise, PlannedExercise, SplitId, TodayExercisePick, WorkoutExercise, WorkoutSession, WorkoutSet, LibraryExercise, WeightUnit, DayKey } from '@/workout/types';
 import {
+  applyPlanToExercises,
   generateId,
   getGreeting,
   getTodayDayKey,
@@ -198,6 +201,8 @@ export default function WorkoutPage() {
     getVariationsForExercise,
     splitExtras,
     splitTodayPicks,
+    splitPlans,
+    saveSplitPlan,
     splitSequenceLocked,
     rememberSplitExercise,
     rememberTodayPicks,
@@ -246,6 +251,7 @@ export default function WorkoutPage() {
   const [pinError, setPinError] = useState(false);
   const [workoutDate, setWorkoutDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [showFastLog, setShowFastLog] = useState(false);
+  const [showPlan, setShowPlan] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showReplaceDialog, setShowReplaceDialog] = useState(false);
   const [showAddExercise, setShowAddExercise] = useState(false);
@@ -660,6 +666,11 @@ export default function WorkoutPage() {
       repeatSessionPresetsRef.current = new Map();
     }
 
+    // A saved "plan next workout" fills the exercises it covers (unticked).
+    // It sits below an explicit AI-import / repeat-session choice for this run
+    // and above the last-session auto-fill.
+    exercises = applyPlanToExercises(exercises, splitPlans[selectedSplit]);
+
     // Auto-fill each exercise from its last logged session (same reps + weight),
     // leaving every set unchecked so the user only has to confirm what they did.
     // Only untouched (all-empty) exercises are filled, so an explicit AI-import
@@ -695,6 +706,7 @@ export default function WorkoutPage() {
     profile.prefs.restTimer,
     customExercises,
     splitExtras,
+    splitPlans,
     workouts,
     startActiveWorkout,
     rememberTodayPicks,
@@ -977,6 +989,40 @@ export default function WorkoutPage() {
   };
 
   const closeFastLog = useCallback(() => setShowFastLog(false), []);
+
+  const closePlan = useCallback(() => setShowPlan(false), []);
+
+  const handleSavePlan = useCallback(
+    (plan: PlannedExercise[]) => {
+      if (!selectedSplit) return;
+      saveSplitPlan(selectedSplit, plan);
+      setShowPlan(false);
+    },
+    [selectedSplit, saveSplitPlan]
+  );
+
+  const getPlanExerciseName = useCallback(
+    (exerciseId: string) =>
+      pickerExercises.find((e) => e.id === exerciseId)?.name ?? getExerciseById(exerciseId)?.name ?? exerciseId,
+    [pickerExercises]
+  );
+
+  // How much of today's picks the saved plan covers (shown on the plan card).
+  const planSummary = useMemo(() => {
+    const plan = (selectedSplit && splitPlans[selectedSplit]) || [];
+    const bySet = new Map(
+      plan.map((entry) => [repeatSessionPresetKey(entry.exerciseId, entry.variation), entry.sets.length] as const)
+    );
+    let planned = 0;
+    let sets = 0;
+    for (const pick of todayPicks) {
+      const count = bySet.get(repeatSessionPresetKey(pick.exerciseId, pick.variation));
+      if (!count) continue;
+      planned += 1;
+      sets += count;
+    }
+    return { planned, sets };
+  }, [selectedSplit, splitPlans, todayPicks]);
 
   const handleFastLog = useCallback(
     (source: WorkoutSession, date: string) => {
@@ -2202,6 +2248,29 @@ export default function WorkoutPage() {
           />
         )}
 
+        {selectedSplit && todayPicks.length > 0 && (
+          <div className="ft-card ft-card-padded flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+              <ClipboardList className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-foreground">Plan next workout</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {planSummary.planned > 0
+                  ? `${planSummary.planned} of ${todayPicks.length} exercises planned · ${planSummary.sets} sets. Just press Start in the gym.`
+                  : 'Set weights and reps ahead of time, then just press Start in the gym.'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPlan(true)}
+              className="ft-btn ft-btn--secondary shrink-0"
+            >
+              {planSummary.planned > 0 ? 'Edit plan' : 'Plan sets'}
+            </button>
+          </div>
+        )}
+
         <div className="ft-split-grid">
           {SPLIT_DEFINITIONS.map((split) => {
             const last = getLastTrainedDate(workouts, split.id);
@@ -2316,6 +2385,19 @@ export default function WorkoutPage() {
             </button>
           </div>
         )}
+
+        <WorkoutPlanSheet
+          open={showPlan && !!selectedSplit}
+          splitName={selectedSplit ? SPLIT_NAMES[selectedSplit] : ''}
+          picks={todayPicks}
+          getExerciseName={getPlanExerciseName}
+          plan={selectedSplit ? splitPlans[selectedSplit] : undefined}
+          workouts={workouts}
+          defaultSets={profile.prefs.defaultSets}
+          unit={profile.prefs.unit}
+          onSave={handleSavePlan}
+          onClose={closePlan}
+        />
 
         <FastLogModal
           open={showFastLog}

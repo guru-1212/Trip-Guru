@@ -270,3 +270,22 @@ export interface MobilityExercise {
 
 /** Per-split remembered mobility variation picks: mobilityId → variation name */
 export type SplitMobilityPicks = Partial<Record<SplitId, Record<string, string>>>;
+
+/** One set of a saved workout plan (weight in kg). */
+export interface PlannedSet {
+  weight: number;
+  reps: number;
+}
+
+/** An exercise + variation with the sets planned for it. */
+export interface PlannedExercise {
+  exerciseId: string;
+  variation: string;
+  sets: PlannedSet[];
+}
+
+/**
+ * Standing "plan next workout" per split. Applied when that split's workout is
+ * started; a missing key or empty array means no plan.
+ */
+export type SplitPlans = Partial<Record<SplitId, PlannedExercise[]>>;

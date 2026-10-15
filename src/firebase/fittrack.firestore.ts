@@ -24,6 +24,7 @@ import type {
   PersonalRecord,
   ProgressPhoto,
   SplitId,
+  SplitPlans,
   TodayExercisePick,
   UserProfile,
   WeeklyGoals,
@@ -52,6 +53,8 @@ export interface FitTrackStateDoc {
   splitSequenceLocked: Partial<Record<SplitId, boolean>>;
   /** Per-split remembered mobility variation picks: mobilityId → variation name */
   splitMobilityPicks: Partial<Record<SplitId, Record<string, string>>>;
+  /** Per-split "plan next workout": planned sets/weights/reps applied on Start. */
+  splitPlans: SplitPlans;
   activeWorkout: ActiveWorkoutState | null;
   /** Dates (YYYY-MM-DD) the user explicitly marked as a rest day. */
   restDays: string[];
@@ -117,6 +120,7 @@ export function defaultStateDoc(): FitTrackStateDoc {
     splitTodayPicks: {},
     splitSequenceLocked: {},
     splitMobilityPicks: {},
+    splitPlans: {},
     activeWorkout: null,
     restDays: [],
     targets: [],

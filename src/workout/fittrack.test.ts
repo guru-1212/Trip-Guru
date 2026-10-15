@@ -16,6 +16,8 @@ import {
   getPlannedSplitForDate,
   applyWorkoutEdit,
   recomputePRsForExercises,
+  applyPlanToExercises,
+  normalizePlan,
   repeatSessionPresetKey,
   exerciseMatchesSearch,
   getMatchingVariations,
@@ -459,6 +461,63 @@ function testWorkoutEdit() {
     existing
   );
   assert(!('bench' in gone), 'PR removed when no session has the exercise any more');
+}
+
+function testWorkoutPlan() {
+  console.log('Testing Workout Plan...');
+
+  const blank = (): WorkoutSet[] => Array.from({ length: 3 }, () => ({ weight: 0, reps: 0, done: false }));
+  const exercise = (exerciseId: string, variation: string, sets: WorkoutSet[]): WorkoutExercise => ({
+    exerciseId,
+    name: exerciseId,
+    variation,
+    muscle: 'Chest',
+    sets,
+    pickedToday: true,
+  });
+
+  const exercises = [
+    exercise('bench', 'Barbell', blank()),
+    exercise('fly', 'Cable', blank()),
+    exercise('dip', 'Bodyweight', [{ weight: 40, reps: 8, done: false }]),
+  ];
+  const plan = [
+    {
+      exerciseId: 'bench',
+      variation: 'Barbell',
+      sets: [
+        { weight: 60, reps: 10 },
+        { weight: 60, reps: 10 },
+        { weight: 60, reps: 8 },
+        { weight: 60, reps: 8 },
+      ],
+    },
+    { exerciseId: 'dip', variation: 'Bodyweight', sets: [{ weight: 0, reps: 12 }] },
+    { exerciseId: 'bench', variation: 'Dumbbell', sets: [{ weight: 30, reps: 12 }] },
+  ];
+
+  const applied = applyPlanToExercises(exercises, plan);
+  assert(applied[0].sets.length === 4, 'Planned set count replaces the default count');
+  assert(applied[0].sets.every((s) => !s.done && s.weight === 60), 'Planned sets are weighted and unticked');
+  assert(applied[0].sets[3].reps === 8, 'Planned reps kept per set');
+  assert(applied[1] === exercises[1], 'Exercise without a plan entry is untouched (falls through to last-session fill)');
+  assert(applied[2] === exercises[2], 'Exercise that already has numbers (AI import / repeat) is not overridden');
+  assert(applyPlanToExercises(exercises, undefined) === exercises, 'No plan returns the exercises as they are');
+  assert(applyPlanToExercises(exercises, []) === exercises, 'Empty plan returns the exercises as they are');
+
+  const cleaned = normalizePlan([
+    {
+      exerciseId: 'bench',
+      variation: 'Barbell',
+      sets: [
+        { weight: 60, reps: 10 },
+        { weight: 0, reps: 0 },
+      ],
+    },
+    { exerciseId: 'fly', variation: 'Cable', sets: [{ weight: 0, reps: 0 }] },
+  ]);
+  assert(cleaned.length === 1 && cleaned[0].exerciseId === 'bench', 'Exercises with only blank sets are dropped');
+  assert(cleaned[0].sets.length === 1, 'Blank sets are dropped');
 }
 
 function testPlannedSplitForDate() {
@@ -1074,6 +1133,7 @@ function runTests() {
     testFastLogSession();
     testFastLogSuggestions();
     testWorkoutEdit();
+    testWorkoutPlan();
     testExerciseSearchHelpers();
     testSplitExerciseFilter();
     testRotationScheduling();

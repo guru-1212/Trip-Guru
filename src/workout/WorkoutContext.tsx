@@ -26,6 +26,8 @@ import type {
   UserPrefs,
   TodayExercisePick,
   SplitMobilityPicks,
+  PlannedExercise,
+  SplitPlans,
 } from './types';
 import type { Target, TargetAttempt } from './targets';
 import { hasReachedGoal } from './targets';
@@ -38,6 +40,7 @@ import {
   syncWorkoutHabits,
   updatePRDatesForWorkout,
   recomputePRsForExercises,
+  normalizePlan,
   getDefaultProfile,
   variationImageKey,
   mobilityStorageId,
@@ -67,6 +70,9 @@ interface WorkoutContextValue {
   splitTodayPicks: Partial<Record<SplitId, TodayExercisePick[]>>;
   splitSequenceLocked: Partial<Record<SplitId, boolean>>;
   splitMobilityPicks: SplitMobilityPicks;
+  /** Saved "plan next workout" sets per split, applied when that workout starts. */
+  splitPlans: SplitPlans;
+  saveSplitPlan: (splitId: SplitId, plan: PlannedExercise[]) => void;
   restDays: string[];
   targets: Target[];
   targetAttempts: TargetAttempt[];
@@ -177,6 +183,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
   const [splitTodayPicks, setSplitTodayPicks] = useState<Partial<Record<SplitId, TodayExercisePick[]>>>({});
   const [splitSequenceLocked, setSplitSequenceLocked] = useState<Partial<Record<SplitId, boolean>>>({});
   const [splitMobilityPicks, setSplitMobilityPicks] = useState<SplitMobilityPicks>({});
+  const [splitPlans, setSplitPlans] = useState<SplitPlans>({});
   const [restDays, setRestDays] = useState<string[]>([]);
   const [targets, setTargets] = useState<Target[]>([]);
   const [targetAttempts, setTargetAttempts] = useState<TargetAttempt[]>([]);
@@ -218,6 +225,7 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
     setSplitTodayPicks,
     setSplitSequenceLocked,
     setSplitMobilityPicks,
+    setSplitPlans,
     setRestDays,
     setTargets,
     setTargetAttempts,
@@ -466,6 +474,17 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       persistState({ restDays: next });
       return next;
     });
+  }, [persistState]);
+
+  const saveSplitPlan = useCallback((splitId: SplitId, plan: PlannedExercise[]) => {
+    const cleaned = normalizePlan(plan);
+    setSplitPlans((prev) => {
+      // An empty array (not a deleted key) clears a plan, so the cloud merge replaces it.
+      const next = { ...prev, [splitId]: cleaned };
+      persistState({ splitPlans: next });
+      return next;
+    });
+    toast.success(cleaned.length > 0 ? 'Plan saved — just press Start in the gym' : 'Plan cleared');
   }, [persistState]);
 
   const addTarget = useCallback((target: Target) => {
@@ -1110,6 +1129,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitTodayPicks,
       splitSequenceLocked,
       splitMobilityPicks,
+      splitPlans,
+      saveSplitPlan,
       restDays,
       targets,
       targetAttempts,
@@ -1185,6 +1206,8 @@ export function WorkoutProvider({ children }: { children: React.ReactNode }) {
       splitTodayPicks,
       splitSequenceLocked,
       splitMobilityPicks,
+      splitPlans,
+      saveSplitPlan,
       restDays,
       targets,
       targetAttempts,

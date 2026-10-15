@@ -7,6 +7,7 @@ import type {
   LibraryExercise,
   MuscleGroup,
   PersonalRecord,
+  PlannedExercise,
   SplitId,
   TodayExercisePick,
   UserProfile,
@@ -381,6 +382,47 @@ export function getFastLogSuggestions(
       const later = ofSplit.filter((w) => !isEarlier(w)).reverse();
       return { splitId, sources: [...earlier, ...later].slice(0, limit) };
     });
+}
+
+/**
+ * Clean a plan before saving: blank sets (no weight and no reps) are dropped,
+ * as are exercises left with no sets, so a stored plan never holds empty rows.
+ */
+export function normalizePlan(plan: PlannedExercise[]): PlannedExercise[] {
+  return plan
+    .map((entry) => ({
+      ...entry,
+      sets: entry.sets
+        .filter((s) => s.weight > 0 || s.reps > 0)
+        .map((s) => ({ weight: s.weight, reps: s.reps })),
+    }))
+    .filter((entry) => entry.sets.length > 0);
+}
+
+/**
+ * Fill a just-built workout from a saved plan. Each exercise that is still
+ * empty and has a plan entry (same exercise + variation) gets the planned sets,
+ * unticked. Exercises that already carry numbers (an AI import or a repeated
+ * session chosen for this run) are left alone, and exercises without a plan
+ * entry fall through to the usual last-session auto-fill.
+ */
+export function applyPlanToExercises(
+  exercises: WorkoutExercise[],
+  plan: PlannedExercise[] | undefined
+): WorkoutExercise[] {
+  if (!plan?.length) return exercises;
+  const planned = new Map(
+    plan.map((entry) => [repeatSessionPresetKey(entry.exerciseId, entry.variation), entry.sets] as const)
+  );
+  return exercises.map((ex) => {
+    if (ex.sets.some((s) => s.weight > 0 || s.reps > 0)) return ex;
+    const sets = planned.get(repeatSessionPresetKey(ex.exerciseId, ex.variation));
+    if (!sets?.length) return ex;
+    return patchExerciseSets(
+      ex,
+      sets.map((s) => ({ weight: s.weight, reps: s.reps, done: false }))
+    );
+  });
 }
 
 /** "3 × 10 @ 60kg", or "10 @ 60kg, 8 @ 55kg" when the sets differ. */

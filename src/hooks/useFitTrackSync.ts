@@ -18,6 +18,7 @@ import type {
   PersonalRecord,
   ProgressPhoto,
   SplitId,
+  SplitPlans,
   TodayExercisePick,
   UserProfile,
   WeeklyGoals,
@@ -52,6 +53,7 @@ export interface FitTrackSyncCallbacks {
   setSplitTodayPicks: (p: Partial<Record<SplitId, TodayExercisePick[]>>) => void;
   setSplitSequenceLocked: (l: Partial<Record<SplitId, boolean>>) => void;
   setSplitMobilityPicks: (p: Partial<Record<SplitId, Record<string, string>>>) => void;
+  setSplitPlans: (p: SplitPlans) => void;
   setRestDays: (d: string[]) => void;
   setTargets: (t: Target[]) => void;
   setTargetAttempts: (a: TargetAttempt[]) => void;
@@ -143,6 +145,7 @@ export function useFitTrackSync(
           const cloudMobilityPicks = data.splitMobilityPicks ?? {};
           cb().setSplitMobilityPicks(cloudMobilityPicks);
           saveSplitMobilityPicks(cloudMobilityPicks);
+          cb().setSplitPlans(data.splitPlans ?? {});
           cb().setRestDays(data.restDays ?? []);
           cb().setTargets(data.targets ?? []);
 
